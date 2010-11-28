@@ -113,6 +113,9 @@ class Tool:
         sub.add_argument("-i", "--inherit", metavar="CONFIG",
                          type=str, default="", dest="inherit_config",
                          help="inherit from config (regexp)")
+        sub.add_argument("-d", "--copy-dir", metavar="DIR",
+                         type=str, default="", dest="copy_dir",
+                         help="copy config files from DIR")
         sub.add_argument("-v", "--verbose", default=False,
                          action="store_true", help="verbose output")
         sub.add_argument("-c", "--create-node", default=False,
@@ -274,7 +277,8 @@ class Tool:
                 raise errors.UserError("config '%s/%s' already exists" % (
                         node.name, arg.config))
 
-            node.add_config(arg.config, parent=parent_config_name)
+            node.add_config(arg.config, parent=parent_config_name,
+                            copy_dir=arg.copy_dir)
             # TODO: verbose output
             self.log.debug("added config %r to %s, parent=%r", arg.config,
                            node.path, parent_config_name)

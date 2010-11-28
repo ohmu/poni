@@ -9,6 +9,7 @@ See LICENSE for details.
 import sys
 import re
 import imp
+import shutil
 from path import path
 from .util import json
 from . import newconfig
@@ -191,13 +192,16 @@ class Node(Item):
 
         return self._remote
 
-    def add_config(self, config, parent=None):
+    def add_config(self, config, parent=None, copy_dir=None):
         config_dir = self.path / CONFIG_DIR / config
         if config_dir.exists():
             raise errors.UserError(
                 "%s: config %r already exists" % (self.name, config))
 
-        config_dir.makedirs ()
+        if copy_dir:
+            shutil.copytree(copy_dir, config_dir, symlinks=True)
+        else:
+            config_dir.makedirs()
 
         conf_file = config_dir / CONFIG_CONF_FILE
         conf = {}
@@ -207,7 +211,8 @@ class Node(Item):
         util.json_dump(conf, file(conf_file, "w"))
 
         settings_dir = config_dir / SETTINGS_DIR
-        settings_dir.mkdir() # pre-created so it is there for copying files
+        if not settings_dir.exists():
+            settings_dir.mkdir() # pre-created so it is there for copying files
 
     def iter_configs(self):
         config_dir = self.path / CONFIG_DIR
