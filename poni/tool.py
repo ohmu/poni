@@ -115,6 +115,9 @@ class Tool:
                          help="inherit from config (regexp)")
         sub.add_argument("-v", "--verbose", default=False,
                          action="store_true", help="verbose output")
+        sub.add_argument("-c", "--create-node", default=False,
+                         action="store_true",
+                         help="create node if it does not exist")
 
         # verify
         sub = subparsers.add_parser("verify", help="verify local node configs")
@@ -258,7 +261,13 @@ class Tool:
             parent_config_name = None
 
         updates = []
-        for node in self.confman.find(arg.nodes):
+        nodes = list(self.confman.find(arg.nodes))
+        if arg.create_node and (not nodes):
+            # node does not exist, create it as requested
+            self.confman.create_node(arg.nodes)
+            nodes = self.confman.find(arg.nodes)
+
+        for node in nodes:
             existing = list(c for c in node.iter_configs()
                             if c.name == arg.config)
             if existing:
