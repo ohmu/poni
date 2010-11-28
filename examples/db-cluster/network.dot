@@ -1,0 +1,30 @@
+digraph G {
+
+#def foo($item)
+
+#if not $item.get("verify", True) or $item.name == "report"
+#foo
+#else if $item.type == "node"
+  #set $nodelabel = $str(item).replace(", ", "\\n")
+  "$item.name" [ label = "${item.name.rsplit("/")[-1]}\n$nodelabel" ];
+#else
+subgraph "cluster_$item.name" {
+  label = "$item.name\n$item";
+
+  #for $n in $find("^" + $item.name, nodes=True, systems=True, depth=[$item.depth + 1])
+  $foo($n)
+  #end for
+  }
+#end if
+
+#end def
+
+#for $n in $find(".", nodes=True, systems=True, depth=[1])
+$foo($n)
+#end for
+
+#for $item in $dynconf
+  "$item.source" -> "$item.dest" [ label = "$item.protocol" ];
+#end for
+
+}

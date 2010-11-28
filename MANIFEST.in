@@ -1,0 +1,8 @@
+include poni/*.py
+include tests/*.py
+include README.html
+include README.rst
+include README.txt
+
+recursive-include examples *
+recursive-exclude examples *~ *.pyc \.*

@@ -1,0 +1,11 @@
+*~
+dist
+build
+*.pyc
+poni.egg-info/
+cover
+.coverage
+poni/version.py
+
+README.html
+README.txt

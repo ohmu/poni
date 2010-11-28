@@ -1,0 +1,5 @@
+blah
+
+#for $item in $dynconf
+  $item.source => $item.dest ($item.protocol)
+#end for
