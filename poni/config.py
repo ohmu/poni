@@ -6,10 +6,12 @@ See LICENSE for details.
 
 """
 
+import sys
 import itertools
 import datetime
 import logging
 import difflib
+from path import path
 from . import errors
 from . import util
 
@@ -34,6 +36,34 @@ class Manager:
                          error.__class__.__name__, error)
         self.error_count += 1
 
+    def copy_tree(self, entry):
+        remote = entry["node"].get_remote()
+        def progress(copied, total):
+            sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
+
+        dest_dir = path(entry["dest_path"])
+        try:
+            remote.stat(dest_dir)
+        except errors.RemoteError:
+            remote.makedirs(dest_dir)
+
+        for file_path in path(entry["source_path"]).files():
+            dest_path = dest_dir / file_path.basename()
+            try:
+                rsize = remote.stat(dest_path).st_size
+                lsize = file_path.stat().st_size
+                # TODO: is size comparison enough?
+                copy = (rsize != lsize)
+            except errors.RemoteError:
+                copy = True
+
+            if copy:
+                self.log.info("copying: %s", dest_path)
+                remote.put_file(file_path, dest_path, callback=progress)
+                sys.stderr.write("\n")
+            else:
+                self.log.info("already copied: %s", dest_path)
+
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
                verbose=False, callback=None):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
@@ -55,6 +85,11 @@ class Manager:
             dest_path = entry["dest_path"]
             failed = False
             node_name = entry["node"].name
+
+            if entry["type"] == "dir":
+                # copy a directory recursively
+                self.copy_tree(entry)
+                continue
 
             source_path = entry["config"].path / entry["source_path"]
             try:
@@ -161,12 +196,18 @@ class PlugIn:
                  render=None, report=False, post_process=None, mode=None):
         render = render or self.render_cheetah
         return self.manager.add_file(node=self.node, config=self.config,
-                                     dest_path=dest_path,
+                                     type="file", dest_path=dest_path,
                                      source_path=source_path,
                                      source_text=source_text,
                                      render=render, report=report,
                                      post_process=post_process,
                                      mode=mode)
+
+    def add_dir(self, source_path, dest_path, render=None):
+        render = render or self.render_cheetah
+        return self.manager.add_file(type="dir", node=self.node,
+                                     config=self.config, dest_path=dest_path,
+                                     source_path=source_path, render=render)
 
     def get_one(self, name, nodes=True, systems=False):
         hits = list(self.manager.confman.find(name, nodes=nodes,

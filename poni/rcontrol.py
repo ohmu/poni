@@ -27,6 +27,9 @@ class RemoteControl:
     def read_file(self, file_path):
         assert 0, "must implement in sub-class"
 
+    def put_file(self, source_path, dest_path, callback=None):
+        assert 0, "must implement in sub-class"
+
     def write_file(self, file_path, contents, mode=None):
         assert 0, "must implement in sub-class"
 
@@ -34,6 +37,9 @@ class RemoteControl:
         assert 0, "must implement in sub-class"
 
     def shell(self):
+        assert 0, "must implement in sub-class"
+
+    def makedirs(self, dir_path):
         assert 0, "must implement in sub-class"
 
 
@@ -56,6 +62,14 @@ class LocalControl(RemoteControl):
     """Local file-system access"""
     def __init__(self, node):
         RemoteControl.__init__(self, node)
+
+    @convert_local_errors
+    def put_file(self, source_path, dest_path, callback=None):
+        shutil.copy(source_path, dest_path)
+
+    @convert_local_errors
+    def makedirs(self, dir_path):
+        return os.stat(dir_path)
 
     @convert_local_errors
     def read_file(self, file_path):

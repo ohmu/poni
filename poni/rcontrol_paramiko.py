@@ -86,11 +86,13 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
     @convert_paramiko_errors
     def read_file(self, file_path):
+        file_path = str(file_path)
         sftp = self.get_sftp()
         return sftp.file(file_path, mode="rb").read()
 
     @convert_paramiko_errors
     def write_file(self, file_path, contents, mode=None):
+        file_path = str(file_path)
         sftp = self.get_sftp()
         f = sftp.file(file_path, mode="wb")
         if mode is not None:
@@ -180,5 +182,21 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
     @convert_paramiko_errors
     def stat(self, file_path):
+        file_path = str(file_path)
         sftp = self.get_sftp()
         return sftp.stat(file_path)
+
+    @convert_paramiko_errors
+    def put_file(self, source_path, dest_path, callback=None):
+        source_path = str(source_path)
+        dest_path = str(dest_path)
+        sftp = self.get_sftp()
+        sftp.put(source_path, dest_path, callback=callback)
+
+    @convert_paramiko_errors
+    def makedirs(self, dir_path):
+        dir_path = str(dir_path)
+        sftp = self.get_sftp()
+        # TODO: support for multiple levels of dirs
+        sftp.mkdir(dir_path)
+

@@ -9,6 +9,8 @@ See LICENSE for details.
 from . import rcontrol
 from . import rcontrol_paramiko
 from . import rcontrol_openssh
+from . import errors
+
 
 def get_remote(node):
     # NOTE: assuming that empty "host" means localhost would be dangerous
