@@ -3,6 +3,11 @@ include tests/*.py
 include README.html
 include README.rst
 include README.txt
+include version.py
+include setup.py
+include setup.cfg
+include LICENSE
+include MANIFEST.in
 
 recursive-include examples *
 recursive-exclude examples *~ *.pyc \.*

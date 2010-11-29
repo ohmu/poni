@@ -1,4 +1,8 @@
+rst2html=rst2html
+
 all: dist doc readme example-doc
+
+include Makefile.debian
 
 dist: doc readme
 	python setup.py sdist
@@ -12,17 +16,17 @@ README.txt: README.html
 	lynx $< -dump > $@
 
 README.html: README.rst LICENSE
-	rst2html.py $< $@
+	$(rst2html) $< $@
 
 example-doc: examples/puppet/README.html examples/db-cluster/README.html
 
 examples/puppet/README.html: examples/puppet/README.rst
-	rst2html.py $< $@
+	$(rst2html) $< $@
 
 examples/db-cluster/README.html: examples/db-cluster/README.rst
-	rst2html.py $< $@
+	$(rst2html) $< $@
 
-clean:
+clean: deb-clean
 	rm -rf dist/ build/ poni.egg-info/ poni/*.pyc cover/ examples/puppet/README.html examples/db-cluster/README.html README.html README.txt *.pyc
 	(cd doc && make clean)
 

@@ -1,0 +1,21 @@
+version = $(shell git describe)
+short_version = $(shell git describe | sed 's/-g.*//')
+export DEBFULLNAME := Mika Eloranta
+export DEBEMAIL := mika.eloranta@gmail.com
+
+debian:
+	python setup.py sdist -d ..
+	cp "../poni-$(version).tar.gz" "../poni_$(short_version).orig.tar.gz"
+	echo | dh_make -b -i -p "poni_$(version)" -c blank -f "../poni-$(version).tar.gz"
+	rm debian/*ex debian/*EX debian/docs debian/README.Debian
+	cp debian.in/* debian/
+	dch -v $(version) -D unstable "TODO: message"
+
+deb-debuild: debian
+	debuild -us -uc
+
+deb-clean:
+	rm -rf debian/
+
+deb: debian
+	dpkg-buildpackage -S -us -uc

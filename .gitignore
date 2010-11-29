@@ -9,3 +9,5 @@ poni/version.py
 
 README.html
 README.txt
+debian/
+.pc/
