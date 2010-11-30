@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import logging
+import shlex
 import argparse
 from path import path
 from . import config
@@ -228,16 +229,20 @@ class Tool:
         except (OSError, IOError), error:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
 
-        re_split = re.compile("[ \t]+")
+        def wrap(arg):
+            if " " in arg:
+                return repr(arg)
+            else:
+                return arg
+
         for line in lines:
-            line = line.strip()
-            if not line or line[:1] == "#":
+            args = shlex.split(line, comments=True)
+            if not args:
                 continue
 
-            args = re_split.split(line)
             sub_arg = self.parser.parse_args(args)
             if arg.verbose:
-                print "> " + " ".join(args)
+                print "$ " + " ".join(wrap(a) for a in args)
 
             self.run_one(sub_arg)
 
