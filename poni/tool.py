@@ -18,8 +18,10 @@ from . import errors
 from . import util
 from . import core
 from . import cloud
+from . import vc
 
 TOOL_NAME = "poni"
+
 
 class Tool:
     """command-line tool"""
@@ -211,6 +213,22 @@ class Tool:
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
 
+        # vc
+        vc_p = subparsers.add_parser("vc", help="version control")
+        vc_sub = vc_p.add_subparsers(dest="vcmd",
+                                     help="command to execute")
+
+        # vc init
+        sub = vc_sub.add_parser("init", help="init version control in repo")
+
+        # vc status
+        sub = vc_sub.add_parser("status", help="show working tree status")
+
+        # vc commit
+        sub = vc_sub.add_parser("commit", help="commit all changes")
+        sub.add_argument('message', type=str,
+                         help='commit message')
+
         return parser
 
     def handle_add_system(self, arg):
@@ -346,6 +364,28 @@ class Tool:
                 control_func = controls.get(arg.control)
                 if control_func:
                     control_func()
+
+    def handle_vc_init(self, arg):
+        if self.confman.vc:
+            raise errors.UserError(
+                "version control already initialized in this repo")
+
+        self.confman.vc = vc.GitVersionControl(self.confman.root_dir,
+                                               init=True)
+
+    def require_vc(self):
+        if not self.confman.vc:
+            raise errors.UserError(
+                "version control not initialized in this repo")
+
+    def handle_vc_status(self, arg):
+        self.require_vc()
+        for out in self.confman.vc.status():
+            print out,
+
+    def handle_vc_commit(self, arg):
+        self.require_vc()
+        self.confman.vc.commit_all(arg.message)
 
     def handle_cloud_terminate(self, arg):
         count = 0
@@ -601,6 +641,8 @@ class Tool:
             handler_name = "handle_remote_%s" % arg.rcmd.replace("-", "_")
         elif arg.command == "cloud":
             handler_name = "handle_cloud_%s" % arg.ccmd.replace("-", "_")
+        elif arg.command == "vc":
+            handler_name = "handle_vc_%s" % arg.vcmd.replace("-", "_")
         else:
             handler_name = "handle_%s" % arg.command.replace("-", "_")
 

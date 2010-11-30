@@ -16,6 +16,7 @@ from . import newconfig
 from . import errors
 from . import util
 from . import rcontrol_all
+from . import vc
 
 NODE_CONF_FILE = "node.json"
 SYSTEM_CONF_FILE = "system.json"
@@ -259,6 +260,8 @@ class ConfigMan:
         if must_exist:
             # TODO: actually use it for something
             self.load_config()
+
+        self.vc = vc.create_vc(self.root_dir)
 
     def init_repo(self):
         if self.config_path.exists():
