@@ -225,18 +225,22 @@ class Node(Item):
         for conf in self.iter_configs():
             conf.collect(manager, self)
 
-    def collect_parents(self, manager):
+    def collect_parents(self, manager, node=None):
+        node = node or self
         parent_name = self.get("parent")
         if parent_name:
             # collect configs from parent node
             parent_path = self.confman.system_root / parent_name
             parent_node = self.confman.get_node(parent_path, self.system)
             for conf in parent_node.iter_configs():
-                conf.collect(manager, self)
+                conf.collect(manager, node)
+
+            # collect parent's parents ad infinitum...
+            parent_node.collect_parents(manager, node)
 
         # collect configs from this node's inherited configs
         for conf in self.iter_configs():
-            conf.collect_parents(manager, self)
+            conf.collect_parents(manager, node)
 
 
 class System(Item):
