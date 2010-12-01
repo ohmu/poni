@@ -71,14 +71,19 @@ class Tool:
         # add-node
         sub = subparsers.add_parser("add-node", help="add a new node")
         sub.add_argument('node', type=str, help='name of the node')
-        sub.add_argument("-c", "--count", metavar="N..M", type=str,
+        sub.add_argument("-n", "--count", metavar="N..M", type=str,
                          default="1", help="number of nodes ('N' or 'N..M'")
-        sub.add_argument("-n", "--host", metavar="HOST",
+        sub.add_argument("-H", "--host", metavar="HOST",
                          type=str, default="", dest="host",
                          help="host address")
         sub.add_argument("-i", "--inherit-node", metavar="NODE",
                          type=str, default="", dest="inherit_node",
                          help="inherit from node (regexp)")
+        sub.add_argument("-c", "--copy-props", default=False,
+                         action="store_true",
+                         help="copy parent node's properties")
+        sub.add_argument("-v", "--verbose", default=False,
+                         action="store_true", help="verbose output")
 
         # list
         sub = subparsers.add_parser("list", help="list systems and nodes")
@@ -538,14 +543,25 @@ class Tool:
         else:
             parent_node_name = None
 
+        if arg.verbose:
+            logger = self.log.info
+        else:
+            logger = self.log.debug
+
         n, m = util.parse_count(arg.count)
         for n in range(n, m):
             node_name = arg.node.format(id=n)
             host = arg.host.format(id=n)
             node_spec = self.confman.create_node(
-                node_name, host=host,
-                parent_node_name=parent_node_name)
-            self.log.debug("created: %s", node_spec)
+                node_name, host=host, parent_node_name=parent_node_name,
+                copy_props=arg.copy_props)
+
+            if parent_node_name:
+                msg = " <= %s" % (parent_node_name)
+            else:
+                msg = ""
+
+            logger("node added: %s%s", node_name, msg)
 
     def handle_list(self, arg):
         format_str = "%8s %s"

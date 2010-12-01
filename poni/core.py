@@ -307,7 +307,8 @@ class ConfigMan:
     def system_exists(self, name):
         return (path(self.system_root) / name).exists()
 
-    def create_node(self, node, host=None, parent_node_name=None):
+    def create_node(self, node, host=None, parent_node_name=None,
+                    copy_props=None):
         system_dir, node_name = path(node).splitpath()
         if not self.system_exists(system_dir):
             self.create_system(system_dir)
@@ -315,13 +316,19 @@ class ConfigMan:
         node_dir = self.get_node_dir(system_dir, node_name, must_exist=False)
         node_dir.makedirs()
         spec_file = node_dir / NODE_CONF_FILE
-        spec = {"host":host or ""}
+
+        if copy_props and parent_node_name:
+            parent_node_conf = (self.system_root / parent_node_name
+                                / NODE_CONF_FILE)
+            spec = json.load(file(parent_node_conf))
+        else:
+            spec = {}
+
+        spec["host"] = host or ""
         if parent_node_name:
             spec["parent"] = parent_node_name
 
         util.json_dump(spec, file(spec_file, "w"))
-
-        config_dir = node_dir / CONFIG_DIR
 
         return spec_file
 

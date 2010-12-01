@@ -18,7 +18,7 @@ add-config template/db-node sql-shard
 set template\$ verify=bool:false
 
 # create db backend cluster
-add-node db/backend/cluster/pg{id:04} -c 4 -i ^template/db-node\$
+add-node db/backend/cluster/pg{id:04} -n 4 -i ^template/db-node\$
 set db/backend/cluster\$ shards=int:64
 set cluster/pg000 host=@local
 
@@ -28,7 +28,7 @@ add-config report/example example1
 set ^report/example host=@local
 
 # create some dummy frontend nodes
-add-node web/frontend/leiska{id:02} -c 2
+add-node web/frontend/leiska{id:02} -n 2
 set frontend$ msg=hello-world
 set leiska01 host=leiska01.company.com
 set leiska02 host=leiska02.company.com
