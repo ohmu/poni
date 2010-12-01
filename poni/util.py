@@ -6,6 +6,7 @@ See LICENSE for details.
 
 """
 
+import os
 from . import errors
 
 try:
@@ -40,11 +41,17 @@ def to_bool(value):
     except KeyError:
         raise errors.InvalidProperty("invalid boolean value: %r" % (value,))
 
+def from_env(value):
+    try:
+        return os.environ[value]
+    except KeyError:
+        raise errors.InvalidProperty("environment variable %r not set" % value)
 
 PROP_PREFIX = {
     "int:": int,
     "float:": float,
     "bool:": to_bool,
+    "env:": from_env,
     }
 
 def parse_prop(prop_str):
