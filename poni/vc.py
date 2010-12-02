@@ -1,6 +1,11 @@
 from path import path
 import git
 
+GIT_IGNORE = """\
+*~
+*.pyc
+"""
+
 class VersionControl:
     def __init__(self, repo_dir):
         self.repo_dir = repo_dir
@@ -10,13 +15,18 @@ class GitVersionControl(VersionControl):
     def __init__(self, repo_dir, init=False):
         VersionControl.__init__(self, repo_dir)
         if init:
-            self.git = git.Repo.init(repo_dir)
-            self.commit_all("initial commit")
+            self.init_repo(repo_dir)
         else:
             self.git = git.Repo(repo_dir)
 
         self.add = self.git.index.add
         self.commit = self.git.index.commit
+
+    def init_repo(self, repo_dir):
+        self.git = git.Repo.init(repo_dir)
+        (repo_dir / ".gitignore").write_bytes(GIT_IGNORE)
+        self.git.index.add([".gitignore"])
+        self.commit_all("initial commit")
 
     def commit_all(self, message):
         #self.git.index.add(self.git.untracked_files)
