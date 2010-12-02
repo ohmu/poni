@@ -96,7 +96,12 @@ class Manager:
 
             source_path = entry["config"].path / entry["source_path"]
             try:
-                dest_path, output = render(source_path, entry["dest_path"])
+                dest_path = entry["dest_path"]
+                if dest_path[-1:] == "/":
+                    # dest path ending in slash: use source filename
+                    dest_path = path(dest_path) / source_path.basename()
+
+                dest_path, output = render(source_path, dest_path)
                 dest_path = path(dest_path)
             except Exception, error:
                 self.emit_error(entry["node"], source_path, error)
