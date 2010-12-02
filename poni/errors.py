@@ -32,3 +32,9 @@ class RemoteError(Error):
 
 class RepoError(Error):
     """repository error"""
+
+class ImporterError(Error):
+    """importer error"""
+
+class MissingLibraryError(Error):
+    """missing library error"""

@@ -19,6 +19,7 @@ from . import util
 from . import core
 from . import cloud
 from . import vc
+from . import importer
 
 TOOL_NAME = "poni"
 
@@ -190,6 +191,11 @@ class Tool:
         sub.add_argument("-v", "--verbose", default=False,
                          action="store_true", help="verbose output")
 
+        # import
+        sub = subparsers.add_parser("import", help="import nodes/configs")
+        sub.add_argument('source', type=str, help='source dir/file',
+                         nargs="+")
+
         # cloud
         cloud_p = subparsers.add_parser("cloud", help="manage cloud nodes")
         cloud_sub = cloud_p.add_subparsers(dest="ccmd",
@@ -250,6 +256,11 @@ class Tool:
 
     def handle_init(self, arg):
         self.confman.init_repo()
+
+    def handle_import(self, arg):
+        for source_path in arg.source:
+            source = importer.get_importer(source_path)
+            source.import_to(self.confman)
 
     def handle_script(self, arg):
         try:
