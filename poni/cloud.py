@@ -221,8 +221,9 @@ class AwsProvider(Provider):
                                      dns=instance.private_dns_name))
 
             if pending:
-                self.log.info("[%s/%s] instances started, waiting...",
-                              len(output), len(output) + len(pending))
+                self.log.info("[%s/%s] instances %r, waiting...",
+                              len(output), len(output) + len(pending),
+                              wait_state)
                 time.sleep(5)
 
         return output

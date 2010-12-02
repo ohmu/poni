@@ -218,6 +218,14 @@ class Tool:
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
 
+        # cloud wait
+        sub = cloud_sub.add_parser(
+            "wait", help="wait cloud instances to reach a state")
+        sub.add_argument('target', type=str,
+                         help='target systems/nodes (regexp)')
+        sub.add_argument('--state', type=str, default="running",
+                         help="target instance state, default: 'running'")
+
         # vc
         vc_p = subparsers.add_parser("vc", help="version control")
         vc_sub = vc_p.add_subparsers(dest="vcmd",
@@ -426,7 +434,13 @@ class Tool:
                 self.log.info("%s: updated: %s", node.name, change_str)
                 node.save()
 
+    def handle_cloud_wait(self, arg):
+        return self.cloud_op(arg, False)
+
     def handle_cloud_init(self, arg):
+        return self.cloud_op(arg, True)
+
+    def cloud_op(self, arg, start):
         nodes = []
 
         def printable(dict_obj):
@@ -437,7 +451,7 @@ class Tool:
             if not cloud_prop:
                 continue
 
-            if cloud_prop and cloud_prop.get("instance"):
+            if start and cloud_prop and cloud_prop.get("instance"):
                 if not arg.reinit:
                     self.log.warning("%s has already been cloud-initialized, "
                                      "use --reinit to override",
@@ -447,24 +461,48 @@ class Tool:
                     self.log.info("%s: reinit: existing config scrapped: %s",
                                   node.name, cloud_prop)
 
-            provider = self.sky.get_provider(cloud_prop)
-            props = provider.init_instance(cloud_prop)
-            node.update(props)
-            node.save()
-            self.log.info("%s: initialized: %s", node.name,
-                          printable(props["cloud"]))
+            if start:
+                provider = self.sky.get_provider(cloud_prop)
+                props = provider.init_instance(cloud_prop)
+                node.update(props)
+                node.save()
+                self.log.info("%s: initialized: %s", node.name,
+                              printable(props["cloud"]))
             nodes.append(node)
 
-        if arg.wait and nodes:
-            props = [n["cloud"] for n in nodes]
-            updates = provider.wait_instances(props)
+        if start:
+            wait = arg.wait
+            wait_state = "running"
+        else:
+            wait = True
+            wait_state = arg.state
 
-            for node in nodes:
-                node_update = updates[node["cloud"]["instance"]]
-                node.update(node_update)
-                node.save()
-                self.log.info("%s update: %s", node.name,
-                              printable(node_update))
+        if wait and nodes:
+            props = [n["cloud"] for n in nodes]
+            providers = {}
+            for cloud_prop in props:
+                provider = self.sky.get_provider(cloud_prop)
+                prop_list = providers.setdefault(provider, [])
+                prop_list.append(cloud_prop)
+
+            for provider, prop_list in providers.iteritems():
+                updates = provider.wait_instances(props, wait_state=wait_state)
+
+                for node in nodes:
+                    node_update = updates[node["cloud"]["instance"]]
+
+                    changes = node.log_update(node_update)
+                    if changes:
+                        change_str = ", ".join(
+                            ("%s=%r (from %r)" % (c[0], c[2], c[1]))
+                            for c in changes)
+                        self.log.info("%s: updated: %s", node.name, change_str)
+                        node.save()
+
+                    #node.update(node_update)
+                    #node.save()
+                    #self.log.info("%s update: %s", node.name,
+                    #              printable(node_update))
 
     def handle_set(self, arg):
         props = dict(util.parse_prop(p) for p in arg.property)
