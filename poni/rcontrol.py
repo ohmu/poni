@@ -100,6 +100,10 @@ class LocalControl(RemoteControl):
     def stat(self, file_path):
         return os.stat(file_path)
 
+    @convert_local_errors
+    def utime(self, file_path, times):
+        os.utime(file_path, times)
+
 
 class SshRemoteControl(RemoteControl):
     """Remote control over an SSH connection using Paramiko"""
