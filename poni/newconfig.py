@@ -11,23 +11,26 @@ TODO: this simple draft is VERY likely to change a lot
 import glob
 import os
 import logging
+from path import path
 from . import errors
 from .util import json
 
 
 class Config(dict):
-    def __init__(self, config_dir):
+    def __init__(self, config_dirs):
         dict.__init__(self)
         self.log = logging.getLogger("config")
-        self.config_dir = config_dir
+        self.config_dirs = list(config_dirs)
         self.config = None
         self.reload()
 
     def reload(self):
-        if not self.config_dir.exists():
-            return
+        files = []
+        for config_dir in [path(d) for d in self.config_dirs]:
+            if config_dir.exists():
+                files.extend(config_dir.glob("*.json"))
 
-        files = sorted(glob.glob(os.path.join(self.config_dir, "*.json")))
+        files = sorted(files, key=lambda x: x.basename())
         self.log.debug("settings files: %r", files)
         for file_path in files:
             try:

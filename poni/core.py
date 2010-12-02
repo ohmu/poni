@@ -130,8 +130,22 @@ class Config(Item):
         self.node = node
         self.settings_dir = self.path / SETTINGS_DIR
         # TODO: lazy-load settings
-        self.settings = newconfig.Config(self.settings_dir)
+        self.settings = newconfig.Config(self.get_settings_dirs())
         self.controls = None
+
+    def get_settings_dirs(self):
+        parent_config_name = self.get("parent")
+        if parent_config_name:
+            # TODO: find_config() that returns exactly one hit
+            hits = list(self.node.confman.find_config(parent_config_name))
+            if len(hits) == 1:
+                for item in hits[0].get_settings_dirs():
+                    yield item
+            else:
+                raise errors.Error("need exactly one parent config %r" % (
+                        parent_config_name))
+
+        yield self.settings_dir
 
     def saveable(self):
         return self.iteritems()
