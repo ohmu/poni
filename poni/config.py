@@ -49,17 +49,21 @@ class Manager:
 
         for file_path in path(entry["source_path"]).files():
             dest_path = dest_dir / file_path.basename()
+            lstat = file_path.stat()
             try:
-                rsize = remote.stat(dest_path).st_size
-                lsize = file_path.stat().st_size
-                # TODO: is size comparison enough?
-                copy = (rsize != lsize)
+                rstat = remote.stat(dest_path)
+                # copy if mtime or size differs
+                print file_path, lstat.st_mtime, rstat.st_mtime
+                copy = ((lstat.st_size != rstat.st_size)
+                        or (lstat.st_mtime != rstat.st_mtime))
             except errors.RemoteError:
                 copy = True
 
             if copy:
                 self.log.info("copying: %s", dest_path)
                 remote.put_file(file_path, dest_path, callback=progress)
+                remote.utime(dest_path, (int(lstat.st_mtime),
+                                         int(lstat.st_mtime)))
                 sys.stderr.write("\n")
             else:
                 self.log.info("already copied: %s", dest_path)
@@ -82,7 +86,6 @@ class Manager:
 
             self.log.debug("verify: %r", entry)
             render = entry["render"]
-            dest_path = entry["dest_path"]
             failed = False
             node_name = entry["node"].name
 
@@ -94,6 +97,7 @@ class Manager:
             source_path = entry["config"].path / entry["source_path"]
             try:
                 dest_path, output = render(source_path, entry["dest_path"])
+                dest_path = path(dest_path)
             except Exception, error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
@@ -151,6 +155,8 @@ class Manager:
 
             return
 
+        dest_dir = dest_path.dirname()
+        remote.makedirs(dest_dir)
         remote.write_file(dest_path, output, mode=mode)
         post_process = entry.get("post_process")
         if post_process:

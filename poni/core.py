@@ -137,7 +137,8 @@ class Config(Item):
         parent_config_name = self.get("parent")
         if parent_config_name:
             # TODO: find_config() that returns exactly one hit
-            hits = list(self.node.confman.find_config(parent_config_name))
+            full_match = "^%s$" % parent_config_name
+            hits = list(self.node.confman.find_config(full_match))
             if len(hits) == 1:
                 for item in hits[0].get_settings_dirs():
                     yield item
