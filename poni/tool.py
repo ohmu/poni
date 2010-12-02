@@ -399,9 +399,10 @@ class Tool:
             if cloud_prop.get("instance"):
                 provider = self.sky.get_provider(cloud_prop)
                 provider.terminate_instances([cloud_prop])
+                self.log.info("terminated: %s", node.name)
                 count += 1
 
-        self.log.info("%s instances terminated" % count)
+        self.log.info("%s instances terminated", count)
 
     def handle_cloud_update(self, arg):
         nodes = []
