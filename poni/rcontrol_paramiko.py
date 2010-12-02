@@ -141,7 +141,6 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         ssh = self.get_ssh()
         transport = ssh.get_transport()
         channel = transport.open_session()
-        stderr = channel.makefile_stderr()
         BS = 2**16
         try:
             channel.exec_command(cmd)
@@ -150,7 +149,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                 r, w, e = select.select([channel], [], [])
                 if channel.recv_stderr_ready():
                     # TODO: will this catch all stderr output?
-                    x = stderr.read(BS)
+                    x = channel.recv_stderr(BS)
                     if x:
                         sys.stderr.write(x)
                         sys.stderr.flush()
