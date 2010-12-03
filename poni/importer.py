@@ -24,7 +24,7 @@ class DebImporter(Importer):
             raise errors.MissingLibraryError(
                 "this feature requires the 'python-debian' library")
 
-    def import_to(self, confman):
+    def import_to(self, confman, verbose=False):
         data = debfile.DebFile(self.source).data.tgz()
 
         prefix = "./usr/lib/poni-config/"
@@ -36,19 +36,19 @@ class DebImporter(Importer):
             dest_sub = item[len(prefix):]
             dest_path = confman.system_root / dest_sub
             dest_dir = dest_path.dirname()
-            write = False
             if not dest_dir.exists():
                 dest_dir.makedirs()
-                write = True
 
             contents = data.extractfile(item).read()
+            write = not dest_path.exists()
             if (not write) and dest_path.exists():
                 old = dest_path.bytes()
                 write = (old != contents)
 
             if write:
                 file(dest_path, "wb").write(contents)
-                self.log.info("imported: %s", dest_path)
+            elif verbose:
+                self.log.info("unchanged: %s", dest_path)
 
 
 def get_importer(source_path):

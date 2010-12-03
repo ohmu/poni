@@ -12,6 +12,7 @@ import sys
 import logging
 import shlex
 import argparse
+import glob
 from path import path
 from . import config
 from . import errors
@@ -193,8 +194,10 @@ class Tool:
 
         # import
         sub = subparsers.add_parser("import", help="import nodes/configs")
-        sub.add_argument('source', type=str, help='source dir/file',
+        sub.add_argument('source', type=path, help='source dir/file',
                          nargs="+")
+        sub.add_argument("-v", "--verbose", default=False,
+                         action="store_true", help="verbose output")
 
         # cloud
         cloud_p = subparsers.add_parser("cloud", help="manage cloud nodes")
@@ -258,9 +261,10 @@ class Tool:
         self.confman.init_repo()
 
     def handle_import(self, arg):
-        for source_path in arg.source:
-            source = importer.get_importer(source_path)
-            source.import_to(self.confman)
+        for glob_pattern in arg.source:
+            for source_path in glob.glob(glob_pattern):
+                source = importer.get_importer(source_path)
+                source.import_to(self.confman, verbose=arg.verbose)
 
     def handle_script(self, arg):
         try:

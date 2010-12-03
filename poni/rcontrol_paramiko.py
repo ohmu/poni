@@ -9,6 +9,7 @@ See LICENSE for details.
 import os
 import sys
 import socket
+import time
 from . import errors
 from . import rcontrol
 import select
@@ -131,7 +132,22 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
             self.log.debug("ssh connect: host=%s, user=%s, key=%s",
                            host, user, key_file)
-            ssh.connect(host, username=user, key_filename=key_file)
+
+            retries = 10
+            while retries:
+                try:
+                    ssh.connect(host, username=user, key_filename=key_file)
+                    break
+                except (socket.error, paramiko.SSHException), error:
+                    if not retries:
+                        raise
+
+                    self.log.warning("ssh connection to %r failed: %s: %s, "
+                                     "retries remaining=%s" % (
+                            error.__class__.__name__, error, host, retries))
+
+                    time.sleep(1)
+                    retries -= 1
 
             self._ssh = ssh
 
