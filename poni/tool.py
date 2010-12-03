@@ -47,6 +47,17 @@ class Tool:
         if not default_root:
             default_root = str(path(os.environ["HOME"]) / (".%s" % TOOL_NAME))
 
+        # parent parsers
+        match_parent = argparse.ArgumentParser(add_help=False)
+        match_parent.add_argument("-M", "--full-match", default=False,
+                                  dest="full_match", action="store_true",
+                                  help="require full regexp match")
+
+        verbose_parent = argparse.ArgumentParser(add_help=False)
+        verbose_parent.add_argument("-v", "--verbose", default=False,
+                                    action="store_true",
+                                    help="verbose output")
+
         # generic arguments
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
@@ -61,17 +72,17 @@ class Tool:
         sub = subparsers.add_parser("init", help="init repository")
 
         # script
-        sub = subparsers.add_parser("script", help="run a script")
+        sub = subparsers.add_parser("script", help="run a script",
+                                    parents=[verbose_parent])
         sub.add_argument('script', type=str, help='script file', nargs="?")
-        sub.add_argument("-v", "--verbose", default=False,
-                         action="store_true", help="verbose output")
 
         # add-system
         sub = subparsers.add_parser("add-system", help="add a sub-system")
         sub.add_argument('system', type=str, help='name of the system')
 
         # add-node
-        sub = subparsers.add_parser("add-node", help="add a new node")
+        sub = subparsers.add_parser("add-node", help="add a new node",
+                                    parents=[verbose_parent, match_parent])
         sub.add_argument('node', type=str, help='name of the node')
         sub.add_argument("-n", "--count", metavar="N..M", type=str,
                          default="1", help="number of nodes ('N' or 'N..M'")
@@ -84,11 +95,10 @@ class Tool:
         sub.add_argument("-c", "--copy-props", default=False,
                          action="store_true",
                          help="copy parent node's properties")
-        sub.add_argument("-v", "--verbose", default=False,
-                         action="store_true", help="verbose output")
 
         # list
-        sub = subparsers.add_parser("list", help="list systems and nodes")
+        sub = subparsers.add_parser("list", help="list systems and nodes",
+                                    parents=[match_parent])
         sub.add_argument('pattern', type=str, help='search pattern', nargs="?")
         sub.add_argument("-s", "--systems", dest="show_systems", default=False,
                          action="store_true", help="show systems")
@@ -117,7 +127,8 @@ class Tool:
 
         # add-config
         sub = subparsers.add_parser("add-config",
-                                    help="add a config to node(s)")
+                                    help="add a config to node(s)",
+                                    parents=[verbose_parent, match_parent])
         sub.add_argument('nodes', type=str, help='target nodes (regexp)')
         sub.add_argument('config', type=str, help='name of the config')
         sub.add_argument("-i", "--inherit", metavar="CONFIG",
@@ -126,30 +137,29 @@ class Tool:
         sub.add_argument("-d", "--copy-dir", metavar="DIR",
                          type=str, default="", dest="copy_dir",
                          help="copy config files from DIR")
-        sub.add_argument("-v", "--verbose", default=False,
-                         action="store_true", help="verbose output")
         sub.add_argument("-c", "--create-node", default=False,
                          action="store_true",
                          help="create node if it does not exist")
 
         # verify
-        sub = subparsers.add_parser("verify", help="verify local node configs")
+        sub = subparsers.add_parser("verify", help="verify local node configs",
+                                    parents=[match_parent])
         sub.add_argument('nodes', type=str, help='target nodes (regexp)',
                          nargs="?")
 
         # show
-        sub = subparsers.add_parser("show", help="show node configs")
+        sub = subparsers.add_parser("show", help="show node configs",
+                                    parents=[verbose_parent, match_parent])
         sub.add_argument('nodes', type=str, help='target nodes (regexp)',
                          nargs="?")
         sub.add_argument("-d", "--show-dynamic", dest="show_dynamic",
                          default=False, action="store_true",
                          help="show dynamic configuration")
 
-        sub = subparsers.add_parser("deploy", help="deploy node configs")
+        sub = subparsers.add_parser("deploy", help="deploy node configs",
+                                    parents=[verbose_parent, match_parent])
         sub.add_argument('nodes', type=str, help='target nodes (regexp)',
                          nargs="?")
-        sub.add_argument("-v", "--verbose", default=False,
-                         action="store_true", help="verbose output")
 
         # control
         sub = subparsers.add_parser(
@@ -165,39 +175,36 @@ class Tool:
                                            help="command to execute")
 
         # remote exec
-        r_exec = remote_sub.add_parser("exec", help="run shell command")
+        r_exec = remote_sub.add_parser("exec", help="run shell command",
+                                       parents=[verbose_parent, match_parent])
         r_exec.add_argument('nodes', type=str, help='target nodes (regexp)')
-        r_exec.add_argument("-v", "--verbose", default=False,
-                            action="store_true", help="verbose output")
         r_exec.add_argument('cmd', type=str, help='command to execute')
 
         # remote shell
-        r_shell = remote_sub.add_parser("shell", help="interactive shell")
-        r_shell.add_argument("-v", "--verbose", default=False,
-                             action="store_true", help="verbose output")
+        r_shell = remote_sub.add_parser("shell", help="interactive shell",
+                                        parents=[verbose_parent, match_parent])
         r_shell.add_argument('nodes', type=str, help='target nodes (regexp)')
 
         # audit
-        sub = subparsers.add_parser("audit", help="audit active node configs")
+        sub = subparsers.add_parser("audit", help="audit active node configs",
+                                    parents=[verbose_parent, match_parent])
         sub.add_argument('nodes', type=str, help='target nodes (regexp)',
                          nargs="?")
         sub.add_argument("-d", "--diff", dest="show_diff", default=False,
                          action="store_true", help="show config diffs")
 
-        sub = subparsers.add_parser("set", help="set system/node properties")
+        sub = subparsers.add_parser("set", help="set system/node properties",
+                                    parents=[verbose_parent, match_parent])
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
         sub.add_argument('property', type=str, nargs="+",
                          help='property and value ("prop=value")')
-        sub.add_argument("-v", "--verbose", default=False,
-                         action="store_true", help="verbose output")
 
         # import
-        sub = subparsers.add_parser("import", help="import nodes/configs")
+        sub = subparsers.add_parser("import", help="import nodes/configs",
+                                    parents=[verbose_parent])
         sub.add_argument('source', type=path, help='source dir/file',
                          nargs="+")
-        sub.add_argument("-v", "--verbose", default=False,
-                         action="store_true", help="verbose output")
 
         # cloud
         cloud_p = subparsers.add_parser("cloud", help="manage cloud nodes")
@@ -206,7 +213,8 @@ class Tool:
 
         # cloud init
         sub = cloud_sub.add_parser("init",
-                                   help="reserve a cloud image for nodes")
+                                   help="reserve a cloud image for nodes",
+                                   parents=[match_parent])
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
         sub.add_argument("--reinit", dest="reinit", default=False,
@@ -217,19 +225,22 @@ class Tool:
 
         # cloud update
         sub = cloud_sub.add_parser("update",
-                                   help="update cloud instance properties ")
+                                   help="update cloud instance properties",
+                                   parents=[match_parent])
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
 
         # cloud terminate
         sub = cloud_sub.add_parser("terminate",
-                                   help="terminate cloud instances")
+                                   help="terminate cloud instances",
+                                   parents=[match_parent])
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
 
         # cloud wait
         sub = cloud_sub.add_parser(
-            "wait", help="wait cloud instances to reach a state")
+            "wait", help="wait cloud instances to reach a state",
+            parents=[match_parent])
         sub.add_argument('target', type=str,
                          help='target systems/nodes (regexp)')
         sub.add_argument('--state', type=str, default="running",
@@ -315,11 +326,11 @@ class Tool:
             parent_config_name = None
 
         updates = []
-        nodes = list(self.confman.find(arg.nodes))
+        nodes = list(self.confman.find(arg.nodes, full_match=arg.full_match))
         if arg.create_node and (not nodes):
             # node does not exist, create it as requested
             self.confman.create_node(arg.nodes)
-            nodes = self.confman.find(arg.nodes)
+            nodes = self.confman.find(arg.nodes, full_match=True)
 
         for node in nodes:
             existing = list(c for c in node.iter_configs()
@@ -358,7 +369,7 @@ class Tool:
 
     def remote_op(self, arg, op):
         ret = 0
-        for node in self.confman.find(arg.nodes):
+        for node in self.confman.find(arg.nodes, full_match=arg.full_match):
             if not node.get("host"):
                 continue
 
@@ -417,7 +428,7 @@ class Tool:
 
     def handle_cloud_terminate(self, arg):
         count = 0
-        for node in self.confman.find(arg.target):
+        for node in self.confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if cloud_prop.get("instance"):
                 provider = self.sky.get_provider(cloud_prop)
@@ -429,7 +440,7 @@ class Tool:
 
     def handle_cloud_update(self, arg):
         nodes = []
-        for node in self.confman.find(arg.target):
+        for node in self.confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if not cloud_prop.get("instance"):
                 continue
@@ -461,7 +472,7 @@ class Tool:
         def printable(dict_obj):
             return ", ".join(("%s=%r" % item) for item in dict_obj.iteritems())
 
-        for node in self.confman.find(arg.target):
+        for node in self.confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if not cloud_prop:
                 continue
@@ -522,12 +533,25 @@ class Tool:
     def handle_set(self, arg):
         props = dict(util.parse_prop(p) for p in arg.property)
         logger = logging.info if arg.verbose else logging.debug
-        for item in self.confman.find(arg.target, systems=True):
+        changed_items = []
+        found = False
+        for item in self.confman.find(arg.target, systems=True,
+                                      full_match=arg.full_match):
+            found = True
             changes = item.set_properties(props)
             for key, old_value, new_value in changes:
                 logger("%s: set %s=%r (was %r)", item.name, key, new_value,
                        old_value)
 
+            if not changes:
+                logger("%s: no changes", item.name)
+            else:
+                changed_items.append(item)
+
+        if not found:
+            raise errors.Error("no matching nodes found")
+
+        for item in changed_items:
             item.save()
 
     def collect_all(self, manager):
@@ -543,12 +567,16 @@ class Tool:
 
         return items
 
-    def verify_op(self, target, **verify_options):
+    def verify_op(self, target, full_match=False, **verify_options):
         manager = config.Manager(self.confman)
         self.collect_all(manager)
 
         if target:
-            re_target = re.compile(target)
+            if full_match:
+                search_op = re.compile(target + "$").match
+            else:
+                search_op = re.compile(target).search
+
             def target_filter(item):
                 return re_target.search(item["node"].name)
         else:
@@ -558,20 +586,23 @@ class Tool:
         return manager
 
     def handle_show(self, arg):
-        manager = self.verify_op(arg.nodes, show=(not arg.show_dynamic))
+        manager = self.verify_op(arg.nodes, show=(not arg.show_dynamic),
+                                 full_match=arg.full_match)
         if arg.show_dynamic:
             for item in manager.dynamic_conf:
                 print item
 
     def handle_deploy(self, arg):
-        self.verify_op(arg.nodes, show=False, deploy=True, verbose=arg.verbose)
+        self.verify_op(arg.nodes, show=False, deploy=True, verbose=arg.verbose,
+                       full_match=arg.full_match)
 
     def handle_audit(self, arg):
         self.verify_op(arg.nodes, show=False, deploy=False, audit=True,
-                       show_diff=arg.show_diff)
+                       show_diff=arg.show_diff, full_match=arg.full_match)
 
     def handle_verify(self, arg):
-        manager = self.verify_op(arg.nodes, show=False)
+        manager = self.verify_op(arg.nodes, show=False,
+                                 full_match=arg.full_match)
 
         if manager.error_count:
             self.log.error("failed: files with errors: [%d/%d]",
@@ -584,7 +615,8 @@ class Tool:
 
     def handle_add_node(self, arg):
         if arg.inherit_node:
-            nodes = list(self.confman.find(arg.inherit_node))
+            nodes = list(self.confman.find(arg.inherit_node,
+                                           full_match=arg.full_match))
             if len(nodes) == 0:
                 raise errors.UserError(
                     "pattern %r does not match any nodes" % (arg.inherit_node))
@@ -630,7 +662,8 @@ class Tool:
 
             return (INDENT * (depth-1)) + name
 
-        for item in self.confman.find(arg.pattern, systems=arg.show_systems):
+        for item in self.confman.find(arg.pattern, systems=arg.show_systems,
+                                      full_match=arg.full_match):
             name = norm_name(item["depth"], item.name)
             if arg.show_inherits and item.get("parent"):
                 name = "%s <= %s" % (name, item.get("parent"))

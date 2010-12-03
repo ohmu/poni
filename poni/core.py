@@ -374,13 +374,19 @@ class ConfigMan:
                     yield config
 
     def find(self, pattern, current=None, system=None, nodes=True,
-             systems=False, curr_depth=0, extra=None, depth=None):
+             systems=False, curr_depth=0, extra=None, depth=None,
+             full_match=False):
         depth = depth or []
         extra = extra or {}
         pattern = pattern or ""
+
         if isinstance(pattern, (str, unicode)):
+            if full_match and not pattern.endswith("$"):
+                pattern += "$"
+
             pattern = re.compile(pattern or "")
 
+        match_op = pattern.match if full_match else pattern.search
         current = current or self.system_root
         conf_file = current / NODE_CONF_FILE
         name = current[len(self.system_root)+1:]
@@ -388,7 +394,7 @@ class ConfigMan:
 
         if conf_file.exists():
             # this is a node dir
-            if pattern.search(name) and ok_depth:
+            if match_op(name) and ok_depth:
                 yield self.get_node(current, system, extra=extra)
         else:
             # system dir
@@ -396,7 +402,7 @@ class ConfigMan:
             subdirs.sort()
             system = System(system, name, current, len(subdirs), extra=extra)
             if (systems and (current != self.system_root) and ok_depth
-                and pattern.search(name)):
+                and match_op(name)):
                 yield system
 
             for sub_index, subdir in enumerate(subdirs):
@@ -406,5 +412,5 @@ class ConfigMan:
                 for result in self.find(pattern, current=subdir, system=system,
                                         nodes=nodes, systems=systems,
                                         curr_depth=sub_depth, extra=extra,
-                                        depth=depth):
+                                        depth=depth, full_match=full_match):
                     yield result
