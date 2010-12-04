@@ -8,6 +8,7 @@ Poni is a simple system configuration management tool implemented in Python_.
 
 General Information
 ===================
+:documentation: http://melor.github.com/poni/
 :source repo: https://github.com/melor/poni
 :email: mika.eloranta@gmail.com
 :bug tracker: https://github.com/melor/poni/issues
@@ -19,7 +20,7 @@ Installing and operating Poni requires:
 
 * Python_ 2.6 (or greater)
 * setuptools_ installed
-* Internet connection for downloading the dependent Python packages from PyPI_
+* Internet connection for downloading the dependency Python packages from PyPI_
 
 .. _Python: http://www.python.org/
 .. _setuptools: http://http://pypi.python.org/pypi/setuptools
@@ -81,8 +82,9 @@ Verifying the installation
 
 Usage
 =====
-Please refer to the documentation under the ``doc/`` directory and to the
-example systems under the ``examples/`` directory.
+Please refer to the documentation under the ``doc/`` directory
+(published at http://melor.github.com/poni/) and to the example systems under the
+``examples/`` directory.
 
 License (MIT)
 =============
