@@ -19,9 +19,8 @@ CODES = {
 }
 
 CODES.update({
-    'xxx' : '\033[1;48m',
-    'yyy' : '\033[0;36m',
-    'zzz' : '\033[0;35m',
+    'key' : '\033[0;36m',
+    'cloudkey' : '\033[0;35m',
     'str' : '\033[0;32m',
     'bool' : CODES['yellow'],
     'int' : CODES['white'],
@@ -55,7 +54,7 @@ class Output:
 
         return repr(value)
 
-    def color_items(self, items, key_color="yyy"):
+    def color_items(self, items, key_color="key"):
         output = " ".join(("%s:%s" % (self.color(k, key_color),
                                       self.color(self.value_repr(v), "reset"))
                            for k, v in sorted(items)))

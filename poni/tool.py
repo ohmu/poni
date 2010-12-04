@@ -672,7 +672,7 @@ class Tool:
                             HINDENT, INDENT * (item["depth"] - 1), status)))
 
             if arg.show_cloud_prop and cloud_prop:
-                status = output.color_items(cloud_prop.iteritems(), "zzz")
+                status = output.color_items(cloud_prop.iteritems(), "cloudkey")
                 output.sendline(format_str % (
                         "cloud", "%s%s%s" % (HINDENT,
                                              INDENT * (item["depth"] - 1),
