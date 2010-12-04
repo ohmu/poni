@@ -8,7 +8,7 @@ dist: doc readme
 	python setup.py sdist
 
 doc:
-	(cd doc && make all)
+	(cd doc && make html)
 
 readme: README.html
 
