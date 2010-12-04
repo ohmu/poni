@@ -472,7 +472,7 @@ class Tool:
                 search_op = re.compile(target).search
 
             def target_filter(item):
-                return re_target.search(item["node"].name)
+                return search_op(item["node"].name)
         else:
             target_filter = lambda item: True
 
@@ -498,16 +498,21 @@ class Tool:
     @argh.alias("deploy")
     @arg_verbose
     @arg_full_match
+    @argh.arg('--path-prefix', type=str,
+              help='additional prefix for all deployed files')
     @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
     def handle_deploy(self, arg):
         """deploy node configs"""
         confman = core.ConfigMan(arg.root_dir)
         self.verify_op(confman, arg.nodes, show=False, deploy=True,
-                       verbose=arg.verbose, full_match=arg.full_match)
+                       verbose=arg.verbose, full_match=arg.full_match,
+                       path_prefix=arg.path_prefix)
 
     @argh.alias("audit")
     @arg_verbose
     @arg_full_match
+    @argh.arg('--path-prefix', type=str,
+              help='additional prefix for all deployed files')
     @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
     def handle_audit(self, arg):
@@ -515,7 +520,7 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         self.verify_op(confman, arg.nodes, show=False, deploy=False,
                        audit=True, show_diff=arg.show_diff,
-                       full_match=arg.full_match)
+                       full_match=arg.full_match, path_prefix=arg.path_prefix)
 
     @argh.alias("verify")
     @arg_full_match

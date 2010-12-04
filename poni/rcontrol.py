@@ -11,6 +11,7 @@ from __future__ import with_statement
 import os
 import subprocess
 import logging
+import shutil
 from . import errors
 
 
@@ -69,7 +70,7 @@ class LocalControl(RemoteControl):
 
     @convert_local_errors
     def makedirs(self, dir_path):
-        return os.stat(dir_path)
+        return os.makedirs(dir_path)
 
     @convert_local_errors
     def read_file(self, file_path):

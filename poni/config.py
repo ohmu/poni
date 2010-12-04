@@ -69,12 +69,15 @@ class Manager:
                 self.log.info("already copied: %s", dest_path)
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
-               verbose=False, callback=None):
+               verbose=False, callback=None, path_prefix=""):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
         files = [f for f in self.files if not f.get("report")]
         reports = [f for f in self.files if f.get("report")]
+        if path_prefix and not path_prefix.endswith("/"):
+            path_prefix += "/"
+
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
@@ -102,7 +105,7 @@ class Manager:
                     dest_path = path(dest_path) / source_path.basename()
 
                 dest_path, output = render(source_path, dest_path)
-                dest_path = path(dest_path)
+                dest_path = path(path_prefix + dest_path).normpath()
             except Exception, error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
@@ -161,7 +164,11 @@ class Manager:
             return
 
         dest_dir = dest_path.dirname()
-        remote.makedirs(dest_dir)
+        try:
+            remote.stat(dest_dir)
+        except errors.RemoteError:
+            remote.makedirs(dest_dir)
+
         remote.write_file(dest_path, output, mode=mode)
         post_process = entry.get("post_process")
         if post_process:
