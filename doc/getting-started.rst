@@ -145,6 +145,8 @@ We want to deploy a file describing the DB access permissions named ``pg_hba.con
 the backend node::
 
   $ cat > pg_hba.conf <<EOF
+  # This the pg_hba.conf for $node.name
+  #
   # TYPE  DATABASE        USER            ADDRESS                 METHOD
   local   all             all                                     trust
   EOF
@@ -163,18 +165,96 @@ installed and where::
 The above plugin will install a single file ``pg_hba.conf`` into the directory
 ``/etc/postgres/8.4/``.
 
-Next, the files can be added into the existing ``pg84`` config::
+Now the files can be added into the existing ``pg84`` config::
 
-  TODO
+  $ poni update-config pg84 plugin.py pg_hba.conf -v
+  poni    INFO    webshop/backend/postgres1/pg84: added 'plugin.py'
+  poni    INFO    webshop/backend/postgres1/pg84: added 'pg_hba.conf'
+
+Now the database node is setup and we can move on to verifying and deployment...
 
 Verifying Configs
 -----------------
-TODO
+Checking that there are no problems rendering any of the configs can be done with the
+``verify`` command::
+
+  $ poni verify
+  poni    INFO    all [1] files ok
+
+No errors reported, good. Let's see how our ``pg_hba.conf`` looks like::
+
+  $ poni show
+  --- BEGIN webshop/backend/postgres1: dest=/etc/postgres/8.4/pg_hba.conf ---
+  # This is the pg_hba.conf for webshop/backend/postgres1
+  #
+  # TYPE  DATABASE        USER            ADDRESS                 METHOD
+  local   all             all                                     trust
+
+  --- END webshop/backend/postgres1: dest=/etc/postgres/8.4/pg_hba.conf ---
+
+Note that the ``$node.name`` template directive got replaced with the name (full path)
+of the node.
 
 Deploying
 ---------
-TODO
+In order to be able to deploy, Poni needs to know the hostnames of each nodes involved.
+For this exercise we'll deploy the files locally instead of copying them over the
+network::
+
+  $ poni deploy postgres1
+  poni    ERROR   RemoteError: webshop/backend/postgres1: 'host' property not set
+
+Node and system properties can be adjusted with the ``set`` command. We'll set it to a
+special value ``@local`` that tells Poni to install the files to the local file-system::
+
+  $ poni set postgres1 host=@local
+  $ poni list postgres1 -p
+      node webshop/backend/postgres1
+      prop     depth:3 host:'@local' index:0
+
+The ``list`` option ``-p`` shows node and system properties. In addition to ``host`` there
+are a couple of automatically set properties ``depth`` (how deep is the node in the
+system hierarchy) and ``index`` (tells the location of the node within its sub-system).
+
+Now deployment can be completed and we'll override the target directory for this exercise
+using the ``--path-prefix`` argument::
+
+  $ poni deploy postgres1 --path-prefix=/tmp
+  manager INFO       WROTE webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+  $ cat /tmp/etc/postgres/8.4/pg_hba.conf
+  # This is the pg_hba.conf for webshop/backend/postgres1
+  # TYPE  DATABASE        USER            ADDRESS                 METHOD
+  local   all             all                                     trust
 
 Auditing
 --------
-TODO
+Checking that the deployed configuration is still up-to-date and intact is simple::
+
+  $ poni audit --path-prefix=/tmp
+  manager INFO          OK webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+
+Let's see what happens if the file is changed::
+
+  $ echo hello >> /tmp/etc/postgres/8.4/pg_hba.conf
+  $ poni audit --path-prefix=/tmp
+  manager WARNING  DIFFERS webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+
+The difference to the proper contents can be viewed by adding the ``--diff`` argument::
+
+  $ poni audit --path-prefix=/tmp --diff
+  manager WARNING  DIFFERS webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+  --- config TODO:mtime
+  +++ active 2010-12-04 21:21:58
+  @@ -1,3 +1,4 @@
+   # This is the pg_hba.conf for webshop/backend/postgres1
+   # TYPE  DATABASE        USER            ADDRESS                 METHOD
+   local   all             all                                     trust
+  +hello
+
+To repair the file, simply run the ``deploy`` command again::
+
+  $ poni deploy postgres1 --path-prefix=/tmp
+  manager INFO       WROTE webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+  $ poni audit --path-prefix=/tmp --diff
+  manager INFO          OK webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+
