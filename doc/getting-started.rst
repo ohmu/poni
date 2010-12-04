@@ -1,0 +1,180 @@
+Getting Started with Poni
+=========================
+Poni is a command-line tool with many different sub-commands for manipulating the
+Poni repository and the system nodes.
+
+Let's see the command-line help::
+
+  $ poni -h
+  usage: poni [-h] [-D] [-d DIR]
+
+              {audit,set,remote,script,verify,add-system,list,init,vc,add-config,show,import,add-node,deploy,cloud}
+              ...
+
+  positional arguments:
+    {audit,set,remote,script,verify,add-system,list,init,vc,add-config,show,import,add-node,deploy,cloud}
+      list                list systems and nodes
+      add-system          add a sub-system
+      init                init repository
+      import              import nodes/configs
+      script              run commands from a script file
+      add-config          add a config to node(s)
+      set                 set system/node properties
+      show                render and show node config files
+      deploy              deploy node configs
+      audit               audit active node configs
+      verify              verify local node configs
+      add-node            add a new node
+      cloud               cloud operations
+      remote              remote operations
+      vc                  version-control operations
+
+  optional arguments:
+    -h, --help            show this help message and exit
+    -D, --debug           enable debug output
+    -d DIR, --root-dir DIR
+                          repository root directory (default: $HOME/.poni/default)
+
+
+The default Poni repository directory, unless specified by the ``PONI_ROOT`` environment
+variable or by the ``--root-dir DIR`` switch, is ``$HOME/.poni/default``.
+
+Command-specific help can be viewed by executing ``poni <command> -h``, for example::
+
+  $ poni add-system -h
+  usage: poni add-system [-h] system
+
+  positional arguments:
+    system      system name
+
+  optional arguments:
+    -h, --help  show this help message and exit
+
+Creating the Poni Repository
+----------------------------
+First, we will need to initialize the repository using the ``init`` command::
+
+  $ poni init
+
+There is no output if the command is successful. Most Poni commands will not output much
+if there are no errors.
+
+Adding Nodes
+------------
+A "system" in the Poni context refers to a collection of nodes and/or sub-systems.
+
+Let's say we are defining a system ``webshop`` with four HTTP frontend servers and a
+single backend SQL database server. We will divided the ``webshop`` system into two
+sub-systems ``frontend`` and ``backend``.
+
+First, we will create the systems::
+
+  $ poni add-system webshop
+  $ poni add-system webshop/frontend
+  $ poni add-system webshop/backend
+
+Again, no output since everything went ok.
+
+Next, we will add the backend SQL database ``postgres1`` server node into the
+``backend`` system::
+
+  $ poni add-node webshop/backend/postgres1
+
+Let's see how the system looks now::
+
+  $ poni list
+    node webshop/backend/postgres1
+
+The ``list`` command shows only nodes by default. Let's also view the systems::
+
+  $ poni list -s
+    system webshop
+    system webshop/backend
+      node webshop/backend/postgres1
+    system webshop/frontend
+
+The left column tells the type of the item shown on the right.
+
+The four HTTP frontend nodes can be added with a single command using the ``-n COUNT``
+option::
+
+
+  $ poni add-node "webshop/frontend/http{id}" -n 4
+  $ poni list
+      node webshop/backend/postgres1
+      node webshop/frontend/http1
+      node webshop/frontend/http2
+      node webshop/frontend/http3
+      node webshop/frontend/http4
+
+``-n 4`` tells Poni that four nodes are to be added. Value ranges can also be given, for
+example ``-n 5..8`` will create nodes 5, 6, 7 and 8.
+
+The ``{id}`` in the node name gets replaced with the node number. Any normal Python
+``string.format()`` formatting codes can be used, too. For example, if you wanted two
+digits then ``http{id:02}`` would do the job.
+
+Adding Configs
+--------------
+A Poni "config" is a configurable item, often a piece of software, than can be added to
+a node. A config often contains multiple configuration file templates and a bunch of
+settings that will be used in the final configuration files deployed to the nodes. Each
+node can have multiple configs applied to them.
+
+Our example DB backend uses PostgreSQL 8.4 as the database  so we will call it ``pg84``.
+We can create the config and view it using the ``-c`` option::
+
+  $ poni add-config postg pg84
+  $ poni list -c
+      node webshop/backend/postgres1
+    config webshop/backend/postgres1/pg84
+      node webshop/frontend/http1
+      node webshop/frontend/http2
+      node webshop/frontend/http3
+      node webshop/frontend/http4
+
+Above we were a bit lazy and only wrote ``postg`` above as the target node.
+
+.. note::
+  Poni system/node/config arguments are evaluated as regular expressions and will match
+  as long as the given pattern appears somewhere in the full name of the target. If there
+  are multiple hits, the command will be executed for each of them. Stricter full name
+  matching can be enabled by adding the ``-M`` option.
+
+We want to deploy a file describing the DB access permissions named ``pg_hba.conf`` to
+the backend node::
+
+  $ cat > pg_hba.conf <<EOF
+  # TYPE  DATABASE        USER            ADDRESS                 METHOD
+  local   all             all                                     trust
+  EOF
+
+Every Poni config needs a ``plugin.py`` file that tells Poni what files need to be
+installed and where::
+
+  $ cat > plugin.py <<EOF
+  from poni import config
+
+  class PlugIn(config.PlugIn):
+      def add_actions(self):
+          self.add_file("pg_hba.conf", dest_path="/etc/postgres/8.4/")
+  EOF
+
+The above plugin will install a single file ``pg_hba.conf`` into the directory
+``/etc/postgres/8.4/``.
+
+Next, the files can be added into the existing ``pg84`` config::
+
+  TODO
+
+Verifying Configs
+-----------------
+TODO
+
+Deploying
+---------
+TODO
+
+Auditing
+--------
+TODO

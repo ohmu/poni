@@ -9,10 +9,29 @@ Welcome to Poni's documentation!
 Poni is a systems management tool for defining, deploying and verifying complex
 multi-node computer systems.
 
-Contents:
+Overview
+--------
+Poni helps managing systems in many ways:
+
+* Systems, nodes, installed software and settings are stored in a central Poni
+  repository, so there is a single location where the system is defined and documented
+* Changes to the Poni repository can be version-controlled with Git_ allowing rollback
+  and access to history of configuration changes
+* Applications are configured by rendering configuration templates, using a powerful
+  template language (such as Cheetah_) reducing the need to write application-specific
+  installation or configuration scripts
+* The entire system configuration is available when creating node-specific configuration
+  files, making it easy to wire multiple nodes together
+* Virtual machines can be easily provisioned from a cloud provider (currently
+  `Amazon EC2`_ is supported)
+
+Contents
+--------
 
 .. toctree::
    :maxdepth: 2
+
+   getting-started
 
 Indices and tables
 ==================
@@ -21,3 +40,4 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
+.. include:: definitions.rst
