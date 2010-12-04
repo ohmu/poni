@@ -498,7 +498,7 @@ class Tool:
     @argh.alias("deploy")
     @arg_verbose
     @arg_full_match
-    @argh.arg('--path-prefix', type=str,
+    @argh.arg('--path-prefix', type=str, default="",
               help='additional prefix for all deployed files')
     @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
     def handle_deploy(self, arg):
@@ -511,7 +511,7 @@ class Tool:
     @argh.alias("audit")
     @arg_verbose
     @arg_full_match
-    @argh.arg('--path-prefix', type=str,
+    @argh.arg('--path-prefix', type=str, default="",
               help='additional prefix for all deployed files')
     @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
