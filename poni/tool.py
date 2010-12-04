@@ -13,6 +13,7 @@ import logging
 import shlex
 import argh
 import glob
+import shutil
 from path import path
 from . import config
 from . import errors
@@ -106,6 +107,30 @@ class Tool:
                 print "$ " + " ".join(wrap(a) for a in args)
 
             self.parser.dispatch(argv=args, pre_call=set_repo_path)
+
+    @argh.alias("update-config")
+    @arg_verbose
+    @argh.arg('config', type=str, help="target config (regexp)")
+    @argh.arg('source', type=path, help='source file or dir', nargs="+")
+    def handle_update_config(self, arg):
+        """update files to a config"""
+        confman = core.ConfigMan(arg.root_dir)
+        configs = list(confman.find_config(arg.config))
+        if not configs:
+            raise errors.UserError("no config matching %r found" % arg.config)
+
+        for source_path in arg.source:
+            for config in configs:
+                if arg.verbose:
+                    self.log.info("%s/%s: added %r", config.node.name,
+                                  config.name, str(source_path))
+                if source_path.isfile():
+                    shutil.copy2(source_path, config.path)
+                elif source_path.isdir():
+                    assert 0, "unimplemented"
+                else:
+                    raise UserError("don't know how to handle: %r" %
+                                    str(source_path))
 
     @argh.alias("add-config")
     @arg_verbose
@@ -684,7 +709,8 @@ class Tool:
             default_root = os.environ.get("%s_ROOT" % TOOL_NAME.upper())
 
         if not default_root:
-            default_root = str(path(os.environ["HOME"]) / (".%s" % TOOL_NAME))
+            default_root = (path(os.environ["HOME"]) / (".%s" % TOOL_NAME)
+                            / "default")
 
         parser = argh.ArghParser()
         parser.add_argument("-D", "--debug", dest="debug", default=False,
@@ -692,11 +718,12 @@ class Tool:
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
             metavar="DIR",
-            help="repository root directory (default: %s)" % default_root)
+            help="repository root directory (default: $HOME/.poni/default)")
 
         parser.add_commands([
             self.handle_list, self.handle_add_system, self.handle_init,
             self.handle_import, self.handle_script, self.handle_add_config,
+            self.handle_update_config,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
             ])
