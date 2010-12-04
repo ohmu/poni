@@ -13,7 +13,7 @@ class PlugIn(config.PlugIn):
 class TestCommands(Helper):
     def init_repo(self):
         repo = self.temp_file()
-        poni = tool.Tool(default_repo_path=str(repo))
+        poni = tool.Tool(default_repo_path=repo)
         assert not poni.run(["init"])
         config = json.load(file(repo / "repo.json"))
         assert isinstance(config, dict)

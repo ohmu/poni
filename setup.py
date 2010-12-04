@@ -8,7 +8,7 @@ new_dir = os.path.dirname(__file__)
 if new_dir:
     os.chdir(new_dir)
 
-depends = ["path.py", "paramiko", "cheetah", "boto", "GitPython"]
+depends = ["path.py", "paramiko", "cheetah", "boto", "GitPython", "argh"]
 try:
     import json
 except ImportError:

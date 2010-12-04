@@ -48,18 +48,23 @@ Installation
 NOTE: during installation the following packages and their dependencies are
 automatically installed from PyPI_:
 
-* paramiko_ (SSH)
-* boto_ (`Amazon EC2`_)
 * `path.py`_ (directory and file management)
-* argparse_ (command-line argument parsing)
-* cheetah_ (template language)
+* Cheetah_ (template language)
+* Argh_ (command-line argument parsing)
+
+Installing the following Python libraries will add optional functionality:
+
+* Paramiko_ (Remote node control using SSH)
+* GitPython_ (Version controlling the repository with Git)
+* Boto_ (`Amazon EC2`_ virtual machine provisioning)
 
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
-.. _paramiko: http://pypi.python.org/pypi/paramiko
-.. _boto: http://pypi.python.org/pypi/boto
+.. _Paramiko: http://pypi.python.org/pypi/paramiko
+.. _Boto: http://pypi.python.org/pypi/boto
 .. _`path.py`: http://pypi.python.org/pypi/path.py
-.. _argparse: http://pypi.python.org/pypi/argparse
-.. _cheetah: http://pypi.python.org/pypi/Cheetah
+.. _Argh: http://pypi.python.org/pypi/argh
+.. _GitPython: http://pypi.python.org/pypi/GitPython
+.. _Cheetah: http://pypi.python.org/pypi/Cheetah
 
 Installation steps
 ------------------

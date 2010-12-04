@@ -11,7 +11,7 @@ import re
 import sys
 import logging
 import shlex
-import argparse
+import argh
 import glob
 from path import path
 from . import config
@@ -26,259 +26,60 @@ from . import colors
 TOOL_NAME = "poni"
 
 
+def arg_full_match(method):
+    wrap = argh.arg("-M", "--full-match", default=False, dest="full_match",
+                    action="store_true", help="require full regexp match")
+    return wrap(method)
+
+
+def arg_verbose(method):
+    wrap = argh.arg("-v", "--verbose", default=False, action="store_true",
+                    help="verbose output")
+    return wrap(method)
+
+
+def arg_flag(*args, **kwargs):
+    return argh.arg(*args, default=False, action="store_true", **kwargs)
+
+
 class Tool:
     """command-line tool"""
     def __init__(self, default_repo_path=None):
         self.log = logging.getLogger(TOOL_NAME)
-        self.confman = None
         self.default_repo_path = default_repo_path
-        self.parser = self.create_parser()
         self.sky = cloud.Sky()
+        self.parser = self.create_parser()
 
-    def create_parser(self):
-        """Return an argparse parser object"""
-        parser = argparse.ArgumentParser(prog=TOOL_NAME)
-        parser.add_argument("-D", "--debug", dest="debug", default=False,
-                            action="store_true", help="enable debug output")
-
-        default_root = self.default_repo_path
-        if not default_root:
-            default_root = os.environ.get("%s_ROOT" % TOOL_NAME.upper())
-
-        if not default_root:
-            default_root = str(path(os.environ["HOME"]) / (".%s" % TOOL_NAME))
-
-        # parent parsers
-        match_parent = argparse.ArgumentParser(add_help=False)
-        match_parent.add_argument("-M", "--full-match", default=False,
-                                  dest="full_match", action="store_true",
-                                  help="require full regexp match")
-
-        verbose_parent = argparse.ArgumentParser(add_help=False)
-        verbose_parent.add_argument("-v", "--verbose", default=False,
-                                    action="store_true",
-                                    help="verbose output")
-
-        # generic arguments
-        parser.add_argument(
-            "-d", "--root-dir", dest="root_dir", default=default_root,
-            metavar="DIR",
-            help="repository root directory (default: %s)" % default_root)
-
-        # command sub-parser
-        subparsers = parser.add_subparsers(dest="command",
-                                           help="command to execute")
-
-        # init
-        sub = subparsers.add_parser("init", help="init repository")
-
-        # script
-        sub = subparsers.add_parser("script", help="run a script",
-                                    parents=[verbose_parent])
-        sub.add_argument('script', type=str, help='script file', nargs="?")
-
-        # add-system
-        sub = subparsers.add_parser("add-system", help="add a sub-system")
-        sub.add_argument('system', type=str, help='name of the system')
-
-        # add-node
-        sub = subparsers.add_parser("add-node", help="add a new node",
-                                    parents=[verbose_parent, match_parent])
-        sub.add_argument('node', type=str, help='name of the node')
-        sub.add_argument("-n", "--count", metavar="N..M", type=str,
-                         default="1", help="number of nodes ('N' or 'N..M'")
-        sub.add_argument("-H", "--host", metavar="HOST",
-                         type=str, default="", dest="host",
-                         help="host address")
-        sub.add_argument("-i", "--inherit-node", metavar="NODE",
-                         type=str, default="", dest="inherit_node",
-                         help="inherit from node (regexp)")
-        sub.add_argument("-c", "--copy-props", default=False,
-                         action="store_true",
-                         help="copy parent node's properties")
-
-        # list
-        sub = subparsers.add_parser("list", help="list systems and nodes",
-                                    parents=[match_parent])
-        sub.add_argument('pattern', type=str, help='search pattern', nargs="?")
-        sub.add_argument("-s", "--systems", dest="show_systems", default=False,
-                         action="store_true", help="show systems")
-        sub.add_argument("-c", "--config", dest="show_config", default=False,
-                         action="store_true", help="show node configs")
-        sub.add_argument("-n", "--config-prop", dest="show_config_prop",
-                         default=False, action="store_true",
-                         help="show node config properties")
-        sub.add_argument("-C", "--controls", dest="show_controls",
-                         default=False, action="store_true",
-                         help="show node config control commands")
-        sub.add_argument("-t", "--tree", dest="show_tree", default=False,
-                         action="store_true", help="show node tree")
-        sub.add_argument("-p", "--node-prop", dest="show_node_prop",
-                         default=False, action="store_true",
-                         help="show node properties")
-        sub.add_argument("-o", "--cloud", dest="show_cloud_prop",
-                         default=False, action="store_true",
-                         help="show node cloud properties")
-        sub.add_argument("-q", "--query-status", dest="query_status",
-                         default=False, action="store_true",
-                         help="query and show cloud node status")
-        sub.add_argument("-i", "--inherits", dest="show_inherits",
-                         default=False, action="store_true",
-                         help="show node and config inheritances")
-
-        # add-config
-        sub = subparsers.add_parser("add-config",
-                                    help="add a config to node(s)",
-                                    parents=[verbose_parent, match_parent])
-        sub.add_argument('nodes', type=str, help='target nodes (regexp)')
-        sub.add_argument('config', type=str, help='name of the config')
-        sub.add_argument("-i", "--inherit", metavar="CONFIG",
-                         type=str, default="", dest="inherit_config",
-                         help="inherit from config (regexp)")
-        sub.add_argument("-d", "--copy-dir", metavar="DIR",
-                         type=str, default="", dest="copy_dir",
-                         help="copy config files from DIR")
-        sub.add_argument("-c", "--create-node", default=False,
-                         action="store_true",
-                         help="create node if it does not exist")
-
-        # verify
-        sub = subparsers.add_parser("verify", help="verify local node configs",
-                                    parents=[match_parent])
-        sub.add_argument('nodes', type=str, help='target nodes (regexp)',
-                         nargs="?")
-
-        # show
-        sub = subparsers.add_parser("show", help="show node configs",
-                                    parents=[verbose_parent, match_parent])
-        sub.add_argument('nodes', type=str, help='target nodes (regexp)',
-                         nargs="?")
-        sub.add_argument("-d", "--show-dynamic", dest="show_dynamic",
-                         default=False, action="store_true",
-                         help="show dynamic configuration")
-
-        sub = subparsers.add_parser("deploy", help="deploy node configs",
-                                    parents=[verbose_parent, match_parent])
-        sub.add_argument('nodes', type=str, help='target nodes (regexp)',
-                         nargs="?")
-
-        # control
-        sub = subparsers.add_parser(
-            "control", help="run control command over node configs")
-        sub.add_argument('nodes', type=str, help='target nodes (regexp)')
-        sub.add_argument('configs', type=str, help='target configs (regexp)')
-        sub.add_argument('control', type=str, help='name of command')
-        sub.add_argument('arg', type=str, help='command arg', nargs="*")
-
-        # remote
-        remote = subparsers.add_parser("remote", help="run remote commands")
-        remote_sub = remote.add_subparsers(dest="rcmd",
-                                           help="command to execute")
-
-        # remote exec
-        r_exec = remote_sub.add_parser("exec", help="run shell command",
-                                       parents=[verbose_parent, match_parent])
-        r_exec.add_argument('nodes', type=str, help='target nodes (regexp)')
-        r_exec.add_argument('cmd', type=str, help='command to execute')
-
-        # remote shell
-        r_shell = remote_sub.add_parser("shell", help="interactive shell",
-                                        parents=[verbose_parent, match_parent])
-        r_shell.add_argument('nodes', type=str, help='target nodes (regexp)')
-
-        # audit
-        sub = subparsers.add_parser("audit", help="audit active node configs",
-                                    parents=[verbose_parent, match_parent])
-        sub.add_argument('nodes', type=str, help='target nodes (regexp)',
-                         nargs="?")
-        sub.add_argument("-d", "--diff", dest="show_diff", default=False,
-                         action="store_true", help="show config diffs")
-
-        sub = subparsers.add_parser("set", help="set system/node properties",
-                                    parents=[verbose_parent, match_parent])
-        sub.add_argument('target', type=str,
-                         help='target systems/nodes (regexp)')
-        sub.add_argument('property', type=str, nargs="+",
-                         help='property and value ("prop=value")')
-
-        # import
-        sub = subparsers.add_parser("import", help="import nodes/configs",
-                                    parents=[verbose_parent])
-        sub.add_argument('source', type=path, help='source dir/file',
-                         nargs="+")
-
-        # cloud
-        cloud_p = subparsers.add_parser("cloud", help="manage cloud nodes")
-        cloud_sub = cloud_p.add_subparsers(dest="ccmd",
-                                           help="command to execute")
-
-        # cloud init
-        sub = cloud_sub.add_parser("init",
-                                   help="reserve a cloud image for nodes",
-                                   parents=[match_parent])
-        sub.add_argument('target', type=str,
-                         help='target systems/nodes (regexp)')
-        sub.add_argument("--reinit", dest="reinit", default=False,
-                         action="store_true", help="re-initialize cloud image")
-        sub.add_argument("--wait", dest="wait", default=False,
-                         action="store_true",
-                         help="wait for instance to start")
-
-        # cloud update
-        sub = cloud_sub.add_parser("update",
-                                   help="update cloud instance properties",
-                                   parents=[match_parent])
-        sub.add_argument('target', type=str,
-                         help='target systems/nodes (regexp)')
-
-        # cloud terminate
-        sub = cloud_sub.add_parser("terminate",
-                                   help="terminate cloud instances",
-                                   parents=[match_parent])
-        sub.add_argument('target', type=str,
-                         help='target systems/nodes (regexp)')
-
-        # cloud wait
-        sub = cloud_sub.add_parser(
-            "wait", help="wait cloud instances to reach a state",
-            parents=[match_parent])
-        sub.add_argument('target', type=str,
-                         help='target systems/nodes (regexp)')
-        sub.add_argument('--state', type=str, default="running",
-                         help="target instance state, default: 'running'")
-
-        # vc
-        vc_p = subparsers.add_parser("vc", help="version control")
-        vc_sub = vc_p.add_subparsers(dest="vcmd",
-                                     help="command to execute")
-
-        # vc init
-        sub = vc_sub.add_parser("init", help="init version control in repo")
-
-        # vc status
-        sub = vc_sub.add_parser("status", help="show working tree status")
-
-        # vc commit
-        sub = vc_sub.add_parser("commit", help="commit all changes")
-        sub.add_argument('message', type=str,
-                         help='commit message')
-
-        return parser
-
+    @argh.alias("add-system")
+    @argh.arg('system', type=str, help='system name')
     def handle_add_system(self, arg):
-        system_dir = self.confman.create_system(arg.system)
+        """add a sub-system"""
+        confman = core.ConfigMan(arg.root_dir)
+        system_dir = confman.create_system(arg.system)
         self.log.debug("created: %s", system_dir)
 
+    @argh.alias("init")
     def handle_init(self, arg):
-        self.confman.init_repo()
+        """init repository"""
+        confman = core.ConfigMan(arg.root_dir, must_exist=False)
+        confman.init_repo()
 
+    @argh.alias("import")
+    @arg_verbose
+    @argh.arg('source', type=path, help='source dir/file', nargs="+")
     def handle_import(self, arg):
+        """import nodes/configs"""
+        confman = core.ConfigMan(arg.root_dir)
         for glob_pattern in arg.source:
             for source_path in glob.glob(glob_pattern):
                 source = importer.get_importer(source_path)
-                source.import_to(self.confman, verbose=arg.verbose)
+                source.import_to(confman, verbose=arg.verbose)
 
+    @argh.alias("script")
+    @arg_verbose
+    @argh.arg('script', type=str, help='script file', nargs="?")
     def handle_script(self, arg):
+        """run commands from a script file"""
         try:
             if arg.script:
                 lines = file(arg.script).readlines()
@@ -287,26 +88,40 @@ class Tool:
         except (OSError, IOError), error:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
 
-        def wrap(arg):
-            if " " in arg:
-                return repr(arg)
+        def wrap(args):
+            if " " in args:
+                return repr(args)
             else:
-                return arg
+                return args
+
+        def set_repo_path(sub_arg):
+            sub_arg.root_dir = arg.root_dir
 
         for line in lines:
             args = shlex.split(line, comments=True)
             if not args:
                 continue
 
-            sub_arg = self.parser.parse_args(args)
             if arg.verbose:
                 print "$ " + " ".join(wrap(a) for a in args)
 
-            self.run_one(sub_arg)
+            self.parser.dispatch(argv=args, pre_call=set_repo_path)
 
+    @argh.alias("add-config")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)')
+    @argh.arg('config', type=str, help='name of the config')
+    @argh.arg("-i", "--inherit", metavar="CONFIG", type=str, default="",
+              dest="inherit_config", help="inherit from config (regexp)")
+    @argh.arg("-d", "--copy-dir", metavar="DIR", type=str, default="",
+              dest="copy_dir", help="copy config files from DIR")
+    @arg_flag("-c", "--create-node", help="create node if it does not exist")
     def handle_add_config(self, arg):
+        """add a config to node(s)"""
+        confman = core.ConfigMan(arg.root_dir)
         if arg.inherit_config:
-            configs = list(self.confman.find_config(arg.inherit_config))
+            configs = list(confman.find_config(arg.inherit_config))
             if len(configs) == 0:
                 raise errors.UserError(
                     "pattern %r does not match any configs" % (
@@ -327,11 +142,11 @@ class Tool:
             parent_config_name = None
 
         updates = []
-        nodes = list(self.confman.find(arg.nodes, full_match=arg.full_match))
+        nodes = list(confman.find(arg.nodes, full_match=arg.full_match))
         if arg.create_node and (not nodes):
             # node does not exist, create it as requested
-            self.confman.create_node(arg.nodes)
-            nodes = self.confman.find(arg.nodes, full_match=True)
+            confman.create_node(arg.nodes)
+            nodes = confman.find(arg.nodes, full_match=True)
 
         for node in nodes:
             existing = list(c for c in node.iter_configs()
@@ -354,23 +169,36 @@ class Tool:
             self.log.info("config %r added to: %s", arg.config,
                           ", ".join(updates))
 
+    @argh.alias("exec")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)')
+    @argh.arg('cmd', type=str, help='command to execute')
     def handle_remote_exec(self, arg):
+        """run a shell-command"""
+        confman = core.ConfigMan(arg.root_dir)
         def rexec(arg, node, remote):
             return remote.execute(arg.cmd)
 
         rexec.doc = "exec: %r" % arg.cmd
-        return self.remote_op(arg, rexec)
+        return self.remote_op(confman, arg, rexec)
 
+    @argh.alias("shell")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)')
     def handle_remote_shell(self, arg):
+        """start an interactive shell session"""
+        confman = core.ConfigMan(arg.root_dir)
         def rshell(arg, node, remote):
             remote.shell()
 
         rshell.doc = "shell"
-        self.remote_op(arg, rshell)
+        self.remote_op(confman, arg, rshell)
 
-    def remote_op(self, arg, op):
+    def remote_op(self, confman, arg, op):
         ret = 0
-        for node in self.confman.find(arg.nodes, full_match=arg.full_match):
+        for node in confman.find(arg.nodes, full_match=arg.full_match):
             if not node.get("host"):
                 continue
 
@@ -405,31 +233,45 @@ class Tool:
                 if control_func:
                     control_func()
 
+    @argh.alias("init")
     def handle_vc_init(self, arg):
-        if self.confman.vc:
+        """init version control in repo"""
+        confman = core.ConfigMan(arg.root_dir)
+        if confman.vc:
             raise errors.UserError(
                 "version control already initialized in this repo")
 
-        self.confman.vc = vc.GitVersionControl(self.confman.root_dir,
-                                               init=True)
+        confman.vc = vc.GitVersionControl(confman.root_dir, init=True)
 
-    def require_vc(self):
-        if not self.confman.vc:
+    def require_vc(self, confman):
+        if not confman.vc:
             raise errors.UserError(
                 "version control not initialized in this repo")
 
-    def handle_vc_status(self, arg):
-        self.require_vc()
-        for out in self.confman.vc.status():
+    @argh.alias("diff")
+    def handle_vc_diff(self, arg):
+        """show repository working status diff"""
+        confman = core.ConfigMan(arg.root_dir)
+        self.require_vc(confman)
+        for out in confman.vc.status():
             print out,
 
-    def handle_vc_commit(self, arg):
-        self.require_vc()
-        self.confman.vc.commit_all(arg.message)
+    @argh.alias("checkpoint")
+    @argh.arg('message', type=str, help='commit message')
+    def handle_vc_checkpoint(self, arg):
+        """commit all locally added and changed files in the repository"""
+        confman = core.ConfigMan(arg.root_dir)
+        self.require_vc(confman)
+        confman.vc.commit_all(arg.message)
 
+    @argh.alias("terminate")
+    @arg_full_match
+    @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     def handle_cloud_terminate(self, arg):
+        """terminate cloud instances"""
+        confman = core.ConfigMan(arg.root_dir)
         count = 0
-        for node in self.confman.find(arg.target, full_match=arg.full_match):
+        for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if cloud_prop.get("instance"):
                 provider = self.sky.get_provider(cloud_prop)
@@ -439,9 +281,14 @@ class Tool:
 
         self.log.info("%s instances terminated", count)
 
+    @argh.alias("update")
+    @arg_full_match
+    @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     def handle_cloud_update(self, arg):
+        """update node cloud instance properties"""
+        confman = core.ConfigMan(arg.root_dir)
         nodes = []
-        for node in self.confman.find(arg.target, full_match=arg.full_match):
+        for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if not cloud_prop.get("instance"):
                 continue
@@ -461,19 +308,33 @@ class Tool:
                 self.log.info("%s: updated: %s", node.name, change_str)
                 node.save()
 
+    @argh.alias("wait")
+    @arg_full_match
+    @argh.arg('target', type=str, help='target systems/nodes (regexp)')
+    @argh.arg('--state', type=str, default="running",
+              help="target instance state, default: 'running'")
     def handle_cloud_wait(self, arg):
-        return self.cloud_op(arg, False)
+        """wait cloud instances to reach a specific running state"""
+        confman = core.ConfigMan(arg.root_dir)
+        return self.cloud_op(confman, arg, False)
 
+    @argh.alias("init")
+    @arg_full_match
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    @arg_flag("--reinit", dest="reinit", help="re-initialize cloud image")
+    @arg_flag("--wait", dest="wait", help="wait for instance to start")
     def handle_cloud_init(self, arg):
-        return self.cloud_op(arg, True)
+        """reserve and start a cloud instance for nodes"""
+        confman = core.ConfigMan(arg.root_dir)
+        return self.cloud_op(confman, arg, True)
 
-    def cloud_op(self, arg, start):
+    def cloud_op(self, confman, arg, start):
         nodes = []
 
         def printable(dict_obj):
             return ", ".join(("%s=%r" % item) for item in dict_obj.iteritems())
 
-        for node in self.confman.find(arg.target, full_match=arg.full_match):
+        for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if not cloud_prop:
                 continue
@@ -531,13 +392,20 @@ class Tool:
                     #self.log.info("%s update: %s", node.name,
                     #              printable(node_update))
 
+    @argh.alias("set")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('target', type=str, help='target systems/nodes (regexp)')
+    @argh.arg('property', type=str, nargs="+", help="'name=[type:]value'")
     def handle_set(self, arg):
+        """set system/node properties"""
+        confman = core.ConfigMan(arg.root_dir)
         props = dict(util.parse_prop(p) for p in arg.property)
         logger = logging.info if arg.verbose else logging.debug
         changed_items = []
         found = False
-        for item in self.confman.find(arg.target, systems=True,
-                                      full_match=arg.full_match):
+        for item in confman.find(arg.target, systems=True,
+                                 full_match=arg.full_match):
             found = True
             changes = item.set_properties(props)
             for key, old_value, new_value in changes:
@@ -557,7 +425,7 @@ class Tool:
 
     def collect_all(self, manager):
         items = []
-        for item in self.confman.find("."):
+        for item in manager.confman.find("."):
             item.collect(manager)
             items.append(item)
 
@@ -568,8 +436,8 @@ class Tool:
 
         return items
 
-    def verify_op(self, target, full_match=False, **verify_options):
-        manager = config.Manager(self.confman)
+    def verify_op(self, confman, target, full_match=False, **verify_options):
+        manager = config.Manager(confman)
         self.collect_all(manager)
 
         if target:
@@ -586,23 +454,51 @@ class Tool:
         manager.verify(callback=target_filter, **verify_options)
         return manager
 
+    @argh.alias("show")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    @arg_flag("-d", "--show-dynamic", dest="show_dynamic",
+              help="show dynamic configuration")
     def handle_show(self, arg):
-        manager = self.verify_op(arg.nodes, show=(not arg.show_dynamic),
+        """render and show node config files"""
+        confman = core.ConfigMan(arg.root_dir)
+        manager = self.verify_op(confman, arg.nodes,
+                                 show=(not arg.show_dynamic),
                                  full_match=arg.full_match)
         if arg.show_dynamic:
             for item in manager.dynamic_conf:
                 print item
 
+    @argh.alias("deploy")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
     def handle_deploy(self, arg):
-        self.verify_op(arg.nodes, show=False, deploy=True, verbose=arg.verbose,
+        """deploy node configs"""
+        confman = core.ConfigMan(arg.root_dir)
+        self.verify_op(confman, arg.nodes, show=False, deploy=True,
+                       verbose=arg.verbose, full_match=arg.full_match)
+
+    @argh.alias("audit")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
+    def handle_audit(self, arg):
+        """audit active node configs"""
+        confman = core.ConfigMan(arg.root_dir)
+        self.verify_op(confman, arg.nodes, show=False, deploy=False,
+                       audit=True, show_diff=arg.show_diff,
                        full_match=arg.full_match)
 
-    def handle_audit(self, arg):
-        self.verify_op(arg.nodes, show=False, deploy=False, audit=True,
-                       show_diff=arg.show_diff, full_match=arg.full_match)
-
+    @argh.alias("verify")
+    @arg_full_match
+    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
     def handle_verify(self, arg):
-        manager = self.verify_op(arg.nodes, show=False,
+        """verify local node configs"""
+        confman = core.ConfigMan(arg.root_dir)
+        manager = self.verify_op(confman, arg.nodes, show=False,
                                  full_match=arg.full_match)
 
         if manager.error_count:
@@ -614,10 +510,24 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", len(manager.files))
 
+    @argh.alias("add-node")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('node', type=str,
+              help="name of the node, '{id}' is replaced with the node number")
+    @argh.arg("-n", "--count", metavar="N..M", type=str, default="1",
+              help="number of nodes ('N' or 'N..M')")
+    @argh.arg("-H", "--host", metavar="HOST", type=str, default="",
+              dest="host", help="host address")
+    @argh.arg("-i", "--inherit-node", metavar="NODE", type=str, default="",
+              dest="inherit_node", help="inherit from node (regexp)")
+    @arg_flag("-c", "--copy-props", help="copy parent node's properties")
     def handle_add_node(self, arg):
+        """add a new node"""
+        confman = core.ConfigMan(arg.root_dir)
         if arg.inherit_node:
-            nodes = list(self.confman.find(arg.inherit_node,
-                                           full_match=arg.full_match))
+            nodes = list(confman.find(arg.inherit_node,
+                                      full_match=arg.full_match))
             if len(nodes) == 0:
                 raise errors.UserError(
                     "pattern %r does not match any nodes" % (arg.inherit_node))
@@ -639,7 +549,7 @@ class Tool:
         for n in range(n, m):
             node_name = arg.node.format(id=n)
             host = arg.host.format(id=n)
-            node_spec = self.confman.create_node(
+            node_spec = confman.create_node(
                 node_name, host=host, parent_node_name=parent_node_name,
                 copy_props=arg.copy_props)
 
@@ -677,7 +587,26 @@ class Tool:
 
         return name
 
+    @argh.alias("list")
+    @arg_full_match
+    @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @arg_flag("-s", "--systems", dest="show_systems", help="show systems")
+    @arg_flag("-c", "--config", dest="show_config", help="show node configs")
+    @arg_flag("-n", "--config-prop", dest="show_config_prop",
+              help="show node config properties")
+    @arg_flag("-C", "--controls", dest="show_controls",
+              help="show node config control commands")
+    @arg_flag("-t", "--tree", dest="show_tree", help="show node tree")
+    @arg_flag("-p", "--node-prop", dest="show_node_prop",
+              help="show node properties")
+    @arg_flag("-o", "--cloud", dest="show_cloud_prop",
+              help="show node cloud properties")
+    @arg_flag("-q", "--query-status", help="query and show cloud node status")
+    @arg_flag("-i", "--inherits", dest="show_inherits",
+              help="show node and config inheritances")
     def handle_list(self, arg):
+        """list systems and nodes"""
+        confman = core.ConfigMan(arg.root_dir)
         output = colors.Output(sys.stdout)
         format_str = "%8s %s"
         HINDENT = 4 * " "
@@ -692,8 +621,8 @@ class Tool:
 
             return (INDENT * (depth-1)) + name
 
-        for item in self.confman.find(arg.pattern, systems=arg.show_systems,
-                                      full_match=arg.full_match):
+        for item in confman.find(arg.pattern, systems=arg.show_systems,
+                                 full_match=arg.full_match):
             name = norm_name(item["depth"], item.name)
             name = self.color_path(output, item, name)
 
@@ -731,7 +660,7 @@ class Tool:
 
                     if arg.show_config_prop:
                         output.sendline(format_str % ("confprop", "%s%s%s" % (
-                                    HINDENT, INDENT * (item["depth"] - 1),
+                                    HINDENT, INDENT * (item["depth"]),
                                     output.color_items(conf.iteritems()))))
 
 
@@ -749,18 +678,54 @@ class Tool:
                                              INDENT * (item["depth"] - 1),
                                              status)))
 
+    def create_parser(self):
+        default_root = self.default_repo_path
+        if not default_root:
+            default_root = os.environ.get("%s_ROOT" % TOOL_NAME.upper())
+
+        if not default_root:
+            default_root = str(path(os.environ["HOME"]) / (".%s" % TOOL_NAME))
+
+        parser = argh.ArghParser()
+        parser.add_argument("-D", "--debug", dest="debug", default=False,
+                            action="store_true", help="enable debug output")
+        parser.add_argument(
+            "-d", "--root-dir", dest="root_dir", default=default_root,
+            metavar="DIR",
+            help="repository root directory (default: %s)" % default_root)
+
+        parser.add_commands([
+            self.handle_list, self.handle_add_system, self.handle_init,
+            self.handle_import, self.handle_script, self.handle_add_config,
+            self.handle_set, self.handle_show, self.handle_deploy,
+            self.handle_audit, self.handle_verify, self.handle_add_node,
+            ])
+
+        parser.add_commands([
+                self.handle_cloud_init, self.handle_cloud_terminate,
+                self.handle_cloud_update, self.handle_cloud_wait,
+                ],
+                            namespace="cloud", title="cloud operations",
+                            help="command to execute")
+
+        parser.add_commands([
+                self.handle_remote_exec, self.handle_remote_shell,
+                ],
+                            namespace="remote", title="remote operations",
+                            help="command to execute")
+
+        parser.add_commands([
+                self.handle_vc_init, self.handle_vc_diff,
+                self.handle_vc_checkpoint,
+                ],
+                            namespace="vc", title="version-control operations",
+                            help="command to execute")
+
+        return parser
+
     def run(self, args=None):
-        """
-        Run a single command given as an 'args' list.
-
-        Returns a non-zero integer on errors.
-        """
-        arg = self.parser.parse_args(args)
-        must_exist = (arg.command not in ["script", "init"])
-
-        try:
-            self.confman = core.ConfigMan(path(arg.root_dir),
-                                          must_exist=must_exist)
+        def adjust_logging(arg):
+            """tune the logging before executing commands"""
             if arg.debug:
                 logging.getLogger().setLevel(logging.DEBUG)
             else:
@@ -772,28 +737,13 @@ class Tool:
                 boto_logger = logging.getLogger('boto')
                 boto_logger.setLevel(logging.CRITICAL)
 
-            return self.run_one(arg)
+        try:
+            exit_code = self.parser.dispatch(argv=args, pre_call=adjust_logging)
         except errors.Error, error:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1
-        finally:
-            if self.confman:
-                self.confman.cleanup()
 
-
-    def run_one(self, arg):
-        """Run a single command specified in the already parsed 'arg' object"""
-        if arg.command == "remote":
-            handler_name = "handle_remote_%s" % arg.rcmd.replace("-", "_")
-        elif arg.command == "cloud":
-            handler_name = "handle_cloud_%s" % arg.ccmd.replace("-", "_")
-        elif arg.command == "vc":
-            handler_name = "handle_vc_%s" % arg.vcmd.replace("-", "_")
-        else:
-            handler_name = "handle_%s" % arg.command.replace("-", "_")
-
-        op = getattr(self, handler_name)
-        return op(arg)
+        return exit_code
 
     def main(self):
         """Setup logging and run a single command specified by sys.argv"""

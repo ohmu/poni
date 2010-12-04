@@ -272,7 +272,7 @@ class System(Item):
 class ConfigMan:
     def __init__(self, root_dir, must_exist=True):
         # TODO: check repo.json from dir, option to start verification
-        self.root_dir = root_dir
+        self.root_dir = path(root_dir)
         self.system_root = self.root_dir / "system"
         self.config_path = self.root_dir / REPO_CONF_FILE
         self.node_cache = {}
