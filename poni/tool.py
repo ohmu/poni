@@ -611,7 +611,8 @@ class Tool:
         """list systems and nodes"""
         confman = core.ConfigMan(arg.root_dir)
         list_output = listout.ListOutput(self, confman, arg)
-        list_output.print_output()
+        for output in list_output.output():
+            yield output
 
     def create_parser(self):
         default_root = self.default_repo_path
