@@ -27,17 +27,17 @@ from . import colors
 TOOL_NAME = "poni"
 
 
-def arg_full_match(method):
-    wrap = argh.arg("-M", "--full-match", default=False, dest="full_match",
-                    action="store_true", help="require full regexp match")
-    return wrap(method)
-
-
-def arg_verbose(method):
-    wrap = argh.arg("-v", "--verbose", default=False, action="store_true",
-                    help="verbose output")
-    return wrap(method)
-
+# common arguments
+arg_full_match = argh.arg("-M", "--full-match", default=False,
+                          dest="full_match", action="store_true",
+                          help="require full regexp match")
+arg_verbose = argh.arg("-v", "--verbose", default=False, action="store_true",
+                       help="verbose output")
+arg_path_prefix = argh.arg('--path-prefix', type=str, default="",
+                           help='additional prefix for all deployed files')
+arg_target_nodes_0_to_n = argh.arg('nodes', type=str,
+                                   help='target nodes (regexp)', nargs="?")
+arg_target_nodes = argh.arg('nodes', type=str, help='target nodes (regexp)')
 
 def arg_flag(*args, **kwargs):
     return argh.arg(*args, default=False, action="store_true", **kwargs)
@@ -135,7 +135,7 @@ class Tool:
     @argh.alias("add-config")
     @arg_verbose
     @arg_full_match
-    @argh.arg('nodes', type=str, help='target nodes (regexp)')
+    @arg_target_nodes
     @argh.arg('config', type=str, help='name of the config')
     @argh.arg("-i", "--inherit", metavar="CONFIG", type=str, default="",
               dest="inherit_config", help="inherit from config (regexp)")
@@ -197,7 +197,7 @@ class Tool:
     @argh.alias("exec")
     @arg_verbose
     @arg_full_match
-    @argh.arg('nodes', type=str, help='target nodes (regexp)')
+    @arg_target_nodes
     @argh.arg('cmd', type=str, help='command to execute')
     def handle_remote_exec(self, arg):
         """run a shell-command"""
@@ -211,7 +211,7 @@ class Tool:
     @argh.alias("shell")
     @arg_verbose
     @arg_full_match
-    @argh.arg('nodes', type=str, help='target nodes (regexp)')
+    @arg_target_nodes
     def handle_remote_shell(self, arg):
         """start an interactive shell session"""
         confman = core.ConfigMan(arg.root_dir)
@@ -324,7 +324,9 @@ class Tool:
             try:
                 update = updates[cloud_prop["instance"]]
             except KeyError:
-                raise errors.Error("TODO: did not get update from cloud provider for %r" % cloud_prop["instance"])
+                raise errors.Error(
+                    "TODO: did not get update from cloud provider for %r"
+                    % cloud_prop["instance"])
 
             changes = node.log_update(update)
             if changes:
@@ -482,7 +484,7 @@ class Tool:
     @argh.alias("show")
     @arg_verbose
     @arg_full_match
-    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    @arg_target_nodes_0_to_n
     @arg_flag("-d", "--show-dynamic", dest="show_dynamic",
               help="show dynamic configuration")
     def handle_show(self, arg):
@@ -498,9 +500,8 @@ class Tool:
     @argh.alias("deploy")
     @arg_verbose
     @arg_full_match
-    @argh.arg('--path-prefix', type=str, default="",
-              help='additional prefix for all deployed files')
-    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    @arg_path_prefix
+    @arg_target_nodes_0_to_n
     def handle_deploy(self, arg):
         """deploy node configs"""
         confman = core.ConfigMan(arg.root_dir)
@@ -511,9 +512,8 @@ class Tool:
     @argh.alias("audit")
     @arg_verbose
     @arg_full_match
-    @argh.arg('--path-prefix', type=str, default="",
-              help='additional prefix for all deployed files')
-    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    @arg_path_prefix
+    @arg_target_nodes_0_to_n
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
     def handle_audit(self, arg):
         """audit active node configs"""
@@ -524,7 +524,7 @@ class Tool:
 
     @argh.alias("verify")
     @arg_full_match
-    @argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    @arg_target_nodes_0_to_n
     def handle_verify(self, arg):
         """verify local node configs"""
         confman = core.ConfigMan(arg.root_dir)
