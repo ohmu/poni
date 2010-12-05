@@ -215,7 +215,11 @@ class Node(Item):
                 "%s: config %r already exists" % (self.name, config))
 
         if copy_dir:
-            shutil.copytree(copy_dir, config_dir, symlinks=True)
+            try:
+                shutil.copytree(copy_dir, config_dir, symlinks=True)
+            except (IOError, OSError), error:
+                raise errors.Error("copying config files failed: %s: %s" % (
+                        error.__class__.__name__, error))
         else:
             config_dir.makedirs()
 

@@ -45,10 +45,12 @@ class DebImporter(Importer):
                 old = dest_path.bytes()
                 write = (old != contents)
 
+            logger = self.log.info if verbose else self.log.debug
             if write:
                 file(dest_path, "wb").write(contents)
-            elif verbose:
-                self.log.info("unchanged: %s", dest_path)
+                logger("imported: %s", dest_path)
+            else:
+                logger("unchanged: %s", dest_path)
 
 
 def get_importer(source_path):
