@@ -32,6 +32,7 @@ Contents
    :maxdepth: 2
 
    getting-started
+   properties
    ec2
    remote
    vc
