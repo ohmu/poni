@@ -10,7 +10,7 @@ General Information
 ===================
 :documentation: http://melor.github.com/poni/
 :source repo: https://github.com/melor/poni
-:email: mika.eloranta@gmail.com
+:email: mika dot eloranta at gmail dot com
 :bug tracker: https://github.com/melor/poni/issues
 
 Pre-requisites

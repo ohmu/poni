@@ -32,12 +32,17 @@ Contents
    :maxdepth: 2
 
    getting-started
+   ec2
+   remote
+   vc
+   examples/puppet
 
-Indices and tables
-==================
+..
+  Indices and tables
+  ==================
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+  * :ref:`genindex`
+  * :ref:`modindex`
+  * :ref:`search`
 
 .. include:: definitions.rst

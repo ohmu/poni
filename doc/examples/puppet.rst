@@ -1,8 +1,12 @@
 ===============================
-Example: poni puppet deployment
+Example: Poni Puppet Deployment
 ===============================
 
-First, setup the AWS keys in env variables::
+The files for this example are in the ``examples/puppet`` directory.
+
+Preparations
+------------
+First, setup the AWS keys in environment variables::
 
   export AWS_ACCESS_KEY_ID=<access key>
   export AWS_SECRET_ACCESS_KEY=<secret key>
@@ -12,7 +16,10 @@ Edit ``inst-puppet.sh`` and replace your desired AWS key-pair name as the ``AWS_
 Drop your AWS key-pair to ``$HOME/.ssh/<aws-key-pair-name>.pem``
 
 
-Create the system::
+Creating the System
+-------------------
+The ``inst-puppet.sh`` contains the commands needed to create the Poni system for the
+project::
 
   $ ./inst-puppet.sh
   create system
@@ -62,6 +69,8 @@ View node cloud properties (not provisioned yet!)::
       node software
       node template/ec2-deb6
 
+Provisioning the VMs
+--------------------
 Provision VM instances from the cloud provider::
 
   $ poni cloud init . --wait
@@ -91,6 +100,8 @@ Query cloud instances statuses::
       node software
       node     ec2-deb6
 
+Deployment
+----------
 Deploy the bootstrap files::
 
   $ poni deploy
@@ -102,8 +113,12 @@ Deploy the bootstrap files::
   manager INFO       WROTE puppet/master: /root/inst-puppet-master.sh
   manager ERROR   puppet/master: /etc/puppet/manifests/site.pp: IOError: [Errno 2] No such file
 
-NOTE: deploying the puppetmaster ``site.pp`` manifest fails because puppetmaster has not yet been installed.
+.. note::
+  deploying the puppetmaster ``site.pp`` manifest fails because puppetmaster has not yet
+  been installed.
 
+Bootstrap the Puppetmaster
+--------------------------
 Install puppetmaster on the master node::
 
   $ poni remote exec master ./inst-puppet-master.sh
@@ -161,6 +176,8 @@ Review the automatically created puppetmaster ``site.pp`` manifest::
     include nginx
   }
 
+Bootstrap Puppet Agents
+-----------------------
 Deploy puppet agents on the server nodes::
 
   $ poni remote exec demo/server -v ./inst-puppet-agent.sh
@@ -258,6 +275,9 @@ Re-check the puppet activity from syslog::
 Puppet agent seems to have configured both nodes according to the site.pp manifests.
 
 **Done!**
+
+Cleanup
+-------
 
 ...finally terminate the cloud instances and verify that they are stopped::
 
