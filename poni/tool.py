@@ -22,8 +22,8 @@ from . import core
 from . import cloud
 from . import vc
 from . import importer
-from . import colors
 from . import rcontrol_all
+from . import listout
 
 TOOL_NAME = "poni"
 
@@ -416,11 +416,6 @@ class Tool:
                         self.log.info("%s: updated: %s", node.name, change_str)
                         node.save()
 
-                    #node.update(node_update)
-                    #node.save()
-                    #self.log.info("%s update: %s", node.name,
-                    #              printable(node_update))
-
     @argh.alias("set")
     @arg_verbose
     @arg_full_match
@@ -595,33 +590,6 @@ class Tool:
 
             logger("node added: %s%s", node_name, msg)
 
-    def color_path(self, output, item, name, is_config=False, is_node=False):
-        parts = name.rsplit("/", 1)
-        if len(parts) == 1:
-            sys_path = None
-        else:
-            sys_path, name = parts
-
-        if is_config:
-            name = output.color(name, "yellow")
-            sys_parts = sys_path.split("/", 1)
-            if len(sys_parts) == 2:
-                sys_path = "%s/%s" % (output.color(sys_parts[0], "cyan"),
-                                      output.color(sys_parts[1], "green"))
-            else:
-                sys_path = output.color(sys_path, "green")
-        elif is_node or isinstance(item, core.Node):
-            name = output.color(name, "green")
-            sys_path = output.color(sys_path, "cyan")
-        else:
-            name = output.color(name, "cyan")
-            sys_path = output.color(sys_path, "cyan")
-
-        if len(parts) == 2:
-            name = "%s/%s" % (sys_path, name)
-
-        return name
-
     @argh.alias("list")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
@@ -642,76 +610,8 @@ class Tool:
     def handle_list(self, arg):
         """list systems and nodes"""
         confman = core.ConfigMan(arg.root_dir)
-        output = colors.Output(sys.stdout)
-        format_str = "%8s %s"
-        HINDENT = 4 * " "
-        if arg.show_tree:
-            INDENT = HINDENT
-        else:
-            INDENT = ""
-
-        def norm_name(depth, name):
-            if arg.show_tree:
-                name = name.rsplit("/", 2)[-1]
-
-            return (INDENT * (depth-1)) + name
-
-        for item in confman.find(arg.pattern, systems=arg.show_systems,
-                                 full_match=arg.full_match):
-            name = norm_name(item["depth"], item.name)
-            name = self.color_path(output, item, name)
-
-            if arg.show_inherits and item.get("parent"):
-                name = "%s <= %s" % (name, self.color_path(output, None,
-                                                           item.get("parent"),
-                                                           is_node=True))
-
-            output.sendline(format_str % (item.type, name))
-            if arg.show_node_prop:
-                props = output.color_items(item.showable())
-                output.sendline(format_str % (
-                        "prop", "%s%s%s" % (HINDENT, INDENT*(item["depth"]-1),
-                                            props)))
-
-            if arg.show_config and isinstance(item, core.Node):
-                for conf in item.iter_configs():
-                    item_name = self.color_path(output, item, item.name)
-                    config_name = "%s/%s" % (item_name,
-                                             output.color(conf.name, "yellow"))
-                    name = norm_name(item["depth"] + 1, config_name)
-                    if arg.show_inherits and conf.get("parent"):
-                        name = "%s <= %s" % (
-                            name, self.color_path(output, None,
-                                                  conf.get("parent"),
-                                                  is_config=True))
-
-                    output.sendline(format_str % ("config", name))
-
-                    doc, controls = conf.get_controls()
-                    if arg.show_controls and controls:
-                        output.sendline(format_str % ("controls", "%s%s%s" % (
-                                HINDENT, INDENT*(item["depth"]),
-                                ", ".join(controls))))
-
-                    if arg.show_config_prop:
-                        output.sendline(format_str % ("confprop", "%s%s%s" % (
-                                    HINDENT, INDENT * (item["depth"]),
-                                    output.color_items(conf.iteritems()))))
-
-
-            cloud_prop = item.get("cloud", {})
-            if arg.query_status and cloud_prop.get("instance"):
-                provider = self.sky.get_provider(cloud_prop)
-                status = provider.get_instance_status(cloud_prop)
-                output.sendline(format_str % ("status", "%s%s%s" % (
-                            HINDENT, INDENT * (item["depth"] - 1), status)))
-
-            if arg.show_cloud_prop and cloud_prop:
-                status = output.color_items(cloud_prop.iteritems(), "cloudkey")
-                output.sendline(format_str % (
-                        "cloud", "%s%s%s" % (HINDENT,
-                                             INDENT * (item["depth"] - 1),
-                                             status)))
+        list_output = listout.ListOutput(self, confman, arg)
+        list_output.print_output()
 
     def create_parser(self):
         default_root = self.default_repo_path
