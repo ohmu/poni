@@ -24,7 +24,15 @@ CODES.update({
     'str' : '\033[0;32m',
     'bool' : CODES['yellow'],
     'int' : CODES['white'],
+    'status': CODES['red'],
+    'system': CODES['cyan'],
+    'node': CODES['green'],
+    'config': CODES['yellow'],
+    'configparent' : '\033[0;33m',
+    'nodeparent' : '\033[0;32m',
+    None: CODES["reset"],
     })
+
 
 class Output:
     def __init__(self, out_file):
@@ -35,41 +43,6 @@ class Output:
                                                         CODES["reset"])
         else:
             self.color = lambda text, code: text
-
-    def value_repr(self, value):
-        if isinstance(value, unicode):
-            try:
-                value = repr(value.encode("ascii"))
-            except UnicodeEncodeError:
-                pass
-
-        if isinstance(value, dict):
-            return "{%s}" % self.color_items(value.iteritems())
-        elif isinstance(value, str):
-            return self.color(value, "str")
-        elif isinstance(value, bool):
-            return self.color(value, "bool")
-        elif isinstance(value, (int, long)):
-            return self.color(value, "int")
-
-        return repr(value)
-
-    def color_items(self, items, key_color="key"):
-        output = " ".join(("%s:%s" % (self.color(k, key_color),
-                                      self.color(self.value_repr(v), "reset"))
-                           for k, v in sorted(items)))
-        if not output:
-            output = self.color("none", "gray")
-
-        return output
-
-    def sendline(self, msg):
-        self.out.write(msg)
-        self.out.write("\n")
-        self.flush()
-
-    def flush(self):
-        self.out.flush()
 
 
 if __name__ == "__main__":

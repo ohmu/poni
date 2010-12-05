@@ -676,7 +676,9 @@ class Tool:
                 boto_logger.setLevel(logging.CRITICAL)
 
         try:
-            exit_code = self.parser.dispatch(argv=args, pre_call=adjust_logging)
+            exit_code = self.parser.dispatch(argv=args,
+                                             pre_call=adjust_logging,
+                                             raw_output=True)
         except errors.Error, error:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1
