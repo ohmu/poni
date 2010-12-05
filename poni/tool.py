@@ -23,9 +23,9 @@ from . import cloud
 from . import vc
 from . import importer
 from . import colors
+from . import rcontrol_all
 
 TOOL_NAME = "poni"
-
 
 # common arguments
 arg_full_match = argh.arg("-M", "--full-match", default=False,
@@ -38,6 +38,9 @@ arg_path_prefix = argh.arg('--path-prefix', type=str, default="",
 arg_target_nodes_0_to_n = argh.arg('nodes', type=str,
                                    help='target nodes (regexp)', nargs="?")
 arg_target_nodes = argh.arg('nodes', type=str, help='target nodes (regexp)')
+arg_host_access_method = argh.arg("-m", "--method",
+                                  choices=rcontrol_all.METHODS.keys(),
+                                  help="override host access method")
 
 def arg_flag(*args, **kwargs):
     return argh.arg(*args, default=False, action="store_true", **kwargs)
@@ -198,6 +201,7 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_target_nodes
+    @arg_host_access_method
     @argh.arg('cmd', type=str, help='command to execute')
     def handle_remote_exec(self, arg):
         """run a shell-command"""
@@ -211,6 +215,7 @@ class Tool:
     @argh.alias("shell")
     @arg_verbose
     @arg_full_match
+    @arg_host_access_method
     @arg_target_nodes
     def handle_remote_shell(self, arg):
         """start an interactive shell session"""
@@ -224,10 +229,7 @@ class Tool:
     def remote_op(self, confman, arg, op):
         ret = 0
         for node in confman.find(arg.nodes, full_match=arg.full_match):
-            if not node.get("host"):
-                continue
-
-            remote = node.get_remote()
+            remote = node.get_remote(override=arg.method)
             desc = "%s (%s): %s" % (node.name, node.get("host"), op.doc)
             if arg.verbose:
                 print "--- BEGIN %s ---" % desc
@@ -502,25 +504,28 @@ class Tool:
     @arg_full_match
     @arg_path_prefix
     @arg_target_nodes_0_to_n
+    @arg_host_access_method
     def handle_deploy(self, arg):
         """deploy node configs"""
         confman = core.ConfigMan(arg.root_dir)
         self.verify_op(confman, arg.nodes, show=False, deploy=True,
                        verbose=arg.verbose, full_match=arg.full_match,
-                       path_prefix=arg.path_prefix)
+                       path_prefix=arg.path_prefix, access_method=arg.method)
 
     @argh.alias("audit")
     @arg_verbose
     @arg_full_match
     @arg_path_prefix
     @arg_target_nodes_0_to_n
+    @arg_host_access_method
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
     def handle_audit(self, arg):
         """audit active node configs"""
         confman = core.ConfigMan(arg.root_dir)
         self.verify_op(confman, arg.nodes, show=False, deploy=False,
                        audit=True, show_diff=arg.show_diff,
-                       full_match=arg.full_match, path_prefix=arg.path_prefix)
+                       full_match=arg.full_match, path_prefix=arg.path_prefix,
+                       access_method=arg.method)
 
     @argh.alias("verify")
     @arg_full_match

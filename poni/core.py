@@ -102,14 +102,18 @@ class Item(dict):
 
     def verify_enabled(self):
         """Is verification (including deploy and audit) enabled for item?"""
-        verify = self.get("verify")
-        if verify is not None:
-            return verify
+        return self.get_tree_property("verify", True)
+
+    def get_tree_property(self, name, default=None):
+        """Return property value from the closest ancestor (including self)"""
+        value = self.get(name)
+        if value is not None:
+            return value
 
         if self.system:
-            return self.system.verify_enabled()
+            return self.system.get_tree_property(name, default=default)
 
-        return True
+        return default
 
     def __str__(self):
         return ", ".join(("%s=%r" % item) for item in self.showable())
@@ -197,18 +201,21 @@ class Node(Item):
         Item.__init__(self, "node", system, name, item_dir,
                       item_dir / NODE_CONF_FILE, extra)
         self.confman = confman
-        self._remote = None
+        self._remotes = {}
         self.update(json.load(file(self.conf_file)))
 
     def cleanup(self):
-        if self._remote:
-            self._remote.close()
+        for remote in self._remotes.values():
+            remote.close()
 
-    def get_remote(self):
-        if not self._remote:
-            self._remote = rcontrol_all.get_remote(self)
+    def get_remote(self, override=None):
+        method = override or self.get_tree_property("deploy", None)
+        remote = self._remotes.get(method)
+        if not remote:
+            remote = rcontrol_all.get_remote(self, method)
+            self._remotes[method] = remote
 
-        return self._remote
+        return remote
 
     def add_config(self, config, parent=None, copy_dir=None):
         config_dir = self.path / CONFIG_DIR / config

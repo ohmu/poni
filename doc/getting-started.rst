@@ -199,18 +199,19 @@ Deploying
 ---------
 In order to be able to deploy, Poni needs to know the hostnames of each nodes involved.
 For this exercise we'll deploy the files locally instead of copying them over the
-network::
+network. By default Poni attempts an SSH based deployment::
 
   $ poni deploy postgres1
   poni    ERROR   RemoteError: webshop/backend/postgres1: 'host' property not set
 
-Node and system properties can be adjusted with the ``set`` command. We'll set it to a
-special value ``@local`` that tells Poni to install the files to the local file-system::
+Node and system properties can be adjusted with the ``set`` command. We'll set a special
+property ``deploy`` to the value ``local`` that tells Poni to install the files to the
+local file-system::
 
-  $ poni set postgres1 host=@local
+  $ poni set postgres1 deploy=local
   $ poni list postgres1 -p
       node webshop/backend/postgres1
-      prop     depth:3 host:'@local' index:0
+      prop     deploy:'local' depth:3 host:'' index:0
 
 The ``list`` option ``-p`` shows node and system properties. In addition to ``host`` there
 are a couple of automatically set properties ``depth`` (how deep is the node in the

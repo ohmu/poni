@@ -36,8 +36,7 @@ class Manager:
                          error.__class__.__name__, error)
         self.error_count += 1
 
-    def copy_tree(self, entry):
-        remote = entry["node"].get_remote()
+    def copy_tree(self, entry, remote):
         def progress(copied, total):
             sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
 
@@ -69,7 +68,8 @@ class Manager:
                 self.log.info("already copied: %s", dest_path)
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
-               verbose=False, callback=None, path_prefix=""):
+               verbose=False, callback=None, path_prefix="",
+               access_method=None):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
@@ -94,7 +94,8 @@ class Manager:
 
             if entry["type"] == "dir":
                 # copy a directory recursively
-                self.copy_tree(entry)
+                remote = entry["node"].get_remote(override=access_method)
+                self.copy_tree(entry, remote)
                 continue
 
             source_path = entry["config"].path / entry["source_path"]
@@ -123,7 +124,7 @@ class Manager:
             if (audit or deploy) and dest_path and (not failed):
                 # read existing file
                 try:
-                    remote = entry["node"].get_remote()
+                    remote = entry["node"].get_remote(override=access_method)
                     active_text = remote.read_file(dest_path)
                     stat = remote.stat(dest_path)
                     if stat:
@@ -144,7 +145,7 @@ class Manager:
                                   output, show_diff=show_diff)
 
             if deploy and dest_path and (not failed):
-                remote = entry["node"].get_remote()
+                remote = entry["node"].get_remote(override=access_method)
                 try:
                     self.deploy_file(remote, entry, dest_path, output,
                                      active_text, verbose=verbose,

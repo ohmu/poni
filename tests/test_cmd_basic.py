@@ -145,7 +145,7 @@ class TestCommands(Helper):
         instance_node = "inode"
         instance_conf = "iconf"
         assert not poni.run(["add-node", instance_node])
-        assert not poni.run(["set", instance_node, "host=@local"])
+        assert not poni.run(["set", instance_node, "deploy=local"])
         assert not poni.run(["add-config", instance_node, instance_conf,
                              "--inherit", tconf_path])
 

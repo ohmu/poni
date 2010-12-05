@@ -3,8 +3,8 @@ Node Remote Control
 Commands can be executed on remote nodes using Poni's ``remote exec`` and
 ``remote shell`` commands.
 
-Commands are executed over an SSH connection unless the node ``host`` property has been
-set to ``@local``. In that case, the commands are simply run locally in the current host.
+Commands are executed over an SSH connection unless the node ``deploy`` property has been
+set to ``local``. In that case, the commands are simply run locally in the current host.
 
 Remote Execution of Shell Commands
 ----------------------------------

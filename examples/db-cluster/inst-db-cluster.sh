@@ -20,12 +20,12 @@ set template\$ verify=bool:false
 # create db backend cluster
 add-node db/backend/cluster/pg{id:04} -n 4 -i ^template/db-node\$
 set db/backend/cluster\$ shards=int:64
-set cluster/pg000 host=@local
+set cluster/pg000 deploy=local
 
 # create report node
 add-node report/example
 add-config report/example example1
-set ^report/example host=@local
+set ^report/example deploy=local
 
 # create some dummy frontend nodes
 add-node web/frontend/leiska{id:02} -n 2
