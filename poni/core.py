@@ -160,17 +160,19 @@ class Config(Item):
     def get_controls(self):
         return None, None # TODO: implementation
 
-    def collect(self, manager, node):
+    def collect(self, manager, node, top_config=None):
+        top_config = top_config or self
         plugin_path = self.path / PLUGIN_FILE
         if not plugin_path.exists():
             # no plugin, nothing to verify
             return
 
         module = imp.load_source("plugin", plugin_path)
-        plugin = module.PlugIn(manager, self, self.settings, node)
+        plugin = module.PlugIn(manager, self, self.settings, node, top_config)
         plugin.add_actions()
 
-    def collect_parents(self, manager, node):
+    def collect_parents(self, manager, node, top_config=None):
+        top_config = top_config or self
         parent_name = self.get("parent")
         if not parent_name:
             return
@@ -186,7 +188,7 @@ class Config(Item):
                     self.node.name, self.name, parent_name, ", ".join(names)))
 
         parent_conf = matches[0]
-        parent_conf.collect(manager, node)
+        parent_conf.collect(manager, node, top_config=top_config)
         # TODO: parent_conf.collect_parents() (multiple levels of parents)
 
 

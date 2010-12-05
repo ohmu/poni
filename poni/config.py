@@ -203,10 +203,11 @@ class Manager:
 
 
 class PlugIn:
-    def __init__(self, manager, config, settings, node):
+    def __init__(self, manager, config, settings, node, top_config):
         self.log = logging.getLogger("plugin")
         self.manager = manager
         self.config = config
+        self.top_config = top_config
         self.settings = settings
         self.node = node
 
@@ -256,6 +257,7 @@ class PlugIn:
                          find=self.manager.confman.find,
                          get_node=self.get_one,
                          get_system=self.get_system,
+                         config=self.top_config,
                          edge=self.add_edge,
                          dynconf=self.manager.dynamic_conf)
             text = str(CheetahTemplate(file=source_path, searchList=[names]))
