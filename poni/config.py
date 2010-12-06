@@ -14,6 +14,7 @@ import difflib
 from path import path
 from . import errors
 from . import util
+from . import colors
 
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
@@ -78,6 +79,7 @@ class Manager:
         if path_prefix and not path_prefix.endswith("/"):
             path_prefix += "/"
 
+        color = colors.Output(sys.stdout).color
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
@@ -135,10 +137,14 @@ class Manager:
                 failed = True
 
             if show:
-                identity = "%s: dest=%s" % (node_name, dest_path)
-                print "--- BEGIN %s ---" % identity
+                identity = "%s%s%s" % (color(node_name, "node"),
+                                       color(": path=", "header"),
+                                       color(dest_path, "path"))
+                print color("--- BEGIN", "header"), identity, \
+                    color("---", "header")
                 print output
-                print "--- END %s ---" % identity
+                print color("--- END", "header"), identity, \
+                    color("---", "header")
                 print
 
             remote = None

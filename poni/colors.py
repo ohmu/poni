@@ -36,6 +36,8 @@ CODES.update({
     'config': CODES['yellow'],
     'configparent' : '\033[0;33m',
     'nodeparent' : '\033[0;32m',
+    'header': CODES['cyan'],
+    'path': CODES['lyellow'],
     None: CODES["reset"],
     })
 
