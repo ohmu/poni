@@ -666,23 +666,23 @@ class Tool:
         return parser
 
     def tune_arg_namespace(self, arg):
-        try:
+        if arg.function == self.handle_list:
+            # tune "list" arguments
             if arg.show_node_prop or arg.show_cloud_prop or arg.query_status:
                 arg.show_nodes = True
-        except AttributeError:
-            pass
 
-        try:
             if arg.show_config_prop:
                 arg.show_config = True
-        except AttributeError:
-            pass
 
-        try:
             if not any([arg.show_nodes, arg.show_systems, arg.show_config]):
                 arg.show_nodes = True
-        except AttributeError:
-            pass
+
+            if arg.show_tree:
+                if arg.show_config:
+                    arg.show_nodes = True
+
+                if arg.show_nodes:
+                    arg.show_systems = True
 
     def run(self, args=None):
         def adjust_logging(arg):
