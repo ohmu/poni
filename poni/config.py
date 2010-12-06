@@ -111,7 +111,7 @@ class Manager:
                                 entry["source_path"]))
                     elif verbose:
                         self.log.info(
-                            "copy source directory '%(path)s' has "
+                            "[OK] copy source directory '%(path)s' has "
                             "%(file_count)s files, "
                             "%(total_bytes)s bytes" % dir_stats)
 
@@ -127,6 +127,8 @@ class Manager:
 
                 dest_path, output = render(source_path, dest_path)
                 dest_path = path(path_prefix + dest_path).normpath()
+                if verbose:
+                    self.log.info("[OK] file: %s", dest_path)
             except Exception, error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
