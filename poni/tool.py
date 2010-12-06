@@ -99,6 +99,7 @@ class Tool:
                 return args
 
         def set_repo_path(sub_arg):
+            self.tune_arg_namespace(sub_arg)
             sub_arg.root_dir = arg.root_dir
 
         for line in lines:
@@ -132,8 +133,8 @@ class Tool:
                 elif source_path.isdir():
                     assert 0, "unimplemented"
                 else:
-                    raise UserError("don't know how to handle: %r" %
-                                    str(source_path))
+                    raise errors.UserError("don't know how to handle: %r" %
+                                           str(source_path))
 
     @argh.alias("add-config")
     @arg_verbose
@@ -593,13 +594,14 @@ class Tool:
     @argh.alias("list")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @arg_flag("-n", "--nodes", dest="show_nodes", help="show nodes")
     @arg_flag("-s", "--systems", dest="show_systems", help="show systems")
     @arg_flag("-c", "--config", dest="show_config", help="show node configs")
-    @arg_flag("-n", "--config-prop", dest="show_config_prop",
+    @arg_flag("-P", "--config-prop", dest="show_config_prop",
               help="show node config properties")
-    @arg_flag("-C", "--controls", dest="show_controls",
-              help="show node config control commands")
-    @arg_flag("-t", "--tree", dest="show_tree", help="show node tree")
+#    @arg_flag("-C", "--controls", dest="show_controls",
+#              help="show node config control commands")
+    @arg_flag("-t", "--tree", dest="show_tree", help="indented tree output")
     @arg_flag("-p", "--node-prop", dest="show_node_prop",
               help="show node properties")
     @arg_flag("-o", "--cloud", dest="show_cloud_prop",
@@ -661,9 +663,30 @@ class Tool:
 
         return parser
 
+    def tune_arg_namespace(self, arg):
+        try:
+            if arg.show_node_prop or arg.show_cloud_prop or arg.query_status:
+                arg.show_nodes = True
+        except AttributeError:
+            pass
+
+        try:
+            if arg.show_config_prop:
+                arg.show_config = True
+        except AttributeError:
+            pass
+
+        try:
+            if not any([arg.show_nodes, arg.show_systems, arg.show_config]):
+                arg.show_nodes = True
+        except AttributeError:
+            pass
+
     def run(self, args=None):
         def adjust_logging(arg):
             """tune the logging before executing commands"""
+            self.tune_arg_namespace(arg)
+
             if arg.debug:
                 logging.getLogger().setLevel(logging.DEBUG)
             else:
