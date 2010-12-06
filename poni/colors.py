@@ -16,6 +16,9 @@ CODES = {
     'hmagenta' : '\033[1;45m',
     'hcyan' : '\033[1;46m',
     'hgray' : '\033[1;47m',
+    'lgreen' : '\033[0;32m',
+    'lcyan' : '\033[0;36m',
+    'lyellow' : '\033[0;33m',
 }
 
 CODES.update({
@@ -27,6 +30,9 @@ CODES.update({
     'status': CODES['red'],
     'system': CODES['cyan'],
     'node': CODES['green'],
+    'nodetype': CODES['lgreen'],
+    'systemtype': CODES['lcyan'],
+    'configtype': CODES['lyellow'],
     'config': CODES['yellow'],
     'configparent' : '\033[0;33m',
     'nodeparent' : '\033[0;32m',

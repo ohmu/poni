@@ -133,8 +133,12 @@ class ListOutput(colors.Output):
                 indent += self.indent
 
 
-            yield "%8s" % entry["type"], None
-            yield " ", None
+            type_code = "%stype" % entry["type"]
+            if type_code not in colors.CODES:
+                type_code = "reset"
+
+            yield "%8s" % entry["type"], type_code
+            yield "  ", None
             yield indent, None
             for output in self.formatters.get(entry["type"],
                                               self.format_unknown)(entry):
