@@ -623,9 +623,23 @@ class Tool:
     def handle_list(self, arg):
         """list systems and nodes"""
         confman = core.ConfigMan(arg.root_dir)
+        # TODO: don't pass arg to ListOutput()
         list_output = listout.ListOutput(self, confman, arg)
         for output in list_output.output():
             yield output
+
+    @argh.alias("list")
+    @arg_full_match
+    @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    def handle_settings_list(self, arg):
+        """list settings"""
+        pattern = arg.pattern or "."
+        confman = core.ConfigMan(arg.root_dir)
+        for conf in confman.find_config(pattern):
+            if not conf.settings:
+                continue
+
+            print "%s/%s: %s" % (conf.node.name, conf.name, conf.settings)
 
     def create_parser(self):
         default_root = self.default_repo_path
@@ -670,6 +684,13 @@ class Tool:
                 self.handle_vc_checkpoint,
                 ],
                             namespace="vc", title="version-control operations",
+                            help="command to execute")
+
+        parser.add_commands([
+                self.handle_settings_list,
+                ],
+                            namespace="settings",
+                            title="config settings manipulation commands",
                             help="command to execute")
 
         return parser
