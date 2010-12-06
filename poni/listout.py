@@ -152,8 +152,9 @@ class ListOutput(colors.Output):
 
         for item in self.confman.find(arg.pattern, systems=arg.show_systems,
                                       full_match=arg.full_match):
-            if isinstance(item, core.Node) and arg.show_nodes:
-                yield dict(type="node", item=item)
+            if isinstance(item, core.Node):
+                if arg.show_nodes:
+                    yield dict(type="node", item=item)
             elif arg.show_systems:
                 yield dict(type="system", item=item)
 
