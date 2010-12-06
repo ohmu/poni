@@ -99,7 +99,7 @@ def dir_stats(dir_path):
     return out
 
 def path_iter_dict(dict_obj, prefix=[]):
-    for key, value in dict_obj.iteritems():
+    for key, value in sorted(dict_obj.iteritems()):
         location = prefix + [key]
         if isinstance(value, dict):
             for item in path_iter_dict(value, prefix=location):

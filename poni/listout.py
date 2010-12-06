@@ -19,6 +19,7 @@ class ListOutput(colors.Output):
                  show_config=False, show_tree=False, show_inherits=False,
                  pattern=False, full_match=False, show_node_prop=False,
                  show_cloud_prop=False, show_config_prop=False,
+                 list_props=False,
                  query_status=False, show_settings=False, **kwargs):
         colors.Output.__init__(self, sys.stdout)
         self.show_nodes = show_nodes
@@ -30,6 +31,7 @@ class ListOutput(colors.Output):
         self.show_cloud_prop = show_cloud_prop
         self.show_config_prop = show_config_prop
         self.show_settings = show_settings
+        self.list_props = list_props
         self.query_status = query_status
         self.pattern = pattern
         self.full_match = full_match
@@ -184,7 +186,13 @@ class ListOutput(colors.Output):
                 yield dict(type="system", item=item)
 
             if self.show_node_prop:
-                yield dict(type="prop", item=item, prop=dict(item.showable()))
+                items = dict(item.showable())
+                if self.list_props:
+                    for key_path, value in util.path_iter_dict(items):
+                        yield dict(type="prop", item=item,
+                                   prop={key_path: value})
+                else:
+                    yield dict(type="prop", item=item, prop=items)
 
             if isinstance(item, core.Node):
                 for conf in item.iter_configs():
@@ -202,8 +210,13 @@ class ListOutput(colors.Output):
 
             cloud_prop = item.get("cloud", {})
             if self.show_cloud_prop and cloud_prop:
-                yield dict(type="cloud", cloud=cloud_prop, item=item,
-                           prop=cloud_prop)
+                if self.list_props:
+                    for key_path, value in util.path_iter_dict(cloud_prop):
+                        yield dict(type="cloud", item=item,
+                                   prop={key_path: value})
+                else:
+                    yield dict(type="cloud", cloud=cloud_prop, item=item,
+                               prop=cloud_prop)
 
             if self.query_status and cloud_prop.get("instance"):
                 provider = self.tool.sky.get_provider(cloud_prop)

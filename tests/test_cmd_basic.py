@@ -87,7 +87,7 @@ class TestCommands(Helper):
         flags = ["--systems", "--config", "--tree",
 #                 "--controls",
                  "--node-prop", "--cloud", "--query-status", "--config-prop",
-                 "--inherits"]
+                 "--inherits", "--line-per-prop"]
         for combo in combos(flags):
             cmd = ["list"]
             cmd.extend(combo)

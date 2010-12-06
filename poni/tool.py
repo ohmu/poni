@@ -620,6 +620,8 @@ class Tool:
     @arg_flag("-q", "--query-status", help="query and show cloud node status")
     @arg_flag("-i", "--inherits", dest="show_inherits",
               help="show node and config inheritances")
+    @arg_flag("-l", "--line-per-prop", dest="list_props",
+              help="one line per property")
     def handle_list(self, arg):
         """list systems and nodes"""
         confman = core.ConfigMan(arg.root_dir)
