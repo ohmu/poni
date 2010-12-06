@@ -299,10 +299,14 @@ class ConfigMan:
             raise errors.Error("repository '%s' already initialized" % (
                     self.root_dir))
 
-        if not self.system_root.exists():
-            self.system_root.makedirs()
+        try:
+            if not self.system_root.exists():
+                self.system_root.makedirs()
 
-        util.json_dump({}, file(self.config_path, "wb"))
+            util.json_dump({}, file(self.config_path, "wb"))
+        except (OSError, IOError), error:
+            raise errors.RepoError("repository '%s' init failed: %s: %s" % (
+                    self.root_dir, error.__class__.__name__, error))
 
     def load_config(self):
         try:

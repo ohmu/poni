@@ -18,13 +18,20 @@ class Importer:
 
 
 class DebImporter(Importer):
-    def __init__(self, source):
-        Importer.__init__(self, source)
+    def __init__(self, source, verbose=False):
+        Importer.__init__(self, source, verbose=verbose)
         if not debfile:
             raise errors.MissingLibraryError(
                 "this feature requires the 'python-debian' library")
 
     def import_to(self, confman):
+        try:
+            return self.__import_to(confman)
+        except (OSError, IOError), error:
+            raise errors.ImporterError("importing from '%s' failed: %s: %s" % (
+                self.source, error.__class__.__name__, error))
+
+    def __import_to(self, confman):
         data = debfile.DebFile(self.source).data.tgz()
 
         prefix = "./usr/lib/poni-config/"

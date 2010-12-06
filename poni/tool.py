@@ -75,7 +75,13 @@ class Tool:
         """import nodes/configs"""
         confman = core.ConfigMan(arg.root_dir)
         for glob_pattern in arg.source:
-            for source_path in glob.glob(glob_pattern):
+            sources = glob.glob(glob_pattern)
+            if not sources:
+                raise errors.UserError(
+                    "'%s' does not match any files or directories" % (
+                        glob_pattern))
+
+            for source_path in sources:
                 # TODO: move code to core.py
                 source = importer.get_importer(source_path,
                                                verbose=arg.verbose)
@@ -117,7 +123,7 @@ class Tool:
     @argh.alias("update-config")
     @arg_verbose
     @argh.arg('config', type=str, help="target config (regexp)")
-    @argh.arg('source', type=path, help='source file or dir', nargs="+")
+    @argh.arg('source', type=path, help='source file or directory', nargs="+")
     def handle_update_config(self, arg):
         """update files to a config"""
         confman = core.ConfigMan(arg.root_dir)
