@@ -76,8 +76,10 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         for glob_pattern in arg.source:
             for source_path in glob.glob(glob_pattern):
-                source = importer.get_importer(source_path)
-                source.import_to(confman, verbose=arg.verbose)
+                # TODO: move code to core.py
+                source = importer.get_importer(source_path,
+                                               verbose=arg.verbose)
+                source.import_to(confman)
 
     @argh.alias("script")
     @arg_verbose
@@ -124,12 +126,12 @@ class Tool:
             raise errors.UserError("no config matching %r found" % arg.config)
 
         for source_path in arg.source:
-            for config in configs:
+            for conf in configs:
                 if arg.verbose:
-                    self.log.info("%s/%s: added %r", config.node.name,
-                                  config.name, str(source_path))
+                    self.log.info("%s/%s: added %r", conf.node.name,
+                                  conf.name, str(source_path))
                 if source_path.isfile():
-                    shutil.copy2(source_path, config.path)
+                    shutil.copy2(source_path, conf.path)
                 elif source_path.isdir():
                     assert 0, "unimplemented"
                 else:
@@ -249,17 +251,18 @@ class Tool:
 
         return ret
 
-    def handle_control(self, arg):
-        re_conf = re.compile(arg.configs)
-        for node in self.confman.find(arg.nodes):
-            for conf in node.iter_configs():
-                if not re_conf.search(conf.name):
-                    continue
+    ## def handle_control(self, arg):
+    ##     confman = core.ConfigMan(arg.root_dir)
+    ##     re_conf = re.compile(arg.configs)
+    ##     for node in confman.find(arg.nodes):
+    ##         for conf in node.iter_configs():
+    ##             if not re_conf.search(conf.name):
+    ##                 continue
 
-                doc, controls = conf.get_controls()
-                control_func = controls.get(arg.control)
-                if control_func:
-                    control_func()
+    ##             doc, controls = conf.get_controls()
+    ##             control_func = controls.get(arg.control)
+    ##             if control_func:
+    ##                 control_func()
 
     @argh.alias("init")
     def handle_vc_init(self, arg):
@@ -315,7 +318,6 @@ class Tool:
     def handle_cloud_update(self, arg):
         """update node cloud instance properties"""
         confman = core.ConfigMan(arg.root_dir)
-        nodes = []
         for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if not cloud_prop.get("instance"):
@@ -580,7 +582,7 @@ class Tool:
         for n in range(n, m):
             node_name = arg.node.format(id=n)
             host = arg.host.format(id=n)
-            node_spec = confman.create_node(
+            confman.create_node(
                 node_name, host=host, parent_node_name=parent_node_name,
                 copy_props=arg.copy_props)
 

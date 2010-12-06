@@ -8,8 +8,6 @@ TODO: this simple draft is VERY likely to change a lot
 
 """
 
-import glob
-import os
 import logging
 from path import path
 from . import errors

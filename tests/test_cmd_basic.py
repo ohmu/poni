@@ -84,7 +84,8 @@ class TestCommands(Helper):
         assert not poni.run(["add-node", node])
         assert not poni.run(["add-config", node, conf])
         assert not poni.run(["set", node, "cloud.blah=foo"])
-        flags = ["--systems", "--config", "--controls", "--tree",
+        flags = ["--systems", "--config", "--tree",
+#                 "--controls",
                  "--node-prop", "--cloud", "--query-status", "--config-prop",
                  "--inherits"]
         for combo in combos(flags):

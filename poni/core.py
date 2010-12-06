@@ -6,7 +6,6 @@ See LICENSE for details.
 
 """
 
-import sys
 import re
 import imp
 import shutil
@@ -357,8 +356,6 @@ class ConfigMan:
             spec["parent"] = parent_node_name
 
         util.json_dump(spec, file(spec_file, "w"))
-
-        return spec_file
 
     def get_node(self, node_path, system, extra=None, name=None):
         # TODO: random calls to this before loading ALL nodes will result

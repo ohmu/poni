@@ -8,7 +8,7 @@ See LICENSE for details.
 
 from . import rcontrol
 from . import rcontrol_paramiko
-from . import rcontrol_openssh
+#from . import rcontrol_openssh
 from . import errors
 
 METHODS = {
