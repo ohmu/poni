@@ -7,6 +7,7 @@ See LICENSE for details.
 """
 
 import os
+from path import path
 from . import errors
 
 try:
@@ -88,3 +89,11 @@ def parse_count(count_str):
 
 def format_error(error):
     return "ERROR: %s: %s" % (error.__class__.__name__, error)
+
+def dir_stats(dir_path):
+    out = {"path": dir_path, "file_count": 0, "total_bytes": 0}
+    for file_path in path(dir_path).walkfiles():
+        out["file_count"] += 1
+        out["total_bytes"] += file_path.stat().st_size
+
+    return out

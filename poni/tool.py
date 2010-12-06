@@ -532,13 +532,16 @@ class Tool:
                        access_method=arg.method)
 
     @argh.alias("verify")
+    @arg_verbose
     @arg_full_match
+    @arg_host_access_method
     @arg_target_nodes_0_to_n
     def handle_verify(self, arg):
         """verify local node configs"""
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes, show=False,
-                                 full_match=arg.full_match)
+                                 full_match=arg.full_match,
+                                 access_method=arg.method, verbose=arg.verbose)
 
         if manager.error_count:
             self.log.error("failed: files with errors: [%d/%d]",

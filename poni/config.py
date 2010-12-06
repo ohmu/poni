@@ -93,9 +93,29 @@ class Manager:
             node_name = entry["node"].name
 
             if entry["type"] == "dir":
-                # copy a directory recursively
-                remote = entry["node"].get_remote(override=access_method)
-                self.copy_tree(entry, remote)
+                if deploy:
+                    # copy a directory recursively
+                    remote = entry["node"].get_remote(override=access_method)
+                    self.copy_tree(entry, remote)
+                else:
+                    # verify
+                    try:
+                        dir_stats = util.dir_stats(entry["source_path"])
+                    except (OSError, IOError), error:
+                        raise errors.VerifyError(
+                            "cannot copy files from '%s': %s: %s"% (
+                                error.__class__.__name__, error))
+
+                    if dir_stats["file_count"] == 0:
+                        self.log.warning("source directory '%s' is empty" % (
+                                entry["source_path"]))
+                    elif verbose:
+                        self.log.info(
+                            "copy source directory '%(path)s' has "
+                            "%(file_count)s files, "
+                            "%(total_bytes)s bytes" % dir_stats)
+
+                # dir handled, next!
                 continue
 
             source_path = entry["config"].path / entry["source_path"]
