@@ -623,8 +623,7 @@ class Tool:
     def handle_list(self, arg):
         """list systems and nodes"""
         confman = core.ConfigMan(arg.root_dir)
-        # TODO: don't pass arg to ListOutput()
-        list_output = listout.ListOutput(self, confman, arg)
+        list_output = listout.ListOutput(self, confman, **arg.__dict__)
         for output in list_output.output():
             yield output
 
@@ -635,11 +634,10 @@ class Tool:
         """list settings"""
         pattern = arg.pattern or "."
         confman = core.ConfigMan(arg.root_dir)
-        for conf in confman.find_config(pattern):
-            if not conf.settings:
-                continue
-
-            print "%s/%s: %s" % (conf.node.name, conf.name, conf.settings)
+        list_output = listout.ListOutput(self, confman, show_settings=True,
+                                         show_config=True, **arg.__dict__)
+        for output in list_output.output():
+            yield output
 
     def create_parser(self):
         default_root = self.default_repo_path

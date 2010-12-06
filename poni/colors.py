@@ -38,6 +38,7 @@ CODES.update({
     'nodeparent' : '\033[0;32m',
     'header': CODES['cyan'],
     'path': CODES['lyellow'],
+    'setting': CODES['reset'],
     None: CODES["reset"],
     })
 

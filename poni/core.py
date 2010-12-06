@@ -374,6 +374,7 @@ class ConfigMan:
         return node
 
     def find_config(self, pattern):
+        # TODO: don't split the pattern, add config=True to find()
         parts = pattern.rsplit("/", 1)
         if len(parts) == 2:
             node_pattern, config_pattern = parts
