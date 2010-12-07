@@ -203,15 +203,15 @@ class ListOutput(colors.Output):
             if isinstance(item, core.Node):
                 for conf in sorted(item.iter_configs(),
                                    key=lambda x: x.name):
+                    if self.show_config:
+                        yield dict(type="config", item=item, config=conf)
+
                     if self.show_layers:
                         for i, (sort_key, layer_name, file_path) \
                                 in enumerate(conf.settings.layers):
                             yield dict(type="layer", item=item, config=conf,
                                        layer=layer_name, file_path=file_path,
                                        index=i)
-
-                    if self.show_config:
-                        yield dict(type="config", item=item, config=conf)
 
                     if self.show_config_prop:
                         yield dict(type="confprop", item=item, config=conf,

@@ -19,11 +19,11 @@ class Config(dict):
         dict.__init__(self)
         self.log = logging.getLogger("config")
         self.config_dirs = list(config_dirs)
-        self.config = None
         self.layers = []
         self.reload()
 
     def reload(self):
+        self.clear()
         self.layers = []
         # when combinining settings from multiple files, they are primarily
         # sorted by the filename prefix (first two letters) and secondarily

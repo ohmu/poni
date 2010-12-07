@@ -642,6 +642,50 @@ class Tool:
         for output in list_output.output():
             yield output
 
+    @argh.alias("set")
+    @arg_full_match
+    @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @argh.arg('setting', type=str, nargs="+", help="'name=[type:]value'")
+    def handle_settings_set(self, arg):
+        """override settings values"""
+        pattern = arg.pattern or "."
+        confman = core.ConfigMan(arg.root_dir)
+        configs = list(confman.find_config(arg.pattern))
+        if not configs:
+            raise errors.UserError("no config matching %r found" % arg.pattern)
+
+        props = dict(util.parse_prop(p) for p in arg.setting)
+
+        # verify all updates first, collect them to a list
+        updates = []
+        for conf in configs:
+            set_list = []
+            for key_path, value in props.iteritems():
+                addr = key_path.split(".")
+                old = util.set_dict_prop(conf.settings, addr, value,
+                                         verify=True)
+                if old != value:
+                    # needs to be set
+                    set_list.append((addr, value))
+                else:
+                    self.log.info("%s/%s: %r: no change", conf.node.name,
+                                  conf.name, ".".join(addr))
+
+            if set_list:
+                updates.append((conf, set_list))
+
+        # apply updates
+        layer_file = "50-user.json"
+        for conf, update in updates:
+            layer = conf.load_settings_layer(layer_file)
+            for addr, value in update:
+                self.log.info("%s/%s: set %s to %r", conf.node.name, conf.name,
+                              ".".join(addr), value)
+                addr[-1] = "!%s" % addr[-1]
+                util.set_dict_prop(layer, addr, value)
+
+            conf.save_settings_layer(layer_file, layer)
+
     def create_parser(self):
         default_root = self.default_repo_path
         if not default_root:
@@ -688,7 +732,7 @@ class Tool:
                             help="command to execute")
 
         parser.add_commands([
-                self.handle_settings_list,
+                self.handle_settings_list, self.handle_settings_set,
                 ],
                             namespace="settings",
                             title="config settings manipulation commands",

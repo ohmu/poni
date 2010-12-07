@@ -16,16 +16,34 @@ except ImportError:
     import simplejson as json
 
 
-def set_dict_prop(item, address, value):
+def set_dict_prop(item, address, value, verify=False):
+    def_value = object()
     for part in address[:-1]:
-        old = item.get(part)
-        if old is None:
+        old = item.get(part, def_value)
+        if old is def_value:
+            if verify:
+                raise errors.InvalidProperty(
+                    "%r does not exist" % (".".join(address)))
+
             item = item.setdefault(part, {})
         else:
             item = old
 
-    old = item.get(address[-1])
-    item[address[-1]] = value
+    old = item.get(address[-1], def_value)
+    if verify:
+        if old is def_value:
+            raise errors.InvalidProperty(
+                "%r does not exist" % (".".join(address)))
+        elif type(value) != type(old):
+            raise errors.InvalidProperty("%r type is %r, got %r: %r" % (
+                    ".".join(address), type(old).__name__,
+                    type(value).__name__, value))
+    else:
+        if old is def_value:
+            old = None
+
+        item[address[-1]] = value
+
     return old
 
 
@@ -59,7 +77,16 @@ def parse_prop(prop_str):
     try:
         name, value = prop_str.split("=", 1)
     except ValueError:
-        raise errors.InvalidProperty("invalid property: %r" % prop_str)
+        raise errors.InvalidProperty(
+            "invalid property: %r, expected format: name=[type:]value" %
+            prop_str)
+
+    try:
+        value = unicode(value, "ascii")
+    except UnicodeDecodeError, error:
+        raise errors.InvalidProperty(
+            "invalid non-ascii property value %r: %s: %s" % (
+                value, error.__class__.__name__, error))
 
     for prefix, convert in PROP_PREFIX.iteritems():
         if value.startswith(prefix):
