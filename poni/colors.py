@@ -39,6 +39,7 @@ CODES.update({
     'header': CODES['cyan'],
     'path': CODES['lyellow'],
     'setting': CODES['reset'],
+    'layer': CODES['reset'],
     None: CODES["reset"],
     })
 

@@ -631,6 +631,7 @@ class Tool:
 
     @argh.alias("list")
     @arg_full_match
+    @arg_flag("-l", "--show-layers", help="show settings layers")
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
     def handle_settings_list(self, arg):
         """list settings"""

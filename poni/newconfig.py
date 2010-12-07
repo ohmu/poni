@@ -20,17 +20,25 @@ class Config(dict):
         self.log = logging.getLogger("config")
         self.config_dirs = list(config_dirs)
         self.config = None
+        self.layers = []
         self.reload()
 
     def reload(self):
-        files = []
-        for config_dir in [path(d) for d in self.config_dirs]:
+        self.layers = []
+        # when combinining settings from multiple files, they are primarily
+        # sorted by the filename prefix (first two letters) and secondarily
+        # by the inheritance order (parent before child)
+        for i, (layer_name, config_dir) in enumerate(self.config_dirs):
+            config_dir = path(config_dir)
             if config_dir.exists():
-                files.extend(config_dir.glob("*.json"))
+                for file_path in config_dir.glob("*.json"):
+                    self.layers.append(((file_path.basename()[:2], i),
+                                        layer_name, file_path))
 
-        files = sorted(files, key=lambda x: x.basename())
-        self.log.debug("settings files: %r", files)
-        for file_path in files:
+        self.layers.sort()
+
+        self.log.debug("settings files: %r", self.layers)
+        for sort_key, layer_name, file_path in self.layers:
             try:
                 config_dict = json.load(file(file_path, "rb"))
             except ValueError, error:
@@ -46,6 +54,10 @@ class Config(dict):
 
     def apply_update(self, update, target, file_path):
         self.log.debug("apply update: %r -> %r", update, target)
+        if not isinstance(update, dict):
+            raise errors.SettingsError("%s: expected dict, got %s (%r)" % (
+                    file_path, type(update), update))
+
         for key, value in update.iteritems():
             first = key[:1]
             if key[:1] in ["!", "+", "-"]:

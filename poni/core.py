@@ -149,7 +149,7 @@ class Config(Item):
                 raise errors.Error("need exactly one parent config %r" % (
                         parent_config_name))
 
-        yield self.settings_dir
+        yield "%s/%s" % (self.node.name, self.name), self.settings_dir
 
     def saveable(self):
         return self.iteritems()
