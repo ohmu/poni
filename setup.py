@@ -8,16 +8,19 @@ new_dir = os.path.dirname(__file__)
 if new_dir:
     os.chdir(new_dir)
 
-depends = ["path.py", "paramiko", "cheetah", "boto", "GitPython", "argh"]
+depends = [
+    "path.py>=2.2.2",
+    "paramiko>=1.7.6",
+    "cheetah",
+    "boto>=2.0b3",
+    "GitPython",
+    "argh>=0.11"
+    ]
+
 try:
     import json
 except ImportError:
     depends.append("simplejson")
-
-try:
-    import argparse
-except ImportError:
-    depends.append("argparse")
 
 setup(
     name = 'poni',
