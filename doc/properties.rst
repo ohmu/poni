@@ -18,7 +18,8 @@ The following properties are automatically maintained by Poni:
      - integer
      - ``1`` (means: root-level)
    * - ``index``
-     - Location  of the node/system in relation to its siblings in the same system
+     - Location  of the node/system in relation to its siblings in the same
+       system
      - integer
      - ``0`` (means: first node)
 
@@ -34,31 +35,32 @@ Generic Properties
      - Data Type
      - Example
    * - ``host``
-     - Host network address
+     - Host network address (used with SSH-based access)
      - string
      - ``server01.company.com``
-   * - ``depth``
-     - Tells how many levels deep the node (or system) is in the hierarchy
-     - integer
-     - ``1`` (means: root-level)
-   * - ``index``
-     - Tells the location  of the node/system in relation to its siblings in the same
-       system
-     - integer
-     - ``0`` (means: first node)
+   * - ``user``
+     - Username for accessing the host (used with SSH-based access)
+     - string
+     - ``root``
+   * - ``ssh-key``
+     - Filename of the SSH key used to access the host as ``user``
+     - string
+     - ``id_rsa``
    * - ``parent``
-     - full name of the parent node (if defined)
+     - Full name of the parent node (if defined), set automatically when node
+       is created with ``poni add-node CHILD -i PARENT``
      - string
      - ``some/other/node``
    * - ``verify``
-     - Is verification enabled for this node/system and all of its sub-systems? Set to
-       ``false`` for e.g. template nodes. **NOTE:** Affects all sub-systems and their
-       nodes, too.
+     - Is verification enabled for this node/system and all of its
+       sub-systems? Set to ``false`` for e.g. template nodes. **NOTE:**
+       Affects all sub-systems and their nodes, too.
      - boolean
-     - ``true`` (verification is enabled) or ``false`` (verification is disabled)
+     - ``true`` (verification is enabled) or ``false`` (verification is
+       disabled)
    * - ``deploy``
-     - Node access method. Default is ``ssh`` if not defined with this property.
-       **NOTE:** Affects all sub-systems and their nodes, too.
+     - Node access method. Default is ``ssh`` if not defined with this
+       property. **NOTE:** Affects all sub-systems and their nodes, too.
      - string
      - ``ssh`` or ``local``
 
@@ -104,8 +106,8 @@ Amazon EC2 Properties
      - string
      - ``m1.small``, ``m2.xlarge``, etc.
    * - ``cloud.key-pair``
-     - Name of the EC2 data-center specific key-pair to use **without** the ``.pem``
-       suffix
+     - Name of the EC2 data-center specific key-pair to use **without** the
+       ``.pem`` suffix
      - **YES**
      - string
      - ``my-key-pair`` (in case the file you have is ``my-key-pair.pem``)
@@ -116,5 +118,6 @@ Amazon EC2 Properties
      - ``i-4692cd2b``
 
 .. note::
-  Many EC2 instance properties cannot be controlled yet, for example: security groups,
-  user data, addressing types, placement groups, monitoring, subnets or block devices.
+  Many EC2 instance properties cannot be controlled yet, for example: security
+  groups, user data, addressing types, placement groups, monitoring, subnets
+  or block devices.
