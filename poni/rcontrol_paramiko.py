@@ -104,6 +104,10 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         f.close()
 
     def close(self):
+        if self._sftp:
+            self._sftp.close()
+            self._sftp = None
+
         if self._ssh:
             self._ssh.close()
             self._ssh = None

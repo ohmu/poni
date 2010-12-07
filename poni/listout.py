@@ -195,7 +195,8 @@ class ListOutput(colors.Output):
                     yield dict(type="prop", item=item, prop=items)
 
             if isinstance(item, core.Node):
-                for conf in item.iter_configs():
+                for conf in sorted(item.iter_configs(),
+                                   key=lambda x: x.name):
                     if self.show_config:
                         yield dict(type="config", item=item, config=conf)
 

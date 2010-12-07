@@ -171,7 +171,7 @@ class Config(Item):
             return
 
         module = imp.load_source("plugin", plugin_path)
-        plugin = module.PlugIn(manager, self, self.settings, node, top_config)
+        plugin = module.PlugIn(manager, self, node, top_config)
         plugin.add_actions()
 
     def collect_parents(self, manager, node, top_config=None):

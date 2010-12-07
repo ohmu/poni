@@ -232,12 +232,11 @@ class Manager:
 
 
 class PlugIn:
-    def __init__(self, manager, config, settings, node, top_config):
+    def __init__(self, manager, config, node, top_config):
         self.log = logging.getLogger("plugin")
         self.manager = manager
         self.config = config
         self.top_config = top_config
-        self.settings = settings
         self.node = node
 
     def add_file(self, source_path, dest_path=None, source_text=None,
@@ -281,7 +280,7 @@ class PlugIn:
 
     def render_cheetah(self, source_path, dest_path):
         try:
-            names = dict(node=self.node, s=self.settings,
+            names = dict(node=self.node, s=self.top_config.settings,
                          system=self.node.system,
                          find=self.manager.confman.find,
                          get_node=self.get_one,
