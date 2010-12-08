@@ -500,16 +500,19 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_target_nodes_0_to_n
-    @arg_flag("-d", "--show-dynamic", dest="show_dynamic",
+    @arg_flag("-D", "--show-dynamic", dest="show_dynamic",
               help="show dynamic configuration")
     @arg_flag("--raw", dest="show_raw", help="show raw templates")
+    @arg_flag("-d", "--diff", dest="show_diff",
+              help="show raw template vs. rendered output diff")
     def handle_show(self, arg):
         """render and show node config files"""
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes,
                                  show=(not arg.show_dynamic),
                                  full_match=arg.full_match,
-                                 raw=arg.show_raw, color=arg.color)
+                                 raw=arg.show_raw, color=arg.color,
+                                 show_diff=arg.show_diff)
         if arg.show_dynamic:
             for item in manager.dynamic_conf:
                 print item

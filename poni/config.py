@@ -142,15 +142,37 @@ class Manager:
                 error_count += 1
 
             if show:
+                if show_diff:
+                    diff = difflib.unified_diff(
+                        source_path.bytes().splitlines(True),
+                        output.splitlines(True),
+                        "template", "rendered",
+                        "", "",
+                        lineterm="\n")
+
+                    show_output = diff
+
+                else:
+                    show_output = output
+
                 identity = "%s%s%s" % (color(node_name, "node"),
                                        color(": path=", "header"),
                                        color(dest_path, "path"))
-                print color("--- BEGIN", "header"), identity, \
-                    color("---", "header")
-                print output
-                print color("--- END", "header"), identity, \
-                    color("---", "header")
-                print
+                sys.stdout.write("%s %s %s\n" % (color("--- BEGIN", "header"),
+                                               identity,
+                                               color("---", "header")))
+
+                if isinstance(show_output, (str, unicode)):
+                    print show_output
+                else:
+                    diff_colors = {"+": "lgreen", "@": "white", "-": "lred"}
+                    for line in show_output:
+                        sys.stdout.write(
+                            color(line, diff_colors.get(line[:1], "reset")))
+
+                sys.stdout.write("%s %s %s\n\n" % (color("--- END", "header"),
+                                                   identity,
+                                                   color("---", "header")))
 
             remote = None
 
