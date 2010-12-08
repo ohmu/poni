@@ -257,7 +257,7 @@ class Tool:
                 ret = -1
 
             if arg.verbose:
-                print color("--- BEGIN", "header"), desc, \
+                print color("--- END", "header"), desc, \
                     color("---", "header")
                 print
 
