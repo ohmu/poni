@@ -499,12 +499,14 @@ class Tool:
     @arg_target_nodes_0_to_n
     @arg_flag("-d", "--show-dynamic", dest="show_dynamic",
               help="show dynamic configuration")
+    @arg_flag("--raw", dest="show_raw", help="show raw templates")
     def handle_show(self, arg):
         """render and show node config files"""
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes,
                                  show=(not arg.show_dynamic),
-                                 full_match=arg.full_match)
+                                 full_match=arg.full_match,
+                                 raw=arg.show_raw, color=arg.color)
         if arg.show_dynamic:
             for item in manager.dynamic_conf:
                 print item
@@ -520,7 +522,8 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         self.verify_op(confman, arg.nodes, show=False, deploy=True,
                        verbose=arg.verbose, full_match=arg.full_match,
-                       path_prefix=arg.path_prefix, access_method=arg.method)
+                       path_prefix=arg.path_prefix, access_method=arg.method,
+                       color=arg.color)
 
     @argh.alias("audit")
     @arg_verbose
@@ -535,7 +538,7 @@ class Tool:
         self.verify_op(confman, arg.nodes, show=False, deploy=False,
                        audit=True, show_diff=arg.show_diff,
                        full_match=arg.full_match, path_prefix=arg.path_prefix,
-                       access_method=arg.method)
+                       access_method=arg.method, color=arg.color)
 
     @argh.alias("verify")
     @arg_verbose
@@ -547,7 +550,8 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes, show=False,
                                  full_match=arg.full_match,
-                                 access_method=arg.method, verbose=arg.verbose)
+                                 access_method=arg.method, verbose=arg.verbose,
+                                 color=arg.color)
 
         if manager.error_count:
             self.log.error("failed: files with errors: [%d/%d]",
