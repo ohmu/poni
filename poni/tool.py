@@ -237,7 +237,7 @@ class Tool:
 
     def remote_op(self, confman, arg, op):
         ret = 0
-        color = colors.Output(sys.stdout, color=arg.color).color
+        color = colors.Output(sys.stdout, color=arg.color_mode).color
         nodes = list(confman.find(arg.nodes, full_match=arg.full_match))
         if not nodes:
             raise errors.UserError("%r does not match any nodes" % (arg.nodes))
@@ -511,7 +511,7 @@ class Tool:
         manager = self.verify_op(confman, arg.nodes,
                                  show=(not arg.show_dynamic),
                                  full_match=arg.full_match,
-                                 raw=arg.show_raw, color=arg.color,
+                                 raw=arg.show_raw, color_mode=arg.color_mode,
                                  show_diff=arg.show_diff)
         if arg.show_dynamic:
             for item in manager.dynamic_conf:
@@ -529,7 +529,7 @@ class Tool:
         self.verify_op(confman, arg.nodes, show=False, deploy=True,
                        verbose=arg.verbose, full_match=arg.full_match,
                        path_prefix=arg.path_prefix, access_method=arg.method,
-                       color=arg.color)
+                       color_mode=arg.color_mode)
 
     @argh.alias("audit")
     @arg_verbose
@@ -544,7 +544,7 @@ class Tool:
         self.verify_op(confman, arg.nodes, show=False, deploy=False,
                        audit=True, show_diff=arg.show_diff,
                        full_match=arg.full_match, path_prefix=arg.path_prefix,
-                       access_method=arg.method, color=arg.color)
+                       access_method=arg.method, color_mode=arg.color_mode)
 
     @argh.alias("verify")
     @arg_verbose
@@ -557,7 +557,7 @@ class Tool:
         manager = self.verify_op(confman, arg.nodes, show=False,
                                  full_match=arg.full_match,
                                  access_method=arg.method, verbose=arg.verbose,
-                                 color=arg.color)
+                                 color_mode=arg.color_mode)
 
         if manager.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -718,7 +718,7 @@ class Tool:
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
         parser.add_argument(
-            "-c", "--color", dest="color", default="auto",
+            "-c", "--color", dest="color_mode", default="auto",
             choices=["on", "off", "auto"], help="use color highlighting")
 
         parser.add_commands([

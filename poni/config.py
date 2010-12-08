@@ -69,7 +69,7 @@ class Manager:
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
                verbose=False, callback=None, path_prefix="", raw=False,
-               access_method=None, color="auto"):
+               access_method=None, color_mode="auto"):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
@@ -78,7 +78,7 @@ class Manager:
         if path_prefix and not path_prefix.endswith("/"):
             path_prefix += "/"
 
-        color = colors.Output(sys.stdout, color=color).color
+        color = colors.Output(sys.stdout, color=color_mode).color
         error_count = 0
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
@@ -173,6 +173,7 @@ class Manager:
                 sys.stdout.write("%s %s %s\n\n" % (color("--- END", "header"),
                                                    identity,
                                                    color("---", "header")))
+                sys.stdout.flush()
 
             remote = None
 
@@ -199,7 +200,8 @@ class Manager:
 
             if active_text and audit:
                 self.audit_output(entry, dest_path, active_text, active_time,
-                                  output, show_diff=show_diff)
+                                  output, show_diff=show_diff,
+                                  color_mode=color_mode)
 
             if deploy and dest_path and (not failed):
                 remote = entry["node"].get_remote(override=access_method)
@@ -242,20 +244,26 @@ class Manager:
                       entry["node"].name, dest_path)
 
     def audit_output(self, entry, dest_path, active_text, active_time,
-                     output, show_diff=False):
+                     output, show_diff=False, color_mode="auto"):
         if (active_text is not None) and (active_text != output):
             self.log.warning(self.audit_format, "DIFFERS",
                              entry["node"].name, dest_path)
             if show_diff:
+                color = colors.Output(sys.stdout, color=color_mode).color
                 diff = difflib.unified_diff(
                     output.splitlines(True),
                     active_text.splitlines(True),
                     "config", "active",
-                    "TODO:mtime", active_time,
+                    "", active_time, # TODO: mtime for config?
                     lineterm="\n")
 
+                diff_colors = {"+": "lgreen", "@": "white", "-": "lred"}
                 for line in diff:
-                    print line,
+                    sys.stdout.write(
+                        color(line, diff_colors.get(line[:1], "reset")))
+
+                sys.stdout.flush()
+
         elif active_text:
             self.log.info(self.audit_format, "OK", entry["node"].name,
                           dest_path)
