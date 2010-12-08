@@ -292,6 +292,7 @@ class PlugIn:
                          get_system=self.get_system,
                          config=self.top_config,
                          edge=self.add_edge,
+                         plugin=self,
                          dynconf=self.manager.dynamic_conf)
             text = str(CheetahTemplate(file=source_path, searchList=[names]))
             if dest_path:
