@@ -403,13 +403,13 @@ class ConfigMan:
 
         match_op = pattern.match if full_match else pattern.search
         current = current or self.system_root
-        conf_file = current / NODE_CONF_FILE
+        node_conf_file = current / NODE_CONF_FILE
         name = current[len(self.system_root)+1:]
         ok_depth = (not depth) or (curr_depth in depth)
 
-        if conf_file.exists():
+        if node_conf_file.exists():
             # this is a node dir
-            if match_op(name) and ok_depth:
+            if nodes and match_op(name) and ok_depth:
                 yield self.get_node(current, system, extra=extra)
         else:
             # system dir

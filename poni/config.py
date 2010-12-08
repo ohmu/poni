@@ -281,6 +281,7 @@ class PlugIn:
     def render_cheetah(self, source_path, dest_path):
         try:
             names = dict(node=self.node, s=self.top_config.settings,
+                         settings=self.top_config.settings,
                          system=self.node.system,
                          find=self.manager.confman.find,
                          get_node=self.get_one,
