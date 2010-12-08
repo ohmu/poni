@@ -67,7 +67,7 @@ class ListOutput(colors.Output):
             if not top_level:
                 yield "{", None
 
-            for i, (key, value) in enumerate(value.iteritems()):
+            for i, (key, value) in enumerate(sorted(value.iteritems())):
                 if i > 0:
                     yield ", ", None
 
