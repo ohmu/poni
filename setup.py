@@ -14,13 +14,19 @@ depends = [
     "cheetah",
     "boto>=2.0b3",
     "GitPython",
-    "argh>=0.11"
+    "argh>=0.11",
     ]
 
 try:
     import json
 except ImportError:
     depends.append("simplejson")
+
+try:
+    import argparse
+except ImportError:
+    depends.append("argparse")
+
 
 setup(
     name = 'poni',
