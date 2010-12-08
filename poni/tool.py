@@ -201,8 +201,7 @@ class Tool:
             updates.append("%s/%s" % (node.name, arg.config))
 
         if not updates:
-            self.log.error("no matching nodes found")
-            return -1
+            raise errors.UserError("no matching nodes found")
         elif arg.verbose:
             self.log.info("config %r added to: %s", arg.config,
                           ", ".join(updates))
@@ -239,7 +238,11 @@ class Tool:
     def remote_op(self, confman, arg, op):
         ret = 0
         color = colors.Output(sys.stdout, color=arg.color).color
-        for node in confman.find(arg.nodes, full_match=arg.full_match):
+        nodes = list(confman.find(arg.nodes, full_match=arg.full_match))
+        if not nodes:
+            raise errors.UserError("%r does not match any nodes" % (arg.nodes))
+
+        for node in nodes:
             remote = node.get_remote(override=arg.method)
             desc = "%s (%s): %s" % (color(node.name, "node"),
                                     color(node.get("host"), "host"),
@@ -554,9 +557,8 @@ class Tool:
                                  color=arg.color)
 
         if manager.error_count:
-            self.log.error("failed: files with errors: [%d/%d]",
-                           manager.error_count, len(manager.files))
-            return 1
+            raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
+                           manager.error_count, len(manager.files)))
         elif not manager.files:
             self.log.info("no files to verify")
         else:
@@ -798,6 +800,9 @@ class Tool:
         except errors.Error, error:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1
+        finally:
+            self.log.debug("rcontrol cleanup")
+            rcontrol_all.manager.cleanup()
 
         return exit_code
 

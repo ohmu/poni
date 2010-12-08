@@ -16,12 +16,30 @@ METHODS = {
     "local": rcontrol.LocalControl,
     }
 
-def get_remote(node, method):
-    try:
-        control_class = METHODS[method or "ssh"]
-    except KeyError:
-        raise errors.RemoteError("unknown remote control method %r" % method)
+class RemoteManager:
+    def __init__(self):
+        self.remotes = {}
 
-    return control_class(node)
+    def cleanup(self):
+        for remote in self.remotes.values():
+            remote.close()
 
+    def get_remote(self, node, method):
+        key = (node.name, method)
+        remote = self.remotes.get(key)
+        if not remote:
+            try:
+                control_class = METHODS[method or "ssh"]
+            except KeyError:
+                raise errors.RemoteError(
+                    "unknown remote control method %r" % method)
+
+            remote = control_class(node)
+            self.remotes[key] = remote
+
+        return remote
+
+manager = RemoteManager()
+
+get_remote = manager.get_remote
 

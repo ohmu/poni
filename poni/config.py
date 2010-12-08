@@ -53,7 +53,6 @@ class Manager:
             try:
                 rstat = remote.stat(dest_path)
                 # copy if mtime or size differs
-                print file_path, lstat.st_mtime, rstat.st_mtime
                 copy = ((lstat.st_size != rstat.st_size)
                         or (lstat.st_mtime != rstat.st_mtime))
             except errors.RemoteError:
@@ -80,6 +79,7 @@ class Manager:
             path_prefix += "/"
 
         color = colors.Output(sys.stdout, color=color).color
+        error_count = 0
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
@@ -139,6 +139,7 @@ class Manager:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
+                error_count += 1
 
             if show:
                 identity = "%s%s%s" % (color(node_name, "node"),
@@ -168,6 +169,8 @@ class Manager:
                     if audit:
                         self.log.error("%s: %s: %s: %s", node_name, dest_path,
                                        error.__class__.__name__, error)
+                        error_count += 1
+
                     active_text = None
             else:
                 active_text = None
@@ -183,8 +186,13 @@ class Manager:
                                      active_text, verbose=verbose,
                                      mode=entry.get("mode"))
                 except errors.RemoteError, error:
+                    error_count += 1
                     self.log.error("%s: %s: %s", node_name, dest_path, error)
                     # NOTE: continuing
+
+        if error_count:
+            raise errors.VerifyError("failed: there were %s errors" % (
+                    error_count))
 
     def deploy_file(self, remote, entry, dest_path, output, active_text,
                     verbose=False, mode=None):
@@ -284,7 +292,8 @@ class PlugIn:
 
     def render_cheetah(self, source_path, dest_path):
         try:
-            names = dict(node=self.node, s=self.top_config.settings,
+            names = dict(node=self.node,
+                         s=self.top_config.settings,
                          settings=self.top_config.settings,
                          system=self.node.system,
                          find=self.manager.confman.find,
