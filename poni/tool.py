@@ -24,6 +24,7 @@ from . import vc
 from . import importer
 from . import rcontrol_all
 from . import listout
+from . import colors
 
 TOOL_NAME = "poni"
 
@@ -237,11 +238,15 @@ class Tool:
 
     def remote_op(self, confman, arg, op):
         ret = 0
+        color = colors.Output(sys.stdout, color=arg.color).color
         for node in confman.find(arg.nodes, full_match=arg.full_match):
             remote = node.get_remote(override=arg.method)
-            desc = "%s (%s): %s" % (node.name, node.get("host"), op.doc)
+            desc = "%s (%s): %s" % (color(node.name, "node"),
+                                    color(node.get("host"), "host"),
+                                    color(op.doc, "command"))
             if arg.verbose:
-                print "--- BEGIN %s ---" % desc
+                print color("--- BEGIN", "header"), desc, \
+                    color("---", "header")
 
             try:
                 exit_code = op(arg, node, remote)
@@ -252,7 +257,8 @@ class Tool:
                 ret = -1
 
             if arg.verbose:
-                print "--- END %s ---" % desc
+                print color("--- BEGIN", "header"), desc, \
+                    color("---", "header")
                 print
 
         return ret
@@ -493,12 +499,14 @@ class Tool:
     @arg_target_nodes_0_to_n
     @arg_flag("-d", "--show-dynamic", dest="show_dynamic",
               help="show dynamic configuration")
+    @arg_flag("--raw", dest="show_raw", help="show raw templates")
     def handle_show(self, arg):
         """render and show node config files"""
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes,
                                  show=(not arg.show_dynamic),
-                                 full_match=arg.full_match)
+                                 full_match=arg.full_match,
+                                 raw=arg.show_raw, color=arg.color)
         if arg.show_dynamic:
             for item in manager.dynamic_conf:
                 print item
@@ -514,7 +522,8 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         self.verify_op(confman, arg.nodes, show=False, deploy=True,
                        verbose=arg.verbose, full_match=arg.full_match,
-                       path_prefix=arg.path_prefix, access_method=arg.method)
+                       path_prefix=arg.path_prefix, access_method=arg.method,
+                       color=arg.color)
 
     @argh.alias("audit")
     @arg_verbose
@@ -529,7 +538,7 @@ class Tool:
         self.verify_op(confman, arg.nodes, show=False, deploy=False,
                        audit=True, show_diff=arg.show_diff,
                        full_match=arg.full_match, path_prefix=arg.path_prefix,
-                       access_method=arg.method)
+                       access_method=arg.method, color=arg.color)
 
     @argh.alias("verify")
     @arg_verbose
@@ -541,7 +550,8 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes, show=False,
                                  full_match=arg.full_match,
-                                 access_method=arg.method, verbose=arg.verbose)
+                                 access_method=arg.method, verbose=arg.verbose,
+                                 color=arg.color)
 
         if manager.error_count:
             self.log.error("failed: files with errors: [%d/%d]",
@@ -631,6 +641,7 @@ class Tool:
 
     @argh.alias("list")
     @arg_full_match
+    @arg_flag("-l", "--show-layers", help="show settings layers")
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
     def handle_settings_list(self, arg):
         """list settings"""
@@ -640,6 +651,50 @@ class Tool:
                                          show_config=True, **arg.__dict__)
         for output in list_output.output():
             yield output
+
+    @argh.alias("set")
+    @arg_full_match
+    @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @argh.arg('setting', type=str, nargs="+", help="'name=[type:]value'")
+    def handle_settings_set(self, arg):
+        """override settings values"""
+        pattern = arg.pattern or "."
+        confman = core.ConfigMan(arg.root_dir)
+        configs = list(confman.find_config(arg.pattern))
+        if not configs:
+            raise errors.UserError("no config matching %r found" % arg.pattern)
+
+        props = dict(util.parse_prop(p) for p in arg.setting)
+
+        # verify all updates first, collect them to a list
+        updates = []
+        for conf in configs:
+            set_list = []
+            for key_path, value in props.iteritems():
+                addr = key_path.split(".")
+                old = util.set_dict_prop(conf.settings, addr, value,
+                                         verify=True)
+                if old != value:
+                    # needs to be set
+                    set_list.append((addr, value))
+                else:
+                    self.log.info("%s/%s: %r: no change", conf.node.name,
+                                  conf.name, ".".join(addr))
+
+            if set_list:
+                updates.append((conf, set_list))
+
+        # apply updates
+        layer_file = "50-user.json"
+        for conf, update in updates:
+            layer = conf.load_settings_layer(layer_file)
+            for addr, value in update:
+                self.log.info("%s/%s: set %s to %r", conf.node.name, conf.name,
+                              ".".join(addr), value)
+                addr[-1] = "!%s" % addr[-1]
+                util.set_dict_prop(layer, addr, value)
+
+            conf.save_settings_layer(layer_file, layer)
 
     def create_parser(self):
         default_root = self.default_repo_path
@@ -657,6 +712,9 @@ class Tool:
             "-d", "--root-dir", dest="root_dir", default=default_root,
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
+        parser.add_argument(
+            "-c", "--color", dest="color", default="auto",
+            choices=["on", "off", "auto"], help="use color highlighting")
 
         parser.add_commands([
             self.handle_list, self.handle_add_system, self.handle_init,
@@ -687,7 +745,7 @@ class Tool:
                             help="command to execute")
 
         parser.add_commands([
-                self.handle_settings_list,
+                self.handle_settings_list, self.handle_settings_set,
                 ],
                             namespace="settings",
                             title="config settings manipulation commands",
@@ -734,6 +792,9 @@ class Tool:
             exit_code = self.parser.dispatch(argv=args,
                                              pre_call=adjust_logging,
                                              raw_output=True)
+        except KeyboardInterrupt:
+            self.log.error("*** terminated by keyboard ***")
+            return -1
         except errors.Error, error:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1

@@ -111,11 +111,12 @@ class SshRemoteControl(RemoteControl):
     def __init__(self, node):
         self.log = logging.getLogger("ssh")
         RemoteControl.__init__(self, node)
-        self.key_filename = node.get("ssh-key")
-        if not self.key_filename:
-            # ssh-key not specifically set, use cloud.key-pair
-            cloud_key = node.get("cloud", {}).get("key-pair")
-            if cloud_key:
-                self.key_filename = "%s.pem" % cloud_key
+        self.key_filename = None
+        cloud_key = node.get("cloud", {}).get("key-pair")
+        if cloud_key:
+            # cloud 'key-pair' overrides 'ssh-key' from host properties
+            self.key_filename = "%s.pem" % cloud_key
+        else:
+            self.key_filename = node.get_tree_property("ssh-key")
 
 

@@ -69,8 +69,8 @@ class Manager:
                 self.log.info("already copied: %s", dest_path)
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
-               verbose=False, callback=None, path_prefix="",
-               access_method=None):
+               verbose=False, callback=None, path_prefix="", raw=False,
+               access_method=None, color="auto"):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
@@ -79,7 +79,7 @@ class Manager:
         if path_prefix and not path_prefix.endswith("/"):
             path_prefix += "/"
 
-        color = colors.Output(sys.stdout).color
+        color = colors.Output(sys.stdout, color=color).color
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
@@ -127,7 +127,11 @@ class Manager:
                     # dest path ending in slash: use source filename
                     dest_path = path(dest_path) / source_path.basename()
 
-                dest_path, output = render(source_path, dest_path)
+                if raw:
+                    dest_path, output = dest_path, source_path.bytes()
+                else:
+                    dest_path, output = render(source_path, dest_path)
+
                 dest_path = path(path_prefix + dest_path).normpath()
                 if verbose:
                     self.log.info("[OK] file: %s", dest_path)

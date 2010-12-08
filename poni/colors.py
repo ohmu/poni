@@ -38,15 +38,20 @@ CODES.update({
     'nodeparent' : '\033[0;32m',
     'header': CODES['cyan'],
     'path': CODES['lyellow'],
+    'host': CODES['lyellow'],
+    'command': CODES['red'],
     'setting': CODES['reset'],
+    'layer': CODES['reset'],
     None: CODES["reset"],
     })
 
 
 class Output:
-    def __init__(self, out_file):
+    def __init__(self, out_file, color="auto"):
         self.out = out_file
-        if hasattr(out_file, 'isatty') and out_file.isatty():
+        if ((color == "on") or (color == "auto"
+                                and (hasattr(out_file, 'isatty')
+                                and out_file.isatty()))):
             self.color = lambda text, code: "%s%s%s" % (CODES[code],
                                                         text,
                                                         CODES["reset"])

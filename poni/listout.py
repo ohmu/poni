@@ -19,9 +19,9 @@ class ListOutput(colors.Output):
                  show_config=False, show_tree=False, show_inherits=False,
                  pattern=False, full_match=False, show_node_prop=False,
                  show_cloud_prop=False, show_config_prop=False,
-                 list_props=False,
+                 list_props=False, show_layers=False, color="auto",
                  query_status=False, show_settings=False, **kwargs):
-        colors.Output.__init__(self, sys.stdout)
+        colors.Output.__init__(self, sys.stdout, color=color)
         self.show_nodes = show_nodes
         self.show_systems = show_systems
         self.show_config = show_config
@@ -31,6 +31,7 @@ class ListOutput(colors.Output):
         self.show_cloud_prop = show_cloud_prop
         self.show_config_prop = show_config_prop
         self.show_settings = show_settings
+        self.show_layers = show_layers
         self.list_props = list_props
         self.query_status = query_status
         self.pattern = pattern
@@ -48,6 +49,7 @@ class ListOutput(colors.Output):
             "confprop": self.format_prop,
             "status": self.format_status,
             "setting": self.format_setting,
+            "layer": self.format_layer,
             }
 
     def value_repr(self, value, top_level=False):
@@ -94,6 +96,10 @@ class ListOutput(colors.Output):
 
     def format_status(self, entry):
         yield entry["status"], "status"
+
+    def format_layer(self, entry):
+        yield "#%d: %s: %s" % (entry["index"], entry["layer"],
+                               entry["file_path"].basename()), "layer"
 
     def format_prop(self, entry):
         return self.value_repr(entry["prop"], top_level=True)
@@ -199,6 +205,13 @@ class ListOutput(colors.Output):
                                    key=lambda x: x.name):
                     if self.show_config:
                         yield dict(type="config", item=item, config=conf)
+
+                    if self.show_layers:
+                        for i, (sort_key, layer_name, file_path) \
+                                in enumerate(conf.settings.layers):
+                            yield dict(type="layer", item=item, config=conf,
+                                       layer=layer_name, file_path=file_path,
+                                       index=i)
 
                     if self.show_config_prop:
                         yield dict(type="confprop", item=item, config=conf,

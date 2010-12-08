@@ -136,6 +136,21 @@ class Config(Item):
         self.settings = newconfig.Config(self.get_settings_dirs())
         self.controls = None
 
+    def load_settings_layer(self, file_name):
+        try:
+            return json.load((self.settings_dir / file_name).open())
+        except (IOError, OSError):
+            return {}
+
+    def save_settings_layer(self, file_name, layer):
+        if not self.settings_dir.exists():
+            self.settings_dir.mkdir()
+
+        full_path = self.settings_dir / file_name
+        print "SAVING:", full_path
+        util.json_dump(layer, full_path.open("wb"))
+        self.settings.reload()
+
     def get_settings_dirs(self):
         parent_config_name = self.get("parent")
         if parent_config_name:
@@ -149,7 +164,7 @@ class Config(Item):
                 raise errors.Error("need exactly one parent config %r" % (
                         parent_config_name))
 
-        yield self.settings_dir
+        yield "%s/%s" % (self.node.name, self.name), self.settings_dir
 
     def saveable(self):
         return self.iteritems()
