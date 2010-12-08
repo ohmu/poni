@@ -113,47 +113,50 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
             self._ssh = None
 
     def get_ssh(self):
-        if not self._ssh:
-            host = self.node.get("host")
-            user = self.node.get("user")
+        if self._ssh:
+            return self._ssh
 
-            if not host:
-                raise errors.RemoteError("%s: 'host' property not defined" % (
+        host = self.node.get("host")
+        user = self.node.get("user")
+
+        if not host:
+            raise errors.RemoteError("%s: 'host' property not defined" % (
                         self.node.name))
-            elif not user:
-                raise errors.RemoteError("%s: 'user' property not defined" % (
-                        self.node.name))
+        elif not user:
+            raise errors.RemoteError("%s: 'user' property not defined" % (
+                self.node.name))
 
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            if self.key_filename:
-                # TODO: other dirs than ~/.ssh/
-                key_file = "%s/.ssh/%s" % (os.environ.get("HOME"),
-                                           self.key_filename)
-            else:
-                key_file = None
+        if self.key_filename:
+            # TODO: other dirs than ~/.ssh/
+            key_file = "%s/.ssh/%s" % (os.environ.get("HOME"),
+                                       self.key_filename)
+        else:
+            key_file = None
 
-            self.log.debug("ssh connect: host=%s, user=%s, key=%s",
-                           host, user, key_file)
+        self.log.debug("ssh connect: host=%s, user=%s, key=%s",
+                       host, user, key_file)
 
-            retries = 10
-            while retries:
-                try:
-                    ssh.connect(host, username=user, key_filename=key_file)
-                    break
-                except (socket.error, paramiko.SSHException), error:
-                    if not retries:
-                        raise
+        retries = 10
+        while True:
+            try:
+                ssh.connect(host, username=user, key_filename=key_file)
+                break
+            except (socket.error, paramiko.SSHException), error:
+                self.log.warning("ssh connection to %r failed: %s: %s, "
+                                 "retries remaining=%s" % (
+                                  host, error.__class__.__name__,
+                                     error, retries))
 
-                    self.log.warning("ssh connection to %r failed: %s: %s, "
-                                     "retries remaining=%s" % (
-                            error.__class__.__name__, error, host, retries))
+                if retries == 0:
+                    raise
 
-                    time.sleep(1)
-                    retries -= 1
+                time.sleep(3)
+                retries -= 1
 
-            self._ssh = ssh
+        self._ssh = ssh
 
         return self._ssh
 

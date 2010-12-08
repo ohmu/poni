@@ -24,6 +24,7 @@ from . import vc
 from . import importer
 from . import rcontrol_all
 from . import listout
+from . import colors
 
 TOOL_NAME = "poni"
 
@@ -237,11 +238,15 @@ class Tool:
 
     def remote_op(self, confman, arg, op):
         ret = 0
+        color = colors.Output(sys.stdout, color=arg.color).color
         for node in confman.find(arg.nodes, full_match=arg.full_match):
             remote = node.get_remote(override=arg.method)
-            desc = "%s (%s): %s" % (node.name, node.get("host"), op.doc)
+            desc = "%s (%s): %s" % (color(node.name, "node"),
+                                    color(node.get("host"), "host"),
+                                    color(op.doc, "command"))
             if arg.verbose:
-                print "--- BEGIN %s ---" % desc
+                print color("--- BEGIN", "header"), desc, \
+                    color("---", "header")
 
             try:
                 exit_code = op(arg, node, remote)
@@ -252,7 +257,8 @@ class Tool:
                 ret = -1
 
             if arg.verbose:
-                print "--- END %s ---" % desc
+                print color("--- BEGIN", "header"), desc, \
+                    color("---", "header")
                 print
 
         return ret
@@ -702,6 +708,9 @@ class Tool:
             "-d", "--root-dir", dest="root_dir", default=default_root,
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
+        parser.add_argument(
+            "-c", "--color", dest="color", default="auto",
+            choices=["on", "off", "auto"], help="use color highlighting")
 
         parser.add_commands([
             self.handle_list, self.handle_add_system, self.handle_init,
@@ -779,6 +788,9 @@ class Tool:
             exit_code = self.parser.dispatch(argv=args,
                                              pre_call=adjust_logging,
                                              raw_output=True)
+        except KeyboardInterrupt:
+            self.log.error("*** terminated by keyboard ***")
+            return -1
         except errors.Error, error:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1

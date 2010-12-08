@@ -19,9 +19,9 @@ class ListOutput(colors.Output):
                  show_config=False, show_tree=False, show_inherits=False,
                  pattern=False, full_match=False, show_node_prop=False,
                  show_cloud_prop=False, show_config_prop=False,
-                 list_props=False, show_layers=False,
+                 list_props=False, show_layers=False, color="auto",
                  query_status=False, show_settings=False, **kwargs):
-        colors.Output.__init__(self, sys.stdout)
+        colors.Output.__init__(self, sys.stdout, color=color)
         self.show_nodes = show_nodes
         self.show_systems = show_systems
         self.show_config = show_config
