@@ -262,10 +262,15 @@ class PlugIn:
 
     def get_one(self, name, nodes=True, systems=False):
         hits = list(self.manager.confman.find(name, nodes=nodes,
-                                              systems=systems))
+                                              systems=systems,
+                                              full_match=True))
         names = (h.name for h in hits)
-        assert len(hits) == 1, "found more than one (%d) %r: %s" % (
-            len(hits), name, ", ".join(names))
+        if len(hits) > 1:
+            raise errors.VerifyError("found more than one (%d) %r: %s" % (
+                    len(hits), name, ", ".join(names)))
+        elif len(hits) == 0:
+            raise errors.VerifyError("did not find %r: %s" % (
+                    name, ", ".join(names)))
 
         return hits[0]
 
