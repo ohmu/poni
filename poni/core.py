@@ -155,10 +155,11 @@ class Config(Item):
         parent_config_name = self.get("parent")
         if parent_config_name:
             # TODO: find_config() that returns exactly one hit
-            full_match = "^%s$" % parent_config_name
-            hits = list(self.node.confman.find_config(full_match))
+            hits = list(self.node.confman.find_config(parent_config_name,
+                                                      full_match=True))
             if len(hits) == 1:
-                for item in hits[0].get_settings_dirs():
+                parent_config_node, parent_config = hits[0]
+                for item in parent_config.get_settings_dirs():
                     yield item
             else:
                 raise errors.Error("need exactly one parent config %r" % (
@@ -195,17 +196,18 @@ class Config(Item):
         if not parent_name:
             return
 
-        matches = list(self.node.confman.find_config("^%s$" % parent_name))
+        matches = list(self.node.confman.find_config(parent_name,
+                                                     full_match=True))
         if len(matches) == 0:
             raise errors.Error("config '%s/%s' parent config %r not found" % (
                     self.node.name, self.name, parent_name))
         elif len(matches) > 1:
-            names = (("%s/%s" % (c.node.name, c.name)) for c in matches)
+            names = (("%s/%s" % (c.node.name, c.name)) for pn, c in matches)
             raise errors.Error("config %s/%s's parent config %r matches "
                                "multiple configs: %s" % (
                     self.node.name, self.name, parent_name, ", ".join(names)))
 
-        parent_conf = matches[0]
+        parent_conf_node, parent_conf = matches[0]
         parent_conf.collect(manager, node, top_config=top_config)
         # TODO: parent_conf.collect_parents() (multiple levels of parents)
 
@@ -262,6 +264,18 @@ class Node(Item):
         if config_dir.exists():
             for config_path in config_dir.dirs():
                 yield Config(self, config_path.basename(), config_path)
+
+    def iter_all_configs(self):
+        for conf in self.iter_configs():
+            yield conf
+
+        parent_name = self.get("parent")
+        if parent_name:
+            # collect configs from parent node
+            parent_path = self.confman.system_root / parent_name
+            parent_node = self.confman.get_node(parent_path, self.system)
+            for conf in parent_node.iter_all_configs():
+                yield conf
 
     def collect(self, manager):
         for conf in self.iter_configs():
@@ -388,8 +402,21 @@ class ConfigMan:
 
         return node
 
-    def find_config(self, pattern):
+    def get_config(self, pattern):
+        configs = list(self.find_config(pattern, all_configs=True,
+                                        full_match=True))
+        if len(configs) == 0:
+            raise errors.Error("no config %r found" % (pattern))
+        elif len(configs) > 1:
+            raise errors.Error("found multiple %r configs: %s" % (
+                    pattern, ", ".join(("%s/%s" % (c.node.name, c.name))
+                                       for cn, c in configs)))
+
+        return configs[0]
+
+    def find_config(self, pattern, all_configs=False, full_match=False):
         # TODO: don't split the pattern, add config=True to find()
+        pattern = pattern.replace("//", "/.*/")
         parts = pattern.rsplit("/", 1)
         if len(parts) == 2:
             node_pattern, config_pattern = parts
@@ -397,11 +424,20 @@ class ConfigMan:
             node_pattern = "."
             config_pattern = parts[0]
 
+        if full_match:
+            config_pattern += "$"
+
         re_config = re.compile(config_pattern)
-        for node in self.find(node_pattern):
-            for config in node.iter_configs():
-                if re_config.search(config.name):
-                    yield config
+        for node in self.find(node_pattern, full_match=full_match):
+            if all_configs:
+                find_method = node.iter_all_configs
+            else:
+                find_method = node.iter_configs
+
+            for config in find_method():
+                # TODO: full_match
+                if re_config.match(config.name):
+                    yield node, config
 
     def find(self, pattern, current=None, system=None, nodes=True,
              systems=False, curr_depth=0, extra=None, depth=None,

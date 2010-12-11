@@ -26,11 +26,11 @@ class Manager:
         self.files = []
         self.error_count = 0
         self.confman = confman
-        self.dynamic_conf = []
+        self.buckets = {}
         self.audit_format = "%8s %s: %s"
 
-    def add_dynamic(self, item):
-        self.dynamic_conf.append(item)
+    def get_bucket(self, name):
+        return self.buckets.setdefault(name, [])
 
     def emit_error(self, node, source_path, error):
         self.log.warning("node %s: %s: %s: %s", node.name, source_path,
@@ -85,9 +85,10 @@ class Manager:
                 self.log.debug("filtered: verify disabled: %r", entry)
                 continue
 
+            filtered_out = False
             if callback and not callback(entry):
                 self.log.debug("filtered: callback: %r", entry)
-                continue
+                filtered_out = True
 
             self.log.debug("verify: %r", entry)
             render = entry["render"]
@@ -95,7 +96,10 @@ class Manager:
             node_name = entry["node"].name
 
             if entry["type"] == "dir":
-                if deploy:
+                if filtered_out:
+                    # ignore
+                    pass
+                elif deploy:
                     # copy a directory recursively
                     remote = entry["node"].get_remote(override=access_method)
                     self.copy_tree(entry, remote)
@@ -134,14 +138,14 @@ class Manager:
 
                 dest_path = path(path_prefix + dest_path).normpath()
                 if verbose:
-                    self.log.info("[OK] file: %s", dest_path)
+                    self.log.info("[OK] %s file: %s", node_name, dest_path)
             except Exception, error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
                 error_count += 1
 
-            if show:
+            if show and not filtered_out:
                 if show_diff:
                     diff = difflib.unified_diff(
                         source_path.bytes().splitlines(True),
@@ -177,7 +181,7 @@ class Manager:
 
             remote = None
 
-            if (audit or deploy) and dest_path and (not failed):
+            if (audit or deploy) and dest_path and (not failed) and (not filtered_out):
                 # read existing file
                 try:
                     remote = entry["node"].get_remote(override=access_method)
@@ -203,7 +207,7 @@ class Manager:
                                   output, show_diff=show_diff,
                                   color_mode=color_mode)
 
-            if deploy and dest_path and (not failed):
+            if deploy and dest_path and (not failed) and (not filtered_out):
                 remote = entry["node"].get_remote(override=access_method)
                 try:
                     self.deploy_file(remote, entry, dest_path, output,
@@ -315,15 +319,16 @@ class PlugIn:
     def get_system(self, name):
         return self.get_one(name, nodes=False, systems=True)
 
-    def add_edge(self, source, dest, **kwargs):
-        self.manager.add_dynamic(dict(type="edge", source=source, dest=dest,
-                                      **kwargs))
-
     def render_text(self, source_path, dest_path):
         try:
             return dest_path, file(source_path, "rb").read()
         except (IOError, OSError), error:
             raise errors.VerifyError(source_path, error)
+
+    def add_edge(self, bucket_name, dest_node, dest_config, **kwargs):
+        self.manager.get_bucket(bucket_name).append(
+            dict(source_node=self.node, source_config=self.top_config,
+                 dest_node=dest_node, dest_config=dest_config, **kwargs))
 
     def render_cheetah(self, source_path, dest_path):
         try:
@@ -334,10 +339,11 @@ class PlugIn:
                          find=self.manager.confman.find,
                          get_node=self.get_one,
                          get_system=self.get_system,
+                         get_config=self.manager.confman.get_config,
                          config=self.top_config,
+                         bucket=self.manager.get_bucket,
                          edge=self.add_edge,
-                         plugin=self,
-                         dynconf=self.manager.dynamic_conf)
+                         plugin=self)
             text = str(CheetahTemplate(file=source_path, searchList=[names]))
             if dest_path:
                 dest_path = str(CheetahTemplate(dest_path, searchList=[names]))

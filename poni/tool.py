@@ -133,7 +133,7 @@ class Tool:
             raise errors.UserError("no config matching %r found" % arg.config)
 
         for source_path in arg.source:
-            for conf in configs:
+            for conf_node, conf in configs:
                 if arg.verbose:
                     self.log.info("%s/%s: added %r", conf.node.name,
                                   conf.name, str(source_path))
@@ -159,23 +159,10 @@ class Tool:
         """add a config to node(s)"""
         confman = core.ConfigMan(arg.root_dir)
         if arg.inherit_config:
-            configs = list(confman.find_config(arg.inherit_config))
-            if len(configs) == 0:
-                raise errors.UserError(
-                    "pattern %r does not match any configs" % (
-                        arg.inherit_config))
-            elif len(configs) > 1:
-                names = (("%s/%s" % (c.node.name, c.name))
-                         for c in configs)
-                raise errors.UserError(
-                    "pattern %r matches multiple configs: %s" % (
-                        arg.inherit_config, ", ".join(names)))
-            else:
-                conf = configs[0]
-
-            parent_config_name = "%s/%s" % (conf.node.name, conf.name)
+            conf_node, conf = list(confman.get_config(arg.inherit_config))
+            parent_config_name = "%s/%s" % (conf_node.name, conf.name)
             self.log.debug("parent config: node=%r, config=%r",
-                           conf.node.name, parent_config_name)
+                           conf_node.name, parent_config_name)
         else:
             parent_config_name = None
 
@@ -673,7 +660,7 @@ class Tool:
 
         # verify all updates first, collect them to a list
         updates = []
-        for conf in configs:
+        for conf_node, conf in configs:
             set_list = []
             for key_path, value in props.iteritems():
                 addr = key_path.split(".")
