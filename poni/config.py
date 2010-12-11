@@ -361,8 +361,10 @@ class PlugIn:
                 dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
 
             return dest_path, text
-        except Cheetah.Template.Error, error:
-            raise errors.VerifyError(source_path, error)
+        except (Cheetah.Template.Error,
+                Cheetah.NameMapper.NotFound), error:
+            raise errors.VerifyError("%s: %s: %s" % (
+                source_path, error.__class__.__name__, error))
 
     def render_genshi_xml(self, source_path, dest_path):
         assert genshi, "Genshi is not installed"
