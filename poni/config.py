@@ -337,6 +337,7 @@ class PlugIn:
                          settings=self.top_config.settings,
                          system=self.node.system,
                          find=self.manager.confman.find,
+                         find_config=self.manager.confman.find_config,
                          get_node=self.get_one,
                          get_system=self.get_system,
                          get_config=self.manager.confman.get_config,

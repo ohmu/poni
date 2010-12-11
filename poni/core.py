@@ -415,7 +415,10 @@ class ConfigMan:
         return configs[0]
 
     def find_config(self, pattern, all_configs=False, full_match=False):
-        # TODO: don't split the pattern, add config=True to find()
+        if "$" in pattern[:-1]:
+            # make sure no unexpanded macros leak from templates
+            raise errors.UserError("invalid chars in pattern %r" % pattern)
+
         pattern = pattern.replace("//", "/.*/")
         parts = pattern.rsplit("/", 1)
         if len(parts) == 2:
