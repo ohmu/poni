@@ -11,14 +11,6 @@ class PlugIn(config.PlugIn):
 """
 
 class TestCommands(Helper):
-    def init_repo(self):
-        repo = self.temp_file()
-        poni = tool.Tool(default_repo_path=repo)
-        assert not poni.run(["init"])
-        config = json.load(file(repo / "repo.json"))
-        assert isinstance(config, dict)
-        return poni, repo
-
     def test_add_node(self):
         poni, repo = self.init_repo()
         nodes = ["foo", "bar/foo/baz"]
