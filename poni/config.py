@@ -81,8 +81,6 @@ class Manager:
                                           verbose=verbose, callback=callback))
         files = [f for f in self.files if not f.get("report")]
         reports = [f for f in self.files if f.get("report")]
-        if path_prefix and not path_prefix.endswith("/"):
-            path_prefix += "/"
 
         color = colors.Output(sys.stdout, color=color_mode).color
         error_count = 0
@@ -96,6 +94,11 @@ class Manager:
                 self.log.debug("filtered: callback: %r", entry)
                 filtered_out = True
 
+            if path_prefix:
+                item_path_prefix = "%s/%s/" % (path_prefix, entry["node"].name)
+            else:
+                item_path_prefix = ""
+
             self.log.debug("verify: %r", entry)
             render = entry["render"]
             failed = False
@@ -108,7 +111,7 @@ class Manager:
                 elif deploy:
                     # copy a directory recursively
                     remote = entry["node"].get_remote(override=access_method)
-                    self.copy_tree(entry, remote, path_prefix=path_prefix)
+                    self.copy_tree(entry, remote, path_prefix=item_path_prefix)
                 else:
                     # verify
                     try:
@@ -142,7 +145,7 @@ class Manager:
                 else:
                     dest_path, output = render(source_path, dest_path)
 
-                dest_path = path(path_prefix + dest_path).normpath()
+                dest_path = path(item_path_prefix + dest_path).normpath()
                 if (not audit and not deploy) and verbose:
                     # plain verify mode
                     self.log.info("OK: %s file: %s", node_name, dest_path)
