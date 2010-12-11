@@ -16,7 +16,7 @@ The following variables are accessible from templates:
      - Example Usage
    * - ``node``
      - Node properties
-     - dict
+     - ``poni.core.Node``
      - ``$node.private.dns``
    * - ``settings``
      - Config settings (with all settings layers applied)
@@ -28,11 +28,11 @@ The following variables are accessible from templates:
      -
    * - ``system``
      - System properties of the current node's system
-     - dict
+     - ``poni.core.System``
      - ``$system.sub_count``
    * - ``config``
      - Config properties
-     - dict
+     - ``poni.core.Config``
      - ``$system.get("parent", "orphan!")``
    * - ``plugin``
      - Current config's plug-in object. Allows e.g. calling custom methods
@@ -53,7 +53,7 @@ The following functions are accessible from templates:
    :param systems: Returns systems if True
    :param full_match: Require full regexp match instead of default sub-string
                       match
-   :rtype: generator object returning node objects
+   :rtype: generator object returning Node objects
 
    Example usage::
 
@@ -82,26 +82,73 @@ The following functions are accessible from templates:
        $node.name has $conf.name at port $conf.settings.server_port
      #end for
 
-.. function:: get_node(TODO)
+.. function:: get_node(pattern)
 
-   TODO: desc
+   Return exactly one node that matches the pattern. An error is raise if
+   zero or more than one nodes match the pattern.
 
-.. function:: get_system(TODO)
+   :param pattern: Regular expression node path pattern.
+   :rtype: Node object
 
-   TODO: desc
+.. function:: get_system(pattern)
 
-.. function:: get_config(TODO)
+   Return exactly one system that matches the pattern. An error is raise if
+   zero or more than one systems match the pattern.
 
-   TODO: desc
+   :param pattern: Regular expression system path pattern.
+   :rtype: System object
 
-.. function:: find_config(TODO)
+.. function:: get_config(pattern)
 
-   TODO: desc
+   Return exactly one config that matches the pattern. An error is raise if
+   zero or more than one configs match the pattern.
 
-.. function:: edge(TODO)
+   :param pattern: Regular expression system/node/config path pattern.
+   :rtype: Config object
 
-   TODO: desc
+.. function:: edge(bucket_name, dest_node, dest_config, **kwargs)
 
-.. function:: bucket(TODO)
+   Add a directed graph edge as a ``dict`` object into a bucket. This can be
+   used to, for example, automatically collect information about network
+   connections between nodes.
 
-   TODO: desc
+   :param bucket_name: Bucket name
+   :type bucket_name: string
+   :param dest_node: Edge destination node
+   :type dest_node: ``poni.core.Node``
+   :param dest_config: Edge destination config
+   :type dest_config: ``poni.core.Config``
+   :param kwargs: Extra information to store in the ``dict`` object
+
+   Example usage::
+
+     #for $db_node, $db_config in $find_config("webshop//pg84")
+       $edge("tcp", $db_node, $db_config, protocol="sql", port=$db_config.settings.db_server_port)#slurp
+     #end for
+
+.. function:: bucket(bucket_name)
+
+   Return a bucket object for accessing dynamically collected data during
+   the template rendering process.
+
+   :param bucket_name: Bucket name
+   :type bucket_name: string
+   :rtype: ``list`` object
+
+   **NOTE:** Accessing buckets from templates should be done only after all
+   other templates are rendered so that all dynamic data is collected. This
+   can be achieved by giving the extra ``report=True`` argument to the
+   ``poni.core.PlugIn`` ``add_file()`` call.
+
+   Example usage::
+
+     #for $item in $bucket("tcp")
+     Node $item.source_node.name config $item.source_config.name connects to:
+       $item.dest_node:$item.port for some $item.protocol action...
+     #end for
+
+   Registering the template to be processed after all regular templates::
+
+     class PlugIn(config.PlugIn):
+         def add_actions(self):
+             self.add_file("node-report.txt", dest_path="/tmp/", report=True)
