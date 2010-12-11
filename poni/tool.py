@@ -25,6 +25,7 @@ from . import importer
 from . import rcontrol_all
 from . import listout
 from . import colors
+from . import version
 
 TOOL_NAME = "poni"
 
@@ -62,6 +63,12 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         system_dir = confman.create_system(arg.system)
         self.log.debug("created: %s", system_dir)
+
+    @argh.alias("version")
+    def handle_version(self, arg):
+        """show version information"""
+        yield version.__version__
+        yield "\n"
 
     @argh.alias("init")
     def handle_init(self, arg):
@@ -711,7 +718,7 @@ class Tool:
         parser.add_commands([
             self.handle_list, self.handle_add_system, self.handle_init,
             self.handle_import, self.handle_script, self.handle_add_config,
-            self.handle_update_config,
+            self.handle_update_config, self.handle_version,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
             ])
