@@ -33,6 +33,7 @@ Contents
 
    getting-started
    properties
+   template-variables
    ec2
    remote
    vc

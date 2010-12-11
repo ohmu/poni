@@ -50,7 +50,7 @@ NOTE: during installation the following packages and their dependencies are
 automatically installed from PyPI_:
 
 * `path.py`_ (directory and file management)
-* Cheetah_ (template language)
+* Cheetah_ (text-based templating language)
 * Argh_ (command-line argument parsing)
 
 Installing the following Python libraries will add optional functionality:
@@ -58,6 +58,7 @@ Installing the following Python libraries will add optional functionality:
 * Paramiko_ (Remote node control using SSH)
 * GitPython_ (Version controlling the repository with Git)
 * Boto_ (`Amazon EC2`_ virtual machine provisioning)
+* Genshi_ (XML-based templating)
 
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
 .. _Paramiko: http://pypi.python.org/pypi/paramiko
@@ -66,6 +67,7 @@ Installing the following Python libraries will add optional functionality:
 .. _Argh: http://pypi.python.org/pypi/argh
 .. _GitPython: http://pypi.python.org/pypi/GitPython
 .. _Cheetah: http://pypi.python.org/pypi/Cheetah
+.. _Genshi: http://pypi.python.org/pypi/Genshi
 
 Installation steps
 ------------------
