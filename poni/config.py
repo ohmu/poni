@@ -19,6 +19,12 @@ from . import colors
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
 
+try:
+    import genshi
+    import genshi.template
+except ImportError:
+    genshi = None
+
 
 class Manager:
     def __init__(self, confman):
@@ -139,7 +145,7 @@ class Manager:
                 dest_path = path(path_prefix + dest_path).normpath()
                 if verbose:
                     self.log.info("[OK] %s file: %s", node_name, dest_path)
-            except Exception, error:
+            except errors.Error, error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
@@ -330,21 +336,26 @@ class PlugIn:
             dict(source_node=self.node, source_config=self.top_config,
                  dest_node=dest_node, dest_config=dest_config, **kwargs))
 
+    def get_names(self):
+        names = dict(node=self.node,
+                     s=self.top_config.settings,
+                     settings=self.top_config.settings,
+                     system=self.node.system,
+                     find=self.manager.confman.find,
+                     find_config=self.manager.confman.find_config,
+                     get_node=self.get_one,
+                     get_system=self.get_system,
+                     get_config=self.manager.confman.get_config,
+                     config=self.top_config,
+                     bucket=self.manager.get_bucket,
+                     edge=self.add_edge,
+                     plugin=self)
+        return names
+
     def render_cheetah(self, source_path, dest_path):
+        names = self.get_names()
+        # TODO: template caching
         try:
-            names = dict(node=self.node,
-                         s=self.top_config.settings,
-                         settings=self.top_config.settings,
-                         system=self.node.system,
-                         find=self.manager.confman.find,
-                         find_config=self.manager.confman.find_config,
-                         get_node=self.get_one,
-                         get_system=self.get_system,
-                         get_config=self.manager.confman.get_config,
-                         config=self.top_config,
-                         bucket=self.manager.get_bucket,
-                         edge=self.add_edge,
-                         plugin=self)
             text = str(CheetahTemplate(file=source_path, searchList=[names]))
             if dest_path:
                 dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
@@ -353,3 +364,20 @@ class PlugIn:
         except Cheetah.Template.Error, error:
             raise errors.VerifyError(source_path, error)
 
+    def render_genshi_xml(self, source_path, dest_path):
+        assert genshi, "Genshi is not installed"
+
+        names = self.get_names()
+        if dest_path:
+            dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
+
+        try:
+            tmpl = genshi.template.MarkupTemplate(file(source_path),
+                                                  filepath=source_path)
+            stream = tmpl.generate(**names)
+            output = stream.render('xml')
+            return dest_path, output
+        except (errors.Error,
+                genshi.template.TemplateError,
+                IOError), error:
+            raise errors.VerifyError(source_path, error)

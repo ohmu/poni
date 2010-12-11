@@ -1,8 +1,10 @@
+import json
 import itertools
 import shutil
 import os
 import tempfile
 from path import path
+from poni import tool
 
 
 class Helper:
@@ -23,6 +25,15 @@ class Helper:
                 os.unlink(temp_file)
             elif os.path.isdir(temp_file):
                 shutil.rmtree(temp_file)
+
+    def init_repo(self):
+        repo = self.temp_file()
+        poni = tool.Tool(default_repo_path=repo)
+        assert not poni.run(["init"])
+        config = json.load(file(repo / "repo.json"))
+        assert isinstance(config, dict)
+        return poni, repo
+
 
 
 def combos(seq):
