@@ -37,11 +37,11 @@ class Manager:
                          error.__class__.__name__, error)
         self.error_count += 1
 
-    def copy_tree(self, entry, remote):
+    def copy_tree(self, entry, remote, path_prefix=""):
         def progress(copied, total):
             sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
 
-        dest_dir = path(entry["dest_path"])
+        dest_dir = path(path_prefix + entry["dest_path"])
         try:
             remote.stat(dest_dir)
         except errors.RemoteError:
@@ -102,7 +102,7 @@ class Manager:
                 elif deploy:
                     # copy a directory recursively
                     remote = entry["node"].get_remote(override=access_method)
-                    self.copy_tree(entry, remote)
+                    self.copy_tree(entry, remote, path_prefix=path_prefix)
                 else:
                     # verify
                     try:
@@ -137,9 +137,10 @@ class Manager:
                     dest_path, output = render(source_path, dest_path)
 
                 dest_path = path(path_prefix + dest_path).normpath()
-                if verbose:
-                    self.log.info("[OK] %s file: %s", node_name, dest_path)
-            except Exception, error:
+                if (not audit and not deploy) and verbose:
+                    # plain verify mode
+                    self.log.info("OK: %s file: %s", node_name, dest_path)
+            except (IOError, errors.VerifyError), error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
@@ -205,7 +206,7 @@ class Manager:
             if active_text and audit:
                 self.audit_output(entry, dest_path, active_text, active_time,
                                   output, show_diff=show_diff,
-                                  color_mode=color_mode)
+                                  color_mode=color_mode, verbose=verbose)
 
             if deploy and dest_path and (not failed) and (not filtered_out):
                 remote = entry["node"].get_remote(override=access_method)
@@ -248,7 +249,8 @@ class Manager:
                       entry["node"].name, dest_path)
 
     def audit_output(self, entry, dest_path, active_text, active_time,
-                     output, show_diff=False, color_mode="auto"):
+                     output, show_diff=False, color_mode="auto",
+                     verbose=False):
         if (active_text is not None) and (active_text != output):
             self.log.warning(self.audit_format, "DIFFERS",
                              entry["node"].name, dest_path)
@@ -267,8 +269,7 @@ class Manager:
                         color(line, diff_colors.get(line[:1], "reset")))
 
                 sys.stdout.flush()
-
-        elif active_text:
+        elif active_text and verbose:
             self.log.info(self.audit_format, "OK", entry["node"].name,
                           dest_path)
 
@@ -350,6 +351,7 @@ class PlugIn:
                 dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
 
             return dest_path, text
-        except Cheetah.Template.Error, error:
-            raise errors.VerifyError(source_path, error)
+        except (Cheetah.Template.Error, SyntaxError), error:
+            raise errors.VerifyError("%s: %s: %s" % (
+                    source_path, error.__class__.__name__, error))
 

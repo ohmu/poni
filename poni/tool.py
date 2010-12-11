@@ -538,7 +538,8 @@ class Tool:
         self.verify_op(confman, arg.nodes, show=False, deploy=False,
                        audit=True, show_diff=arg.show_diff,
                        full_match=arg.full_match, path_prefix=arg.path_prefix,
-                       access_method=arg.method, color_mode=arg.color_mode)
+                       access_method=arg.method, color_mode=arg.color_mode,
+                       verbose=arg.verbose)
 
     @argh.alias("verify")
     @arg_verbose
