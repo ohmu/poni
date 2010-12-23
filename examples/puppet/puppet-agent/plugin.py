@@ -1,6 +1,20 @@
+import argh
 from poni import config
 
 class PlugIn(config.PlugIn):
+    @argh.arg("-x", "--extra", help="extra info")
+    def install(self, arg):
+        self.log.info("install: %s", arg)
+        if arg.extra:
+            print "extra info: %r" % arg.extra
+
+        remote = self.node.get_remote(override=arg.method)
+        remote.execute("/root/inst-puppet-agent.sh")
+        self.log.info("install: done")
+
+    def add_controls(self):
+        self.add_argh_control("install", self.install)
+
     def add_actions(self):
         self.add_file("inst-puppet-agent.sh", mode=0500,
                       dest_path="/root/inst-puppet-agent.sh",

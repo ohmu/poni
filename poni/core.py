@@ -135,6 +135,20 @@ class Config(Item):
         # TODO: lazy-load settings
         self.settings = newconfig.Config(self.get_settings_dirs())
         self.controls = None
+        self.plugin = None
+
+    def get_plugin(self):
+        if self.plugin:
+            return self.plugin
+
+        parent_config_name = self.get("parent")
+        if not parent_config_name:
+            return None
+
+        parent_conf_node, parent_config = self.node.confman.get_config(
+            parent_config_name)
+
+        return parent_config.get_plugin()
 
     def load_settings_layer(self, file_name):
         try:
@@ -176,9 +190,6 @@ class Config(Item):
             if k not in dont_show:
                 yield k, v
 
-    def get_controls(self):
-        return None, None # TODO: implementation
-
     def collect(self, manager, node, top_config=None):
         top_config = top_config or self
         plugin_path = self.path / PLUGIN_FILE
@@ -189,6 +200,8 @@ class Config(Item):
         module = imp.load_source("plugin", plugin_path)
         plugin = module.PlugIn(manager, self, node, top_config)
         plugin.add_actions()
+        plugin.add_controls()
+        top_config.plugin = plugin # TODO
 
     def collect_parents(self, manager, node, top_config=None):
         top_config = top_config or self
@@ -218,6 +231,7 @@ class Node(Item):
                       item_dir / NODE_CONF_FILE, extra)
         self.confman = confman
         self._remotes = {}
+        self.config_cache = {}
         self.update(json.load(file(self.conf_file)))
 
     def cleanup(self):
@@ -263,7 +277,12 @@ class Node(Item):
         config_dir = self.path / CONFIG_DIR
         if config_dir.exists():
             for config_path in config_dir.dirs():
-                yield Config(self, config_path.basename(), config_path)
+                conf = self.config_cache.get(config_path)
+                if conf is None:
+                    conf = Config(self, config_path.basename(), config_path)
+                    self.config_cache[config_path] = conf
+
+                yield conf
 
     def iter_all_configs(self):
         for conf in self.iter_configs():

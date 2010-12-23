@@ -12,6 +12,8 @@ import datetime
 import logging
 import difflib
 from path import path
+import argh
+import argparse
 from . import errors
 from . import util
 from . import colors
@@ -294,6 +296,41 @@ class PlugIn:
         self.config = config
         self.top_config = top_config
         self.node = node
+        self.controls = {}
+
+    def add_argh_control(self, name, handler):
+        def handle_control(control_name, args, **kwargs):
+            return self.handle_argh_control(handler, control_name, args,
+                                            **kwargs)
+
+        self.controls[name] = handle_control
+
+    def add_controls(self):
+        pass
+
+    def execute_control_operation(self, control_name, args, verbose=False,
+                                  method=None):
+        handler = self.controls.get(control_name)
+        if not handler:
+            if verbose:
+                self.log.info("%s: %s: %r: control not supported" % (
+                    self.node.name, self.config.name, control_name))
+
+            return
+
+        self.log.info("%s: %s: control %r", self.node.name,
+                      self.config.name, control_name)
+        return handler(control_name, args, verbose=verbose, method=method)
+
+    def handle_argh_control(self, handler, control_name, args, verbose=False,
+                            method=None):
+        parser = argh.ArghParser(prog="control")
+        parser.add_commands([handler])
+        full_args = [control_name] + args
+        namespace = argparse.Namespace()
+        namespace.verbose = verbose
+        namespace.method = method
+        parser.dispatch(argv=full_args, namespace=namespace)
 
     def add_file(self, source_path, dest_path=None, source_text=None,
                  render=None, report=False, post_process=None, mode=None):

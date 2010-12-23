@@ -14,7 +14,7 @@ depends = [
     "cheetah",
     "boto>=2.0b3",
     "GitPython",
-    "argh>=0.11",
+    "argh>=0.13",
     ]
 
 try:

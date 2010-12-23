@@ -2,7 +2,7 @@
 
 set -e
 
-AWS_KEYPAIR="aws-mel-fsc"
+AWS_KEYPAIR="mel-fsc-aws-east-1-mac"
 REPO="$HOME/tmp/puppet"
 
 rm -rf $REPO
