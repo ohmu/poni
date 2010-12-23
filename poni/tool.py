@@ -33,6 +33,12 @@ TOOL_NAME = "poni"
 arg_full_match = argh.arg("-M", "--full-match", default=False,
                           dest="full_match", action="store_true",
                           help="require full regexp match")
+arg_nodes_only = argh.arg("-N", "--nodes", default=False,
+                          dest="nodes_only", action="store_true",
+                          help="apply only to nodes (not systems)")
+arg_systems_only = argh.arg("-S", "--systems", default=False,
+                          dest="systems_only", action="store_true",
+                          help="apply only to systems (not nodes)")
 arg_verbose = argh.arg("-v", "--verbose", default=False, action="store_true",
                        help="verbose output")
 arg_path_prefix = argh.arg('--path-prefix', type=str, default="",
@@ -95,6 +101,19 @@ class Tool:
                                                verbose=arg.verbose)
                 source.import_to(confman)
 
+    def preprocess_script_lines(self, lines):
+        i = 1
+        lines = lines[:]
+        while i >= len(lines):
+            if lines[i][:1].isspace():
+                # needs to be catenated to previous line
+                lines[i - 1] += lines[i]
+                del lines[i]
+            else:
+                i += 1
+
+        return lines
+
     @argh.alias("script")
     @arg_verbose
     @argh.arg('script', type=str, help='script file', nargs="?")
@@ -117,6 +136,8 @@ class Tool:
         def set_repo_path(sub_arg):
             self.tune_arg_namespace(sub_arg)
             sub_arg.root_dir = arg.root_dir
+
+        lines = self.preprocess_script_lines(lines)
 
         for line in lines:
             args = shlex.split(line, comments=True)
@@ -431,6 +452,8 @@ class Tool:
     @argh.alias("set")
     @arg_verbose
     @arg_full_match
+    @arg_nodes_only
+    @arg_systems_only
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     @argh.arg('property', type=str, nargs="+", help="'name=[type:]value'")
     def handle_set(self, arg):
@@ -440,7 +463,17 @@ class Tool:
         logger = logging.info if arg.verbose else logging.debug
         changed_items = []
         found = False
-        for item in confman.find(arg.target, systems=True,
+        if arg.nodes_only:
+            nodes = True
+            systems = False
+        elif arg.systems_only:
+            nodes = False
+            systems = True
+        else:
+            nodes = True
+            systems = True
+
+        for item in confman.find(arg.target, nodes=nodes, systems=systems,
                                  full_match=arg.full_match):
             found = True
             changes = item.set_properties(props)
@@ -771,6 +804,10 @@ class Tool:
 
                 if arg.show_nodes:
                     arg.show_systems = True
+        elif arg.function == self.handle_set:
+            if arg.nodes_only and arg.systems_only:
+                raise errors.UserError(
+                    "cannot specify both --nodes and --systems")
 
     def run(self, args=None):
         def adjust_logging(arg):
