@@ -9,6 +9,7 @@ See LICENSE for details.
 import os
 from path import path
 from . import errors
+import socket
 
 try:
     import json
@@ -66,11 +67,26 @@ def from_env(value):
     except KeyError:
         raise errors.InvalidProperty("environment variable %r not set" % value)
 
+def resolve_ip(name, family):
+    try:
+        addresses = socket.getaddrinfo(name, None, family)
+    except (socket.error, socket.gaierror), error:
+        raise errors.InvalidProperty("resolving %r failed: %s: %s" % (
+            name, error.__class__.__name__, error))
+
+    if not addresses:
+        raise errors.InvalidProperty(
+            "name %r does not resolve to any addresses" % name)
+
+    return addresses[0][-1][0]
+
 PROP_PREFIX = {
     "int:": int,
     "float:": float,
     "bool:": to_bool,
     "env:": from_env,
+    "ipv4:": lambda name: resolve_ip(name, socket.AF_INET),
+    "ipv6:": lambda name: resolve_ip(name, socket.AF_INET6),
     }
 
 def parse_prop(prop_str):
