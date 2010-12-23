@@ -27,6 +27,9 @@ from . import listout
 from . import colors
 from . import version
 
+import Cheetah.Template
+from Cheetah.Template import Template as CheetahTemplate
+
 TOOL_NAME = "poni"
 
 # common arguments
@@ -104,7 +107,7 @@ class Tool:
     def preprocess_script_lines(self, lines):
         i = 1
         lines = lines[:]
-        while i >= len(lines):
+        while i < len(lines):
             if lines[i][:1].isspace():
                 # needs to be catenated to previous line
                 lines[i - 1] += lines[i]
@@ -116,16 +119,29 @@ class Tool:
 
     @argh.alias("script")
     @arg_verbose
-    @argh.arg('script', type=str, help='script file', nargs="?")
+    @argh.arg('script', metavar="FILE", type=str,
+              help='script file path or "-" (a single minus-sign) for stdin')
+    @argh.arg('variable', type=str, nargs="*", help="'name=[type:]value'")
     def handle_script(self, arg):
         """run commands from a script file"""
         try:
-            if arg.script:
-                lines = file(arg.script).readlines()
+            if arg.script != "-":
+                script_text = file(arg.script).read()
             else:
-                lines = sys.stdin.readlines()
+                script_text = sys.stdin.read()
         except (OSError, IOError), error:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
+
+        variables = dict(util.parse_prop(var) for var in arg.variable)
+        try:
+            script_text = str(CheetahTemplate(script_text,
+                                              searchList=[variables]))
+        except (Cheetah.Template.Error, SyntaxError,
+                Cheetah.NameMapper.NotFound), error:
+            raise errors.Error("script error: %s: %s" % (
+                    error.__class__.__name__, error))
+
+        lines = script_text.splitlines()
 
         def wrap(args):
             if " " in args:

@@ -87,6 +87,7 @@ PROP_PREFIX = {
     "env:": from_env,
     "ipv4:": lambda name: resolve_ip(name, socket.AF_INET),
     "ipv6:": lambda name: resolve_ip(name, socket.AF_INET6),
+    # TODO: property access
     }
 
 def parse_prop(prop_str):
