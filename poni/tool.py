@@ -475,7 +475,6 @@ class Tool:
     def handle_set(self, arg):
         """set system/node properties"""
         confman = core.ConfigMan(arg.root_dir)
-        props = dict(util.parse_prop(p) for p in arg.property)
         logger = logging.info if arg.verbose else logging.debug
         changed_items = []
         found = False
@@ -492,6 +491,15 @@ class Tool:
         for item in confman.find(arg.target, nodes=nodes, systems=systems,
                                  full_match=arg.full_match):
             found = True
+            converters = {
+                "prop": (
+                    lambda x: util.get_dict_prop(dict(node=item), x.split("."),
+                                                 verify=True)[1],
+                    None
+                    )
+                }
+            props = dict(util.parse_prop(p, converters=converters)
+                         for p in arg.property)
             changes = item.set_properties(props)
             for key, old_value, new_value in changes:
                 changed = ((type(old_value) != type(new_value))
@@ -719,12 +727,21 @@ class Tool:
         if not configs:
             raise errors.UserError("no config matching %r found" % arg.pattern)
 
-        props = dict(util.parse_prop(p) for p in arg.setting)
-
         # verify all updates first, collect them to a list
         updates = []
         for conf_node, conf in configs:
             set_list = []
+            converters = {
+                "prop": (
+                    lambda x: util.get_dict_prop(dict(node=conf_node,
+                                                      config=conf),
+                                                 x.split("."),
+                                                 verify=True)[1],
+                    None
+                    )
+                }
+            props = dict(util.parse_prop(p, converters=converters)
+                         for p in arg.setting)
             for key_path, value in props.iteritems():
                 addr = key_path.split(".")
                 old = util.set_dict_prop(conf.settings, addr, value,

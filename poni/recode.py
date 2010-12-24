@@ -105,9 +105,10 @@ type_conversions = {
 
 
 class Codec:
-    def __init__(self, chain_str, default=None):
+    def __init__(self, chain_str, converters=None, default=None):
         self.default = default
         self.chain = []
+        self.converters = converters or {}
         self.parse_chain(chain_str)
 
     def parse_chain(self, chain_str):
@@ -122,7 +123,10 @@ class Codec:
             self.add_to_chain(codec_name, direction)
 
     def get_coder(self, codec_name, direction):
-        converters = type_conversions.get(codec_name)
+        converters = self.converters.get(codec_name)
+        if not converters:
+            converters = type_conversions.get(codec_name)
+            
         if converters:
             if direction == DECODE:
                 converter = converters[1]

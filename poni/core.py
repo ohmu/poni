@@ -118,7 +118,7 @@ class Item(dict):
 
     def save(self):
         """Save item properties to persistent storage"""
-        util.json_dump(dict(self.saveable()), file(self.conf_file, "w"))
+        util.json_dump(dict(self.saveable()), self.conf_file)
 
     def cleanup(self):
         pass
@@ -147,7 +147,7 @@ class Config(Item):
 
         full_path = self.settings_dir / file_name
         print "SAVING:", full_path
-        util.json_dump(layer, full_path.open("wb"))
+        util.json_dump(layer, full_path)
         self.settings.reload()
 
     def get_settings_dirs(self):
@@ -252,7 +252,7 @@ class Node(Item):
         if parent:
             conf["parent"] = parent
 
-        util.json_dump(conf, file(conf_file, "w"))
+        util.json_dump(conf, conf_file)
 
         settings_dir = config_dir / SETTINGS_DIR
         if not settings_dir.exists():
@@ -331,7 +331,7 @@ class ConfigMan:
             if not self.system_root.exists():
                 self.system_root.makedirs()
 
-            util.json_dump({}, file(self.config_path, "wb"))
+            util.json_dump({}, self.config_path)
         except (OSError, IOError), error:
             raise errors.RepoError("repository '%s' init failed: %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
@@ -360,7 +360,7 @@ class ConfigMan:
         system_dir = self.get_system_dir(name, must_exist=False)
         system_dir.makedirs()
         spec_file = system_dir / SYSTEM_CONF_FILE
-        util.json_dump({}, file(spec_file, "w"))
+        util.json_dump({}, spec_file)
         return system_dir
 
     def system_exists(self, name):
@@ -387,7 +387,7 @@ class ConfigMan:
         if parent_node_name:
             spec["parent"] = parent_node_name
 
-        util.json_dump(spec, file(spec_file, "w"))
+        util.json_dump(spec, spec_file)
 
     def get_node(self, node_path, system, extra=None, name=None):
         # TODO: random calls to this before loading ALL nodes will result
