@@ -34,7 +34,7 @@ def int_convert(x):
 
 def from_env(value):
     try:
-        return os.environ[value]
+        return unicode(os.environ[value], "ascii")
     except KeyError:
         raise ValueError("environment variable %r is not set" % value)
 
@@ -48,7 +48,7 @@ def resolve_ip(name, family):
     if not addresses:
         raise EncodeError("name %r does not resolve to any addresses" % name)
 
-    return addresses[0][-1][0]
+    return unicode(addresses[0][-1][0], "ascii")
 
 multiples = {
     # SI
