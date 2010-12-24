@@ -9,6 +9,7 @@ See LICENSE for details.
 import os
 from path import path
 from . import errors
+from . import recode
 import socket
 
 try:
@@ -51,44 +52,6 @@ def set_dict_prop(item, address, value, verify=False):
 def json_dump(data, output):
     json.dump(data, output, indent=4, sort_keys=True)
 
-
-BOOL_MAP = {"true":True, "1":True, "on":True,
-            "false":False, "0":False, "off":False}
-
-def to_bool(value):
-    try:
-        return BOOL_MAP[value.lower()]
-    except KeyError:
-        raise errors.InvalidProperty("invalid boolean value: %r" % (value,))
-
-def from_env(value):
-    try:
-        return os.environ[value]
-    except KeyError:
-        raise errors.InvalidProperty("environment variable %r not set" % value)
-
-def resolve_ip(name, family):
-    try:
-        addresses = socket.getaddrinfo(name, None, family)
-    except (socket.error, socket.gaierror), error:
-        raise errors.InvalidProperty("resolving %r failed: %s: %s" % (
-            name, error.__class__.__name__, error))
-
-    if not addresses:
-        raise errors.InvalidProperty(
-            "name %r does not resolve to any addresses" % name)
-
-    return addresses[0][-1][0]
-
-PROP_PREFIX = {
-    "int:": int,
-    "float:": float,
-    "bool:": to_bool,
-    "env:": from_env,
-    "ipv4:": lambda name: resolve_ip(name, socket.AF_INET),
-    "ipv6:": lambda name: resolve_ip(name, socket.AF_INET6),
-    }
-
 def parse_prop(prop_str):
     try:
         name, value = prop_str.split("=", 1)
@@ -97,26 +60,21 @@ def parse_prop(prop_str):
             "invalid property: %r, expected format: name=[type:]value" %
             prop_str)
 
+    parts = name.split(":", 1)
     try:
-        value = unicode(value, "ascii")
-    except UnicodeDecodeError, error:
-        raise errors.InvalidProperty(
-            "invalid non-ascii property value %r: %s: %s" % (
-                value, error.__class__.__name__, error))
+        if len(parts) > 1:
+            name, enc_str = parts
+            codec = recode.Codec(enc_str, default=recode.ENCODE)
+        else:
+            codec = recode.Codec("-ascii")
 
-    for prefix, convert in PROP_PREFIX.iteritems():
-        if value.startswith(prefix):
-            try:
-                value = convert(value[len(prefix):])
-            except ValueError, error:
-                raise errors.InvalidProperty(
-                    "invalid property value %r: %s: %s" % (
-                        value, error.__class__.__name__, error))
-            break
-
-    return name, value
-
-
+        out = name, codec.process(value)
+    except (ValueError, recode.Error), error:
+        raise errors.InvalidProperty("%s: %s" % (error.__class__.__name__,
+                                                 error))
+    
+    return out
+    
 def parse_count(count_str):
     ranges = count_str.split("..")
     try:

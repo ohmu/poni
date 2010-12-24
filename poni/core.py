@@ -73,8 +73,7 @@ class Item(dict):
         changes = []
         for key_str, value in props.iteritems():
             old_value = util.set_dict_prop(self, key_str.split("."), value)
-            if old_value != value:
-                changes.append((key_str, old_value, value))
+            changes.append((key_str, old_value, value))
 
         return changes
 

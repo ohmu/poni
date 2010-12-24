@@ -445,11 +445,17 @@ class Tool:
             found = True
             changes = item.set_properties(props)
             for key, old_value, new_value in changes:
-                logger("%s: set %s=%r (was %r)", item.name, key, new_value,
-                       old_value)
+                changed = ((type(old_value) != type(new_value))
+                           or (old_value != new_value))
+                if changed:
+                    note = "was %r" % old_value
+                else:
+                    note = "no change"
+                
+                logger("%s: set %s=%r (%s)", item.name, key, new_value, note)
 
             if not changes:
-                logger("%s: no changes", item.name)
+                logger("%s: no changes (%r)", item.name, old_value)
             else:
                 changed_items.append(item)
 
