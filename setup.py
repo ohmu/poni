@@ -7,6 +7,10 @@ old_dir = os.getcwd()
 new_dir = os.path.dirname(__file__)
 if new_dir:
     os.chdir(new_dir)
+else:
+    new_dir = "."
+
+long_desc = file("%s/README.rst" % new_dir).read()
 
 depends = [
     "path.py>=2.2.2",
@@ -32,6 +36,21 @@ setup(
     name = 'poni',
     version = version.get_project_version("poni/version.py"),
     description = 'system configuration software',
+    long_description = long_desc,
+    author = "Mika Eloranta",
+    author_email = "mika.eloranta@gmail.com",
+    url = "http://github.com/melor/poni",
+    classifiers = [
+        "Programming Language :: Python",
+        "Development Status :: 4 - Beta",
+        "License :: OSI Approved :: MIT License",
+        "Intended Audience :: Developers",
+        "Intended Audience :: System Administrators",
+        "Operating System :: OS Independent",
+        "Topic :: System :: Installation/Setup",
+        "Topic :: System :: Software Distribution",
+        "Topic :: Software Development :: Libraries :: Python Module",
+        ],
     packages = find_packages(),
     zip_safe = False,
     install_requires = depends,
