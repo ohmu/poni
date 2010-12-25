@@ -40,6 +40,7 @@ Additionally, running the included automated tests requires:
 Building HTML files from the included ReST_ documentation requires:
 
 * docutils_
+* Sphinx_
 
 .. _ReST: http://docutils.sourceforge.net/rst.html
 .. _docutils: http://pypi.python.org/pypi/docutils
@@ -68,6 +69,7 @@ Installing the following Python libraries will add optional functionality:
 .. _GitPython: http://pypi.python.org/pypi/GitPython
 .. _Cheetah: http://pypi.python.org/pypi/Cheetah
 .. _Genshi: http://pypi.python.org/pypi/Genshi
+.. _Sphinx: http://sphinx.pocoo.org/
 
 Installation steps
 ------------------

@@ -49,7 +49,7 @@ setup(
         "Operating System :: OS Independent",
         "Topic :: System :: Installation/Setup",
         "Topic :: System :: Software Distribution",
-        "Topic :: Software Development :: Libraries :: Python Module",
+        "Topic :: Software Development :: Libraries :: Python Modules",
         ],
     packages = find_packages(),
     zip_safe = False,
