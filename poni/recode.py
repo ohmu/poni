@@ -13,6 +13,7 @@ import re
 import codecs
 import json
 import socket
+import uuid
 
 class Error(Exception):
     """recode error"""
@@ -90,6 +91,12 @@ def to_bool(value):
         raise ValueError("invalid boolean value: %r, expected one of: %s" % (
             value, ", ".join(repr(x) for x in BOOL_MAP)))
 
+def to_uuid(value):
+    return unicode(str(uuid.UUID(bytes=value)))
+
+def to_uuid4(value):
+    return unicode(str(uuid.uuid4()), "ascii")
+        
 type_conversions = {
     "str": (str, None), 
     "int": (lambda x: convert_num(int_convert, x), None),
@@ -101,6 +108,8 @@ type_conversions = {
     "env": (from_env, None),
     "ipv4": (lambda name: resolve_ip(name, socket.AF_INET), None),
     "ipv6": (lambda name: resolve_ip(name, socket.AF_INET6), None),
+    "uuid": (to_uuid, None),
+    "uuid4": (to_uuid4, None),
     }
 
 
@@ -165,9 +174,6 @@ class Codec:
         self.chain.append((direction, codec_name, coder))
 
     def process(self, input_str):
-        if not input_str:
-            return
-
         result = input_str
         for direction, codec_name, coder in self.chain:
             try:
