@@ -24,7 +24,7 @@ class TestTemplates(Helper):
         template_node = "tnode"
         template_conf = "tconf"
         assert not poni.run(["add-node", template_node])
-        assert not poni.run(["set", template_node, "verify=bool:off"])
+        assert not poni.run(["set", template_node, "verify:bool=off"])
         assert not poni.run(["add-config", template_node, template_conf])
 
         # write template config plugin.py

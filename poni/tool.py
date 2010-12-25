@@ -28,12 +28,21 @@ from . import listout
 from . import colors
 from . import version
 
+import Cheetah.Template
+from Cheetah.Template import Template as CheetahTemplate
+
 TOOL_NAME = "poni"
 
 # common arguments
 arg_full_match = argh.arg("-M", "--full-match", default=False,
                           dest="full_match", action="store_true",
                           help="require full regexp match")
+arg_nodes_only = argh.arg("-N", "--nodes", default=False,
+                          dest="nodes_only", action="store_true",
+                          help="apply only to nodes (not systems)")
+arg_systems_only = argh.arg("-S", "--systems", default=False,
+                          dest="systems_only", action="store_true",
+                          help="apply only to systems (not nodes)")
 arg_verbose = argh.arg("-v", "--verbose", default=False, action="store_true",
                        help="verbose output")
 arg_path_prefix = argh.arg('--path-prefix', type=str, default="",
@@ -96,18 +105,44 @@ class Tool:
                                                verbose=arg.verbose)
                 source.import_to(confman)
 
+    def preprocess_script_lines(self, lines):
+        i = 1
+        lines = lines[:]
+        while i < len(lines):
+            if lines[i][:1].isspace():
+                # needs to be catenated to previous line
+                lines[i - 1] += lines[i]
+                del lines[i]
+            else:
+                i += 1
+
+        return lines
+
     @argh.alias("script")
     @arg_verbose
-    @argh.arg('script', type=str, help='script file', nargs="?")
+    @argh.arg('script', metavar="FILE", type=str,
+              help='script file path or "-" (a single minus-sign) for stdin')
+    @argh.arg('variable', type=str, nargs="*", help="'name=[type:]value'")
     def handle_script(self, arg):
         """run commands from a script file"""
         try:
-            if arg.script:
-                lines = file(arg.script).readlines()
+            if arg.script != "-":
+                script_text = file(arg.script).read()
             else:
-                lines = sys.stdin.readlines()
+                script_text = sys.stdin.read()
         except (OSError, IOError), error:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
+
+        variables = dict(util.parse_prop(var) for var in arg.variable)
+        try:
+            script_text = str(CheetahTemplate(script_text,
+                                              searchList=[variables]))
+        except (Cheetah.Template.Error, SyntaxError,
+                Cheetah.NameMapper.NotFound), error:
+            raise errors.Error("script error: %s: %s" % (
+                    error.__class__.__name__, error))
+
+        lines = script_text.splitlines()
 
         def wrap(args):
             if " " in args:
@@ -118,6 +153,8 @@ class Tool:
         def set_repo_path(sub_arg):
             self.tune_arg_namespace(sub_arg)
             sub_arg.root_dir = arg.root_dir
+
+        lines = self.preprocess_script_lines(lines)
 
         for line in lines:
             args = shlex.split(line, comments=True)
@@ -458,25 +495,51 @@ class Tool:
     @argh.alias("set")
     @arg_verbose
     @arg_full_match
+    @arg_nodes_only
+    @arg_systems_only
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     @argh.arg('property', type=str, nargs="+", help="'name=[type:]value'")
     def handle_set(self, arg):
         """set system/node properties"""
         confman = core.ConfigMan(arg.root_dir)
-        props = dict(util.parse_prop(p) for p in arg.property)
         logger = logging.info if arg.verbose else logging.debug
         changed_items = []
         found = False
-        for item in confman.find(arg.target, systems=True,
+        if arg.nodes_only:
+            nodes = True
+            systems = False
+        elif arg.systems_only:
+            nodes = False
+            systems = True
+        else:
+            nodes = True
+            systems = True
+
+        for item in confman.find(arg.target, nodes=nodes, systems=systems,
                                  full_match=arg.full_match):
             found = True
+            converters = {
+                "prop": (
+                    lambda x: util.get_dict_prop(dict(node=item), x.split("."),
+                                                 verify=True)[1],
+                    None
+                    )
+                }
+            props = dict(util.parse_prop(p, converters=converters)
+                         for p in arg.property)
             changes = item.set_properties(props)
             for key, old_value, new_value in changes:
-                logger("%s: set %s=%r (was %r)", item.name, key, new_value,
-                       old_value)
+                changed = ((type(old_value) != type(new_value))
+                           or (old_value != new_value))
+                if changed:
+                    note = "was %r" % old_value
+                else:
+                    note = "no change"
+                
+                logger("%s: set %s=%r (%s)", item.name, key, new_value, note)
 
             if not changes:
-                logger("%s: no changes", item.name)
+                logger("%s: no changes (%r)", item.name, old_value)
             else:
                 changed_items.append(item)
 
@@ -695,12 +758,21 @@ class Tool:
         if not configs:
             raise errors.UserError("no config matching %r found" % arg.pattern)
 
-        props = dict(util.parse_prop(p) for p in arg.setting)
-
         # verify all updates first, collect them to a list
         updates = []
         for conf_node, conf in configs:
             set_list = []
+            converters = {
+                "prop": (
+                    lambda x: util.get_dict_prop(dict(node=conf_node,
+                                                      config=conf),
+                                                 x.split("."),
+                                                 verify=True)[1],
+                    None
+                    )
+                }
+            props = dict(util.parse_prop(p, converters=converters)
+                         for p in arg.setting)
             for key_path, value in props.iteritems():
                 addr = key_path.split(".")
                 old = util.set_dict_prop(conf.settings, addr, value,
@@ -803,6 +875,10 @@ class Tool:
 
                 if arg.show_nodes:
                     arg.show_systems = True
+        elif arg.function == self.handle_set:
+            if arg.nodes_only and arg.systems_only:
+                raise errors.UserError(
+                    "cannot specify both --nodes and --systems")
 
     def run(self, args=None):
         def adjust_logging(arg):

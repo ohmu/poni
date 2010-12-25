@@ -38,17 +38,17 @@ class TestCommands(Helper):
         node = "test"
         assert not poni.run(["add-node", node])
         vals = {
-            "foo": "bar",
-            "a": "b=c",
-            "int": ("int:1", 1),
-            "float": ("float:2", 2.0),
-            "str": ("str:123", "str:123"),
-            "b0": ("bool:0", False),
-            "b1": ("bool:1", True),
-            "bt": ("bool:true", True),
-            "bf": ("bool:false", False),
-            "bon": ("bool:on", True),
-            "boff": ("bool:off", False),
+            "foo": ("=bar", "bar"),
+            "a": ("=b=c", "b=c"),
+            "int": (":int=1", 1),
+            "float": (":float=2", 2.0),
+            "str": (":str=123", "123"),
+            "b0": (":bool=0", False),
+            "b1": (":bool=1", True),
+            "bt": (":bool=true", True),
+            "bf": (":bool=false", False),
+            "bon": (":bool=on", True),
+            "boff": (":bool=off", False),
             }
 
         node_config = repo / "system" / node / "node.json"
@@ -59,11 +59,12 @@ class TestCommands(Helper):
             else:
                 inval, outval = val
 
-            set_str = "%s=%s" % (key, inval)
+            set_str = "%s%s" % (key, inval)
             assert not poni.run(["set", node, set_str])
 
             config = json.load(file(node_config))
-            assert config[key] == outval
+            assert config[key] == outval, "got %r, expected %r" % (
+                config[key], outval)
 
         assert not poni.run(["set", node, "one.two.three.four=five", "-v"])
         config = json.load(file(node_config))
@@ -117,7 +118,7 @@ class TestCommands(Helper):
         template_node = "tnode"
         template_conf = "tconf"
         assert not poni.run(["add-node", template_node])
-        assert not poni.run(["set", template_node, "verify=bool:off"])
+        assert not poni.run(["set", template_node, "verify:bool=off"])
         assert not poni.run(["add-config", template_node, template_conf])
 
         # write template config plugin.py
