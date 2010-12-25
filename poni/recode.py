@@ -13,6 +13,7 @@ import re
 import codecs
 import json
 import socket
+import uuid
 
 class Error(Exception):
     """recode error"""
@@ -27,30 +28,12 @@ class InvalidCodecDefinition(Error):
 ENCODE = "+"
 DECODE = "-"
 
-re_coder = re.compile("([-+]?)([a-z0-9_-]+)", re.I)
+BOOL_MAP = {"true": True, "1": True, "on": True,
+            "false": False, "0": False, "off": False}
 
-def int_convert(x):
-    return int(x, 0) # supports binary, octal, decimal and hex formats
+RE_CODER = re.compile("([-+]?)([a-z0-9_-]+)", re.I)
 
-def from_env(value):
-    try:
-        return os.environ[value]
-    except KeyError:
-        raise ValueError("environment variable %r is not set" % value)
-
-def resolve_ip(name, family):
-    try:
-        addresses = socket.getaddrinfo(name, None, family)
-    except (socket.error, socket.gaierror), error:
-        raise EncodeError("resolving %r failed: %s: %s" % (
-            name, error.__class__.__name__, error))
-
-    if not addresses:
-        raise EncodeError("name %r does not resolve to any addresses" % name)
-
-    return addresses[0][-1][0]
-
-multiples = {
+MULTIPLES = {
     # SI
     "k": 10 ** 3,
     "M": 10 ** 6,
@@ -70,30 +53,84 @@ multiples = {
     'Ei': 2 ** 60,
     }
 
-RE_MULT = re.compile("(.*)(%s)$" % ("|".join(multiples)))
+RE_MULT = re.compile("(.*)(%s)$" % ("|".join(MULTIPLES)))
+
+
+def to_int(value):
+    if value is None:
+        return 0
+    else:
+        return int(value, 0) # supports binary, octal, decimal and hex formats
+
+
+def to_float(value):
+    if value is None:
+        return 0.0
+    else:
+        return float(value)
+
+
+def to_str(value):
+    if value is None:
+        return u""
+    else:
+        return unicode(value, "ascii")
+
+
+def from_env(value):
+    try:
+        return unicode(os.environ[value], "ascii")
+    except KeyError:
+        raise ValueError("environment variable %r is not set" % value)
+
+
+def resolve_ip(name, family):
+    try:
+        addresses = socket.getaddrinfo(name, None, family)
+    except (socket.error, socket.gaierror), error:
+        raise EncodeError("resolving %r failed: %s: %s" % (
+            name, error.__class__.__name__, error))
+
+    if not addresses:
+        raise EncodeError("name %r does not resolve to any addresses" % name)
+
+    return unicode(addresses[0][-1][0], "ascii")
 
 def convert_num(cls, value):
+    if value is None:
+        return cls(value)
+    
     match = RE_MULT.match(value)
     if match:
         num_val = cls(match.group(1))
-        return num_val * multiples[match.group(2)]
+        return num_val * MULTIPLES[match.group(2)]
     else:
         return cls(value)
-    
-BOOL_MAP = {"true": True, "1": True, "on": True,
-            "false": False, "0": False, "off": False}
+
 
 def to_bool(value):
+    if value is None:
+        return False
+    
     try:
         return BOOL_MAP[value]
     except KeyError:
         raise ValueError("invalid boolean value: %r, expected one of: %s" % (
             value, ", ".join(repr(x) for x in BOOL_MAP)))
 
+
+def to_uuid(value):
+    return unicode(str(uuid.UUID(bytes=value)))
+
+
+def to_uuid4(value):
+    return unicode(str(uuid.uuid4()), "ascii")
+        
+
 type_conversions = {
-    "str": (str, None), 
-    "int": (lambda x: convert_num(int_convert, x), None),
-    "float": (lambda x: convert_num(float, x), None),
+    "str": (to_str, None), 
+    "int": (lambda x: convert_num(to_int, x), None),
+    "float": (lambda x: convert_num(to_float, x), None),
     "bool": (to_bool, None),
     "json": (json.dumps, json.loads),
     "null": (lambda x: None, None),
@@ -101,19 +138,22 @@ type_conversions = {
     "env": (from_env, None),
     "ipv4": (lambda name: resolve_ip(name, socket.AF_INET), None),
     "ipv6": (lambda name: resolve_ip(name, socket.AF_INET6), None),
+    "uuid": (to_uuid, None),
+    "uuid4": (to_uuid4, None),
     }
 
 
 class Codec:
-    def __init__(self, chain_str, default=None):
+    def __init__(self, chain_str, converters=None, default=None):
         self.default = default
         self.chain = []
+        self.converters = converters or {}
         self.parse_chain(chain_str)
 
     def parse_chain(self, chain_str):
         parts = chain_str.split(":")
         for part in parts:
-            match = re_coder.match(part)
+            match = RE_CODER.match(part)
             if not match:
                 raise InvalidCodecDefinition(
                     "invalid codec definition: %r, at %r" % (chain_str, part))
@@ -122,7 +162,10 @@ class Codec:
             self.add_to_chain(codec_name, direction)
 
     def get_coder(self, codec_name, direction):
-        converters = type_conversions.get(codec_name)
+        converters = self.converters.get(codec_name)
+        if not converters:
+            converters = type_conversions.get(codec_name)
+            
         if converters:
             if direction == DECODE:
                 converter = converters[1]
@@ -161,9 +204,6 @@ class Codec:
         self.chain.append((direction, codec_name, coder))
 
     def process(self, input_str):
-        if not input_str:
-            return
-
         result = input_str
         for direction, codec_name, coder in self.chain:
             try:

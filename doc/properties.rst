@@ -1,3 +1,5 @@
+.. _propref:
+
 System and Node Property Reference
 ==================================
 

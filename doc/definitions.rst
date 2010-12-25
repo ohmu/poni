@@ -6,3 +6,5 @@
 .. _GitPython: http://pypi.python.org/pypi/GitPython
 .. _Cheetah: http://pypi.python.org/pypi/Cheetah
 .. _Git: http://git-scm.com/
+.. _JSON: http://json.org/
+.. _UUID: http://en.wikipedia.org/wiki/Universally_unique_identifier
