@@ -33,6 +33,7 @@ Contents
 
    getting-started
    properties
+   modify
    template-variables
    ec2
    remote

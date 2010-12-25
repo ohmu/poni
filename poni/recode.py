@@ -28,30 +28,12 @@ class InvalidCodecDefinition(Error):
 ENCODE = "+"
 DECODE = "-"
 
-re_coder = re.compile("([-+]?)([a-z0-9_-]+)", re.I)
+BOOL_MAP = {"true": True, "1": True, "on": True,
+            "false": False, "0": False, "off": False}
 
-def int_convert(x):
-    return int(x, 0) # supports binary, octal, decimal and hex formats
+RE_CODER = re.compile("([-+]?)([a-z0-9_-]+)", re.I)
 
-def from_env(value):
-    try:
-        return unicode(os.environ[value], "ascii")
-    except KeyError:
-        raise ValueError("environment variable %r is not set" % value)
-
-def resolve_ip(name, family):
-    try:
-        addresses = socket.getaddrinfo(name, None, family)
-    except (socket.error, socket.gaierror), error:
-        raise EncodeError("resolving %r failed: %s: %s" % (
-            name, error.__class__.__name__, error))
-
-    if not addresses:
-        raise EncodeError("name %r does not resolve to any addresses" % name)
-
-    return unicode(addresses[0][-1][0], "ascii")
-
-multiples = {
+MULTIPLES = {
     # SI
     "k": 10 ** 3,
     "M": 10 ** 6,
@@ -71,36 +53,84 @@ multiples = {
     'Ei': 2 ** 60,
     }
 
-RE_MULT = re.compile("(.*)(%s)$" % ("|".join(multiples)))
+RE_MULT = re.compile("(.*)(%s)$" % ("|".join(MULTIPLES)))
+
+
+def to_int(value):
+    if value is None:
+        return 0
+    else:
+        return int(value, 0) # supports binary, octal, decimal and hex formats
+
+
+def to_float(value):
+    if value is None:
+        return 0.0
+    else:
+        return float(value)
+
+
+def to_str(value):
+    if value is None:
+        return u""
+    else:
+        return unicode(value, "ascii")
+
+
+def from_env(value):
+    try:
+        return unicode(os.environ[value], "ascii")
+    except KeyError:
+        raise ValueError("environment variable %r is not set" % value)
+
+
+def resolve_ip(name, family):
+    try:
+        addresses = socket.getaddrinfo(name, None, family)
+    except (socket.error, socket.gaierror), error:
+        raise EncodeError("resolving %r failed: %s: %s" % (
+            name, error.__class__.__name__, error))
+
+    if not addresses:
+        raise EncodeError("name %r does not resolve to any addresses" % name)
+
+    return unicode(addresses[0][-1][0], "ascii")
 
 def convert_num(cls, value):
+    if value is None:
+        return cls(value)
+    
     match = RE_MULT.match(value)
     if match:
         num_val = cls(match.group(1))
-        return num_val * multiples[match.group(2)]
+        return num_val * MULTIPLES[match.group(2)]
     else:
         return cls(value)
-    
-BOOL_MAP = {"true": True, "1": True, "on": True,
-            "false": False, "0": False, "off": False}
+
 
 def to_bool(value):
+    if value is None:
+        return False
+    
     try:
         return BOOL_MAP[value]
     except KeyError:
         raise ValueError("invalid boolean value: %r, expected one of: %s" % (
             value, ", ".join(repr(x) for x in BOOL_MAP)))
 
+
 def to_uuid(value):
     return unicode(str(uuid.UUID(bytes=value)))
+
 
 def to_uuid4(value):
     return unicode(str(uuid.uuid4()), "ascii")
         
+
 type_conversions = {
-    "str": (str, None), 
-    "int": (lambda x: convert_num(int_convert, x), None),
-    "float": (lambda x: convert_num(float, x), None),
+    "str": (to_str, None), 
+    "int": (lambda x: convert_num(to_int, x), None),
+    "float": (lambda x: convert_num(to_float, x), None),
     "bool": (to_bool, None),
     "json": (json.dumps, json.loads),
     "null": (lambda x: None, None),
@@ -123,7 +153,7 @@ class Codec:
     def parse_chain(self, chain_str):
         parts = chain_str.split(":")
         for part in parts:
-            match = re_coder.match(part)
+            match = RE_CODER.match(part)
             if not match:
                 raise InvalidCodecDefinition(
                     "invalid codec definition: %r, at %r" % (chain_str, part))

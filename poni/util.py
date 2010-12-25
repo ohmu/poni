@@ -76,12 +76,13 @@ def json_dump(data, file_path):
 
 
 def parse_prop(prop_str, converters=None):
-    try:
-        name, value = prop_str.split("=", 1)
-    except ValueError:
-        raise errors.InvalidProperty(
-            "invalid property: %r, expected format: name=[type:]value" %
-            prop_str)
+    val_parts = prop_str.split("=", 1)
+    if len(val_parts) == 1:
+        # no value specified
+        name = prop_str
+        value = None
+    else:
+        name, value = val_parts
 
     parts = name.split(":", 1)
     try:
