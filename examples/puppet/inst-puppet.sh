@@ -1,23 +1,21 @@
-#! /bin/sh
-
-set -e
+#! /bin/bash -ue
 
 AWS_KEYPAIR="mel-fsc-aws-east-1-mac"
 REPO="$HOME/tmp/puppet"
 
 rm -rf $REPO
 
-poni -d $REPO script -v <<EOF
+poni -d $REPO script - -v <<EOF
 init
 vc init
 
 add-config -cd ec2-deb6/ template/ec2-deb6 hacks
-set template\$ verify=bool:false
+set template\$ verify:bool=false
 vc checkpoint "added templates"
 
 add-config -cd puppet-master/ software puppet-master-v1.0
 add-config -cd puppet-agent/ software puppet-agent-v1.0
-set software\$ verify=bool:false
+set software\$ verify:bool=false
 vc checkpoint "added software"
 
 add-node puppet/master -i template/ec2-deb6
