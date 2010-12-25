@@ -43,6 +43,8 @@ CODES.update({
     'command': CODES['red'],
     'setting': CODES['reset'],
     'layer': CODES['reset'],
+    'controls': CODES['lred'],
+    'controlstype': CODES['lred'],
     None: CODES["reset"],
     })
 

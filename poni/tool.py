@@ -14,6 +14,7 @@ import shlex
 import argh
 import glob
 import shutil
+import argparse
 from path import path
 from . import config
 from . import errors
@@ -236,6 +237,32 @@ class Tool:
         elif arg.verbose:
             self.log.info("config %r added to: %s", arg.config,
                           ", ".join(updates))
+
+    @argh.alias("control")
+    @arg_verbose
+    @argh.arg('pattern', type=str, help='config search pattern')
+    @arg_host_access_method
+    @argh.arg('operation', type=str, help='operation to execute')
+    def handle_control(self, arg):
+        """config control operation"""
+        confman = core.ConfigMan(arg.root_dir)
+        manager = config.Manager(confman)
+        self.collect_all(manager)
+
+        configs = list(confman.find_config(arg.pattern))
+        if not configs:
+            raise errors.UserError("no config matching %r found" % arg.pattern)
+        for conf_node, conf in configs:
+            plugin = conf.get_plugin()
+            if not plugin:
+                # skip pluginless configs
+                self.log.debug("skipping pluginless: %s:%s", conf_node.name,
+                               conf.name)
+                continue
+
+            plugin.execute_control_operation(arg.operation, arg.extras,
+                                             method=arg.method,
+                                             verbose=arg.verbose)
 
     @argh.alias("exec")
     @arg_verbose
@@ -683,8 +710,8 @@ class Tool:
     @arg_flag("-c", "--config", dest="show_config", help="show node configs")
     @arg_flag("-P", "--config-prop", dest="show_config_prop",
               help="show node config properties")
-#    @arg_flag("-C", "--controls", dest="show_controls",
-#              help="show node config control commands")
+    @arg_flag("-C", "--controls", dest="show_controls",
+              help="show config control commands")
     @arg_flag("-t", "--tree", dest="show_tree", help="indented tree output")
     @arg_flag("-p", "--node-prop", dest="show_node_prop",
               help="show node properties")
@@ -698,6 +725,10 @@ class Tool:
     def handle_list(self, arg):
         """list systems and nodes"""
         confman = core.ConfigMan(arg.root_dir)
+
+        manager = config.Manager(confman)
+        self.collect_all(manager) # TODO: needed by "list -C"
+
         list_output = listout.ListOutput(self, confman, **arg.__dict__)
         for output in list_output.output():
             yield output
@@ -792,6 +823,7 @@ class Tool:
             self.handle_list, self.handle_add_system, self.handle_init,
             self.handle_import, self.handle_script, self.handle_add_config,
             self.handle_update_config, self.handle_version,
+            self.handle_control,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
             ])
@@ -831,7 +863,7 @@ class Tool:
             if arg.show_node_prop or arg.show_cloud_prop or arg.query_status:
                 arg.show_nodes = True
 
-            if arg.show_config_prop:
+            if arg.show_config_prop or arg.show_controls:
                 arg.show_config = True
 
             if not any([arg.show_nodes, arg.show_systems, arg.show_config]):
@@ -864,10 +896,21 @@ class Tool:
                 boto_logger = logging.getLogger('boto')
                 boto_logger.setLevel(logging.CRITICAL)
 
+        # strip arguments following "--"
+        args = args or sys.argv[1:]
+        namespace = argparse.Namespace()
+        try:
+            extra_loc = args.index("--")
+            namespace.extras = args[extra_loc + 1:]
+            args = args[:extra_loc]
+        except ValueError:
+            namespace.extras = []
+
         try:
             exit_code = self.parser.dispatch(argv=args,
                                              pre_call=adjust_logging,
-                                             raw_output=True)
+                                             raw_output=True,
+                                             namespace=namespace)
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
             return -1

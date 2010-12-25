@@ -20,6 +20,7 @@ class ListOutput(colors.Output):
                  pattern=False, full_match=False, show_node_prop=False,
                  show_cloud_prop=False, show_config_prop=False,
                  list_props=False, show_layers=False, color="auto",
+                 show_controls=False,
                  query_status=False, show_settings=False, **kwargs):
         colors.Output.__init__(self, sys.stdout, color=color)
         self.show_nodes = show_nodes
@@ -32,6 +33,7 @@ class ListOutput(colors.Output):
         self.show_config_prop = show_config_prop
         self.show_settings = show_settings
         self.show_layers = show_layers
+        self.show_controls = show_controls
         self.list_props = list_props
         self.query_status = query_status
         self.pattern = pattern
@@ -47,6 +49,7 @@ class ListOutput(colors.Output):
             "prop": self.format_prop,
             "cloud": self.format_prop,
             "confprop": self.format_prop,
+            "controls": self.format_controls,
             "status": self.format_status,
             "setting": self.format_setting,
             "layer": self.format_layer,
@@ -103,6 +106,9 @@ class ListOutput(colors.Output):
 
     def format_prop(self, entry):
         return self.value_repr(entry["prop"], top_level=True)
+
+    def format_controls(self, entry):
+        yield ", ".join(entry["controls"]), "controls"
 
     def format_system(self, entry):
         name = entry["item"].name
@@ -216,6 +222,11 @@ class ListOutput(colors.Output):
                     if self.show_config_prop:
                         yield dict(type="confprop", item=item, config=conf,
                                    prop=conf)
+
+                    plugin = conf.get_plugin()
+                    if plugin and self.show_controls and plugin.controls:
+                        yield dict(type="controls", item=item, config=conf,
+                                   controls=plugin.controls)
 
                     if self.show_settings:
                         for key, value in util.path_iter_dict(conf.settings):
