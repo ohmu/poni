@@ -40,6 +40,7 @@ readability especially when using a version control system to store the reposito
 Example version control diff::
 
   $ poni vc checkpoint baseline
+  $ poni set example server.http.port:int=8080
   $ poni vc diff
   Changes:
   diff --git a/system/example/node.json b/system/example/node.json
