@@ -38,3 +38,6 @@ class ImporterError(Error):
 
 class MissingLibraryError(Error):
     """missing library error"""
+
+class RequirementError(Error):
+    """requirement error"""

@@ -14,6 +14,7 @@ import shlex
 import argh
 import glob
 import shutil
+from distutils.version import LooseVersion
 import argparse
 from path import path
 from . import config
@@ -79,6 +80,29 @@ class Tool:
         """show version information"""
         yield version.__version__
         yield "\n"
+
+    @argh.alias("require")
+    @arg_verbose
+    @argh.arg("req", help="requirement expression (Python)", nargs="+")
+    def handle_require(self, arg):
+        """
+        validate that all requirements are fulfilled, exit with error if not
+        """
+        props = {
+            "poni_version": LooseVersion(version.__version__),
+            }
+        for req in arg.req:
+            try:
+                result = eval(req, {}, props)
+                if arg.verbose:
+                    self.log.info("requirement OK: %r", req)
+            except Exception, error:
+                raise errors.RequirementError("%s: %s: %s" % (
+                        req, error.__class__.__name__, error))
+
+            if not result:
+                raise errors.RequirementError(
+                    "requirement not met: %r" % req)
 
     @argh.alias("init")
     def handle_init(self, arg):
@@ -535,7 +559,7 @@ class Tool:
                     note = "was %r" % old_value
                 else:
                     note = "no change"
-                
+
                 logger("%s: set %s=%r (%s)", item.name, key, new_value, note)
 
             if not changes:
@@ -823,7 +847,7 @@ class Tool:
             self.handle_list, self.handle_add_system, self.handle_init,
             self.handle_import, self.handle_script, self.handle_add_config,
             self.handle_update_config, self.handle_version,
-            self.handle_control,
+            self.handle_control, self.handle_require,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
             ])
