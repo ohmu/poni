@@ -121,7 +121,7 @@ class Manager:
                     except (OSError, IOError), error:
                         raise errors.VerifyError(
                             "cannot copy files from '%s': %s: %s"% (
-                                error.__class__.__name__, error))
+                                entry["source_path"], error.__class__.__name__, error))
 
                     if dir_stats["file_count"] == 0:
                         self.log.warning("source directory '%s' is empty" % (
