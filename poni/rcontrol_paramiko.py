@@ -187,6 +187,12 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                     sys.stdout.write(x)
                     sys.stdout.flush()
         finally:
+            if channel.recv_stderr_ready():
+                # TODO: will this catch all stderr output?
+                x = channel.recv_stderr(BS)
+                if x:
+                    sys.stderr.write(x)
+                    sys.stderr.flush()
             channel.close()
 
         return channel.recv_exit_status()
