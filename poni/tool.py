@@ -86,7 +86,7 @@ class Tool:
     @argh.arg("req", help="requirement expression (Python)", nargs="+")
     def handle_require(self, arg):
         """
-        validate that all requirements are fulfilled, exit with error if not
+        validate requirement expressions
         """
         props = {
             "poni_version": LooseVersion(version.__version__),
@@ -264,6 +264,7 @@ class Tool:
 
     @argh.alias("control")
     @arg_verbose
+    @arg_full_match
     @argh.arg('pattern', type=str, help='config search pattern')
     @arg_host_access_method
     @argh.arg('operation', type=str, help='operation to execute')
@@ -273,20 +274,76 @@ class Tool:
         manager = config.Manager(confman)
         self.collect_all(manager)
 
-        configs = list(confman.find_config(arg.pattern))
-        if not configs:
-            raise errors.UserError("no config matching %r found" % arg.pattern)
-        for conf_node, conf in configs:
+        # collect all possible control operations
+        all_configs = list(confman.find_config(".", all_configs=True))
+        all_ops = []
+        provider = {}
+        for conf_node, conf in all_configs:
             plugin = conf.get_plugin()
             if not plugin:
                 # skip pluginless configs
                 self.log.debug("skipping pluginless: %s:%s", conf_node.name,
                                conf.name)
                 continue
+            elif conf_node.get_tree_property("template", False):
+                # skip template nodes
+                self.log.debug("skipping template node: %s:%s", conf_node.name,
+                               conf.name)
+                continue
 
-            plugin.execute_control_operation(arg.operation, arg.extras,
-                                             method=arg.method,
-                                             verbose=arg.verbose)
+            for op in plugin.iter_control_operations():
+                all_ops.append(op)
+                for feature in op["provides"]:
+                    ops = provider.setdefault(feature, [])
+                    ops.append(op)
+                    
+        def add_all_required_ops(op):
+            node = op["plugin"].node
+            conf = op["plugin"].config
+            tasks[(node.name, conf.name, op["name"])] = op
+            for feature in op["requires"]:
+                try:
+                    provider_ops = provider[feature]
+                except KeyError:
+                    raise errors.OperationError(
+                        "%s/%s operation %r depends on feature %r, "
+                        "which is not provided by any config",
+                        node.name, config.name, arg.operation, feature)
+
+                for dep_op in provider_ops:
+                    add_all_required_ops(dep_op)
+
+        # select user-specified ops and their dependencies from the full list
+        tasks = {}
+        comparison = core.ConfigMatch(arg.pattern, full_match=arg.full_match)
+        for op in all_ops:
+            node = op["plugin"].node
+            conf = op["plugin"].config
+            if ((arg.operation != op["name"])
+                or not comparison.match_node(node.name)
+                or not comparison.match_config(conf.name)):
+                continue
+
+            add_all_required_ops(op)
+
+        if not tasks:
+            raise errors.UserError("no matching operations found")
+
+        # TODO: execution in correct order
+        # TODO: parallel execution
+        # execute operations
+        logger = self.log.info if arg.verbose else self.log.debug
+        for op_id, op in tasks.iteritems():
+            plugin = op["plugin"]
+            logger("%s: %s: control %r", plugin.node.name, plugin.config.name, 
+                   op["name"])
+            handler_func = op["callback"]
+            ret = handler_func(op["name"], arg.extras, verbose=arg.verbose, 
+                               method=arg.method)
+            self.log.debug("op %s returns: %r", arg.operation, ret)
+            op["result"] = ret
+
+        # TODO: exit code
 
     @argh.alias("exec")
     @arg_verbose

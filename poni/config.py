@@ -298,29 +298,45 @@ class PlugIn:
         self.node = node
         self.controls = {}
 
-    def add_argh_control(self, name, handler):
+    def add_argh_control(self, handler, provides=None, requires=None):
+        try:
+            name = handler.argh_alias
+        except AttributeError:
+            name = handler.__name__
+
         def handle_control(control_name, args, **kwargs):
             return self.handle_argh_control(handler, control_name, args,
                                             **kwargs)
 
-        self.controls[name] = handle_control
+        self.controls[name] = dict(callback = handle_control,
+                                   plugin = self,
+                                   provides = provides or [],
+                                   requires = requires or [])
 
     def add_controls(self):
         pass
 
-    def execute_control_operation(self, control_name, args, verbose=False,
+    def OLD_execute_control_operation(self, control_name, args, verbose=False,
                                   method=None):
-        handler = self.controls.get(control_name)
-        if not handler:
+        handler_prop = self.controls.get(control_name)
+        if not handler_prop:
             if verbose:
                 self.log.info("%s: %s: %r: control not supported" % (
                     self.node.name, self.config.name, control_name))
 
             return
 
-        self.log.info("%s: %s: control %r", self.node.name,
-                      self.config.name, control_name)
-        return handler(control_name, args, verbose=verbose, method=method)
+        logger = self.log.info if verbose else self.log.debug
+        logger("%s: %s: control %r", self.node.name, self.config.name, 
+               control_name)
+        handler_func = handler_prop["callback"]
+        return handler_func(control_name, args, verbose=verbose, method=method)
+
+    def iter_control_operations(self):
+        for name, prop in self.controls.iteritems():
+            out = prop.copy()
+            out["name"] = name
+            yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
                             method=None):

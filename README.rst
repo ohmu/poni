@@ -10,6 +10,7 @@ General Information
 ===================
 :documentation: http://melor.github.com/poni/
 :source repo: https://github.com/melor/poni
+:pypi: http://pypi.python.org/pypi/poni
 :email: mika dot eloranta at gmail dot com
 :bug tracker: https://github.com/melor/poni/issues
 
@@ -71,8 +72,13 @@ Installing the following Python libraries will add optional functionality:
 .. _Genshi: http://pypi.python.org/pypi/Genshi
 .. _Sphinx: http://sphinx.pocoo.org/
 
-Installation steps
-------------------
+Installation using pip or easy_install
+--------------------------------------
+Poni can be installed from Python Package Index (PyPI) by running ``pip install poni`` or
+``easy_install poni``.
+
+Manual Installation steps
+-------------------------
 1. Unpack the ``poni-v.vv.tar.gz`` package
 2. ``cd poni-v.vv/``
 3. ``python setup.py install``

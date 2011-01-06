@@ -41,6 +41,42 @@ def ensure_dir(typename, root, name, must_exist):
     return target_dir
 
 
+class ConfigMatch:
+    def __init__(self, pattern, full_match=False):
+        if "$" in pattern[:-1]:
+            # make sure no unexpanded macros leak from templates
+            raise errors.UserError("invalid chars in pattern %r" % pattern)
+
+        pattern = pattern.replace("//", "/.*/")
+        parts = pattern.rsplit("/", 1)
+        if len(parts) == 2:
+            node_pattern, config_pattern = parts
+        else:
+            node_pattern = "."
+            config_pattern = parts[0]
+
+        if full_match:
+            if not config_pattern.endswith("$"):
+                config_pattern += "$"
+
+            self.match_config = re.compile(config_pattern).match
+
+            if not node_pattern.endswith("$"):
+                node_pattern += "$"
+
+            self.match_node = re.compile(node_pattern).match
+
+        else:
+            self.match_config = re.compile(config_pattern).search
+            self.match_node = re.compile(node_pattern).search
+
+    def matches(self, node, conf):
+        if not self.match_node(node.name):
+            return False
+
+        return self.match_config(conf.name)
+
+        
 class Item(dict):
     """Generic tree item type"""
     def __init__(self, typename, system, name, item_dir, conf_file, extra):
@@ -433,32 +469,19 @@ class ConfigMan:
         return configs[0]
 
     def find_config(self, pattern, all_configs=False, full_match=False):
-        if "$" in pattern[:-1]:
-            # make sure no unexpanded macros leak from templates
-            raise errors.UserError("invalid chars in pattern %r" % pattern)
+        comparison = ConfigMatch(pattern, full_match=full_match)
+        for node in self.find("."):
+            if not comparison.match_node(node.name):
+                continue
 
-        pattern = pattern.replace("//", "/.*/")
-        parts = pattern.rsplit("/", 1)
-        if len(parts) == 2:
-            node_pattern, config_pattern = parts
-        else:
-            node_pattern = "."
-            config_pattern = parts[0]
-
-        if full_match:
-            config_pattern += "$"
-
-        re_config = re.compile(config_pattern)
-        for node in self.find(node_pattern, full_match=full_match):
             if all_configs:
                 find_method = node.iter_all_configs
             else:
                 find_method = node.iter_configs
 
-            for config in find_method():
-                # TODO: full_match
-                if re_config.match(config.name):
-                    yield node, config
+            for conf in find_method():
+                if comparison.match_config(conf.name):
+                    yield node, conf
 
     def find(self, pattern, current=None, system=None, nodes=True,
              systems=False, curr_depth=0, extra=None, depth=None,
