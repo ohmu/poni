@@ -76,6 +76,13 @@ class ControlTask(work.Task):
                                          self.op["name"], msg))
 
     def can_start(self):
+        """return True when it is ok to start this task"""
+        host = self.op["node"].get("host")
+        for running_task in self.runner.started:
+            if running_task.op["node"].get("host") == host:
+                # another task is already running on the same host
+                return False
+
         for dep_op in self.op.get("depends", []):
             if not "result" in dep_op:
                 # dependency task has not finished yet
