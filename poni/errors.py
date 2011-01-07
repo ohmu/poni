@@ -41,3 +41,6 @@ class MissingLibraryError(Error):
 
 class RequirementError(Error):
     """requirement error"""
+
+class ControlError(Error):
+    """control error"""

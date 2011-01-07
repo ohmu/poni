@@ -28,6 +28,8 @@ from . import rcontrol_all
 from . import listout
 from . import colors
 from . import version
+from . import work
+
 
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
@@ -57,6 +59,53 @@ arg_host_access_method = argh.arg("-m", "--method",
 
 def arg_flag(*args, **kwargs):
     return argh.arg(*args, default=False, action="store_true", **kwargs)
+
+
+class ControlTask(work.Task):
+    def __init__(self, op, args, verbose=False, method=None):
+        work.Task.__init__(self)
+        self.op = op
+        self.args = args
+        self.verbose = verbose
+        self.method = method
+
+    def send_output(self, msg):
+        # TODO: label each output line
+        self.log.info("%s/%s[%s]: %s" % (self.op["node"].name, 
+                                         self.op["config"].name,
+                                         self.op["name"], msg))
+
+    def can_start(self):
+        for dep_op in self.op.get("depends", []):
+            if not "result" in dep_op:
+                # dependency task has not finished yet
+                return False
+
+        return True
+
+    def execute(self):
+        try:
+            for dep_op in self.op.get("depends", []):
+                if dep_op["result"]:
+                    # dependency task has failed, cannot continue
+                    raise errors.ControlError("dependency task failed")
+
+            handler_func = self.op["callback"]
+            ret = handler_func(self.op["name"], self.args, 
+                               verbose=self.verbose, 
+                               method=self.method, 
+                               send_output=self.send_output)
+            self.log.debug("op %s returns: %r", self.op["name"], ret)
+            self.op["result"] = ret
+        except errors.Error, error:
+            self.log.error("%s/%s[%s] failed: %s: %s" % (
+                    self.op["node"].name, self.op["config"].name,
+                    self.op["name"], error.__class__.__name__, error))
+            self.op["result"] = -1
+        except:
+            self.log.exception("task exception")
+            self.op["result"] = -1
+            raise
 
 
 class Tool:
@@ -310,7 +359,9 @@ class Tool:
                         "which is not provided by any config",
                         node.name, config.name, arg.operation, feature)
 
+                depends = op.setdefault("depends", [])
                 for dep_op in provider_ops:
+                    depends.append(dep_op)
                     add_all_required_ops(dep_op)
 
         # select user-specified ops and their dependencies from the full list
@@ -319,6 +370,7 @@ class Tool:
         for op in all_ops:
             node = op["plugin"].node
             conf = op["plugin"].config
+            # control op name, node name, config name, all must match
             if ((arg.operation != op["name"])
                 or not comparison.match_node(node.name)
                 or not comparison.match_config(conf.name)):
@@ -329,21 +381,30 @@ class Tool:
         if not tasks:
             raise errors.UserError("no matching operations found")
 
-        # TODO: execution in correct order
-        # TODO: parallel execution
-        # execute operations
+        # assign tasks
+        runner = work.Runner()
         logger = self.log.info if arg.verbose else self.log.debug
         for op_id, op in tasks.iteritems():
             plugin = op["plugin"]
             logger("%s: %s: control %r", plugin.node.name, plugin.config.name, 
                    op["name"])
-            handler_func = op["callback"]
-            ret = handler_func(op["name"], arg.extras, verbose=arg.verbose, 
+            task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                method=arg.method)
-            self.log.debug("op %s returns: %r", arg.operation, ret)
-            op["result"] = ret
+            runner.add_task(task)
 
-        # TODO: exit code
+        # execute tasks
+        runner.run_all()
+
+        # collect results
+        results = [task.op["result"] for task in runner.stopped]
+        self.log.debug("all tasks finished: %r", results)
+        failed = [r for r in results if r]
+        if failed:
+            raise errors.ControlError("[%d/%d] control tasks failed" % (
+                    len(failed), len(results)))
+        else:
+            self.log.info("all [%d] control tasks finished successfully" % (
+                    len(results)))
 
     @argh.alias("exec")
     @arg_verbose
@@ -358,7 +419,10 @@ class Tool:
             return remote.execute(arg.cmd)
 
         rexec.doc = "exec: %r" % arg.cmd
-        return self.remote_op(confman, arg, rexec)
+        result = self.remote_op(confman, arg, rexec)
+        if result:
+            raise errors.RemoteError("remote exec failed with code=%r" % (
+                    result,))
 
     @argh.alias("shell")
     @arg_verbose

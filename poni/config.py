@@ -310,27 +310,13 @@ class PlugIn:
 
         self.controls[name] = dict(callback = handle_control,
                                    plugin = self,
+                                   node = self.node,
+                                   config = self.config,
                                    provides = provides or [],
                                    requires = requires or [])
 
     def add_controls(self):
         pass
-
-    def OLD_execute_control_operation(self, control_name, args, verbose=False,
-                                  method=None):
-        handler_prop = self.controls.get(control_name)
-        if not handler_prop:
-            if verbose:
-                self.log.info("%s: %s: %r: control not supported" % (
-                    self.node.name, self.config.name, control_name))
-
-            return
-
-        logger = self.log.info if verbose else self.log.debug
-        logger("%s: %s: control %r", self.node.name, self.config.name, 
-               control_name)
-        handler_func = handler_prop["callback"]
-        return handler_func(control_name, args, verbose=verbose, method=method)
 
     def iter_control_operations(self):
         for name, prop in self.controls.iteritems():
@@ -339,13 +325,14 @@ class PlugIn:
             yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
-                            method=None):
+                            method=None, send_output=None):
         parser = argh.ArghParser(prog="control")
         parser.add_commands([handler])
         full_args = [control_name] + args
         namespace = argparse.Namespace()
         namespace.verbose = verbose
         namespace.method = method
+        namespace.send_output = send_output
         parser.dispatch(argv=full_args, namespace=namespace)
 
     def add_file(self, source_path, dest_path=None, source_text=None,
