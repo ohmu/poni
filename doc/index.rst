@@ -31,6 +31,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   changes
    getting-started
    properties
    modify
