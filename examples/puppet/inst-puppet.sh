@@ -12,12 +12,12 @@ init
 vc init
 
 add-config -cd ec2-deb6/ template/ec2-deb6 hacks
-set template\$ verify:bool=false
+set -M template template:bool=true
 vc checkpoint "added templates"
 
 add-config -cd puppet-master/ software puppet-master-v1.0
 add-config -cd puppet-agent/ software puppet-agent-v1.0
-set software\$ template:bool=true
+set -M software template:bool=true
 vc checkpoint "added software"
 
 add-node example/master -i template/ec2-deb6

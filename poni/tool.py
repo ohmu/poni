@@ -422,13 +422,14 @@ class Tool:
     def handle_remote_exec(self, arg):
         """run a shell-command"""
         confman = core.ConfigMan(arg.root_dir)
+        color = colors.Output(sys.stdout, color=arg.color_mode).color
         def rexec(arg, node, remote):
-            return remote.execute(arg.cmd)
+            return remote.execute(arg.cmd, verbose=arg.verbose, color=color)
 
         rexec.doc = "exec: %r" % arg.cmd
         result = self.remote_op(confman, arg, rexec)
         if result:
-            raise errors.RemoteError("remote exec failed with code=%r" % (
+            raise errors.RemoteError("remote exec failed with code: %r" % (
                     result,))
 
     @argh.alias("shell")
@@ -439,41 +440,35 @@ class Tool:
     def handle_remote_shell(self, arg):
         """start an interactive shell session"""
         confman = core.ConfigMan(arg.root_dir)
+        color = colors.Output(sys.stdout, color=arg.color_mode).color
         def rshell(arg, node, remote):
-            remote.shell()
+            remote.shell(verbose=arg.verbose, color=color)
 
         rshell.doc = "shell"
         self.remote_op(confman, arg, rshell)
 
     def remote_op(self, confman, arg, op):
         ret = 0
-        color = colors.Output(sys.stdout, color=arg.color_mode).color
         nodes = list(confman.find(arg.nodes, full_match=arg.full_match))
         if not nodes:
             raise errors.UserError("%r does not match any nodes" % (arg.nodes))
 
         for node in nodes:
+            if node.get_tree_property("template"):
+                # don't try to run anything on template nodes
+                continue
+
             remote = node.get_remote(override=arg.method)
-            desc = "%s (%s): %s" % (color(node.name, "node"),
-                                    color(node.get("host"), "host"),
-                                    color(op.doc, "command"))
-            if arg.verbose:
-                print color("--- BEGIN", "header"), desc, \
-                    color("---", "header")
 
             try:
+                # TODO: pass color arg
                 exit_code = op(arg, node, remote)
                 if (not ret) and exit_code:
                     ret = exit_code
             except errors.RemoteError, error:
                 self.log.error("failed: %s", error)
                 ret = -1
-
-            if arg.verbose:
-                print color("--- END", "header"), desc, \
-                    color("---", "header")
-                print
-
+ 
         return ret
 
     ## def handle_control(self, arg):

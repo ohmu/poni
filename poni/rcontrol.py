@@ -12,18 +12,52 @@ import os
 import subprocess
 import logging
 import shutil
+import sys
 from . import errors
-
+from . import colors
 
 class RemoteControl:
     def __init__(self, node):
         self.node = node
 
-    def execute(self, command, verbose=False):
-        return self.execute_command(command)
+    def tag_line(self, tag, command, result=None, verbose=False, color=None):
+        assert color
+        if not verbose:
+            return
 
-    def shell(self, verbose=False):
-        return self.execute_shell()
+        desc = "%s (%s): %s" % (color(self.node.name, "node"),
+                                color(self.node.get("host"), "host"),
+                                color(command, "command"))
+        if result is not None:
+            tag = "%s (%s)" % (tag, result)
+
+        print color("--- %s" % tag, "header"), desc, color("---", "header")
+
+    def get_color(self, color):
+        if color:
+            return color
+        else:
+            return colors.Output(sys.stdout, color="no").color
+            
+    def execute(self, command, verbose=False, color=None):
+        color = self.get_color(color)
+        self.tag_line("BEGIN", command, verbose=verbose, color=color)
+        try:
+            result = self.execute_command(command)
+            return result
+        except Exception, error:
+            result = "%s: %s" % (error.__class__.__name__, error)
+        finally:
+            self.tag_line("END", command, result=result, verbose=verbose,
+                          color=color)
+
+    def shell(self, verbose=False, color=None):
+        color = self.get_color(color)
+        self.tag_line("BEGIN", "shell", verbose=verbose, color=color)
+        try:
+            return self.execute_shell()
+        finally:
+            self.tag_line("END", "shell", verbose=verbose, color=color)
 
     def close(self):
         pass

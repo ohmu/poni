@@ -13,7 +13,7 @@ class PlugIn(config.PlugIn):
             print "extra info: %r" % arg.extra
 
         remote = self.node.get_remote(override=arg.method)
-        exit_code = remote.execute(INST_MASTER_SH)
+        exit_code = remote.execute(INST_MASTER_SH, verbose=arg.verbose)
         if exit_code:
             raise errors.ControlError("%r failed with exit code %r" % (
                     INST_MASTER_SH, exit_code))
