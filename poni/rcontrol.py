@@ -19,6 +19,12 @@ class RemoteControl:
     def __init__(self, node):
         self.node = node
 
+    def execute(self, command, verbose=False):
+        return self.execute_command(command)
+
+    def shell(self, verbose=False):
+        return self.execute_shell()
+
     def close(self):
         pass
 
@@ -34,10 +40,10 @@ class RemoteControl:
     def write_file(self, file_path, contents, mode=None):
         assert 0, "must implement in sub-class"
 
-    def execute(self, command):
+    def execute_command(self, command):
         assert 0, "must implement in sub-class"
 
-    def shell(self):
+    def execute_shell(self):
         assert 0, "must implement in sub-class"
 
     def makedirs(self, dir_path):
@@ -86,11 +92,11 @@ class LocalControl(RemoteControl):
         f.close()
 
     @convert_local_errors
-    def execute(self, cmd):
+    def execute_command(self, cmd):
         return subprocess.call(cmd)
 
     @convert_local_errors
-    def shell(self):
+    def execute_shell(self):
         shell = os.environ.get("SHELL")
         if not shell:
             raise errors.RemoteError("$SHELL is not defined")

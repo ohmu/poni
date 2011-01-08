@@ -161,7 +161,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         return self._ssh
 
     @convert_paramiko_errors
-    def execute(self, cmd):
+    def execute_command(self, cmd):
         ssh = self.get_ssh()
         transport = ssh.get_transport()
         channel = transport.open_session()
@@ -198,7 +198,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         return channel.recv_exit_status()
 
     @convert_paramiko_errors
-    def shell(self):
+    def execute_shell(self):
         ssh = self.get_ssh()
         channel = None
         try:

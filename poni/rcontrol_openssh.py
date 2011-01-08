@@ -75,11 +75,11 @@ class OpenSshRemoteControl(rcontrol.SshRemoteControl):
                                    stdin=subprocess.PIPE)
         process.stdin.write(contents)
 
-    def execute(self, command):
+    def execute_command(self, command):
         self.open_shared_connection()
         return subprocess.call(self.cmd([command]))
 
-    def shell(self):
+    def execute_shell(self):
         self.open_shared_connection()
         return subprocess.call(self.cmd([]))
 
