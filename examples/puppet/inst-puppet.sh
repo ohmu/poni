@@ -3,8 +3,10 @@
 AWS_KEYPAIR="mel-fsc-aws-east-1-air"
 REPO="$HOME/tmp/puppet"
 
+# remove old repo
 rm -rf $REPO
 
+# create new puppet repo with the example system
 poni -d $REPO script - -v <<EOF
 init
 vc init
@@ -28,8 +30,3 @@ set example/demo/server cloud.provider=aws-ec2 cloud.region=us-east-1 cloud.imag
 vc checkpoint "added nodes"
 
 EOF
-
-# NOTE: verify cannot be run until hardware has been provisioned and
-#       network addresses have been updated
-
-

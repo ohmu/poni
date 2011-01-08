@@ -1,8 +1,6 @@
-#! /bin/bash
+#! /bin/bash -ue
 
 # bootstrap puppet agent in a node
-
-set -e
 
 # make upgrades quiet
 export DEBIAN_FRONTEND=noninteractive
@@ -18,7 +16,7 @@ echo "# puppet master" >> /etc/hosts
 echo "$master.private.ip $master.private.dns.lower() puppet" >> /etc/hosts
 
 # install puppet agent
-apt-get -q --yes install puppet
+apt-get -q --yes --force-yes install puppet
 perl -pi -e 's/START=no/START=yes/' /etc/default/puppet
 /etc/init.d/puppet start
 

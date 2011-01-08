@@ -1,4 +1,7 @@
 from poni import config
+from poni import errors
+
+INST_MASTER_SH = "/root/inst-puppet-master.sh"
 
 class PlugIn(config.PlugIn):
     @argh.arg("-x", "--extra", help="extra info")
@@ -10,7 +13,11 @@ class PlugIn(config.PlugIn):
             print "extra info: %r" % arg.extra
 
         remote = self.node.get_remote(override=arg.method)
-        remote.execute("/root/inst-puppet-master.sh")
+        exit_code = remote.execute(INST_MASTER_SH)
+        if exit_code:
+            raise errors.ControlError("%r failed with exit code %r" % (
+                    INST_MASTER_SH, exit_code))
+
         self.log.info("%s/%s install - done",
                       self.node.name, self.config.name)
 
@@ -21,4 +28,4 @@ class PlugIn(config.PlugIn):
         self.add_file("site.pp", dest_path="/etc/puppet/manifests/",
                       report=True)
         self.add_file("inst-puppet-master.sh", mode=0500,
-                      dest_path="/root/")
+                      dest_path=INST_MASTER_SH)

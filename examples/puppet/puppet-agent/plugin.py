@@ -1,5 +1,8 @@
 import argh
 from poni import config
+from poni import errors
+
+INST_AGENT_SH = "/root/inst-puppet-agent.sh"
 
 class PlugIn(config.PlugIn):
     @argh.arg("-x", "--extra", help="extra info")
@@ -11,7 +14,11 @@ class PlugIn(config.PlugIn):
             print "extra info: %r" % arg.extra
 
         remote = self.node.get_remote(override=arg.method)
-        remote.execute("/root/inst-puppet-agent.sh")
+        exit_code = remote.execute(INST_AGENT_SH)
+        if exit_code:
+            raise errors.ControlError("%r failed with exit code %r" % (
+                    INST_AGENT_SH, exit_code))
+
         self.log.info("%s/%s install - done",
                       self.node.name, self.config.name)
 
@@ -25,6 +32,5 @@ class PlugIn(config.PlugIn):
 
     def add_actions(self):
         self.add_file("inst-puppet-agent.sh", mode=0500,
-                      dest_path="/root/inst-puppet-agent.sh",
-                      render=self.render_cheetah)
+                      dest_path=INST_AGENT_SH, render=self.render_cheetah)
 

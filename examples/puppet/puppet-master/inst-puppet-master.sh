@@ -1,8 +1,6 @@
-#! /bin/sh
+#! /bin/bash -ue
 
 # bootstrap puppet master in a node
-
-set -e
 
 # make apt-get upgrades quiet
 export DEBIAN_FRONTEND=noninteractive
@@ -13,7 +11,7 @@ apt-get -q --yes update
 
 # install
 perl -pi -e 's/(127.0.0.1.*)/\1 puppet/' /etc/hosts
-apt-get install -q --yes puppetmaster puppet
+apt-get install -q --yes --force-yes puppetmaster puppet
 
 # wait until csr arrives...
 # puppetca --list
