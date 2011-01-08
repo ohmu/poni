@@ -60,6 +60,12 @@ Generic Properties
      - boolean
      - ``true`` (verification is enabled) or ``false`` (verification is
        disabled)
+   * - ``template``
+     - Indicates a system or node only containing templates. Control commands
+       are not run under template nodes and implies ``verify=false``.
+     - boolean
+     - ``true`` (system/node contains only templates) or ``false`` (regular 
+       system/node, default)
    * - ``deploy``
      - Node access method. Default is ``ssh`` if not defined with this
        property. **NOTE:** Affects all sub-systems and their nodes, too.

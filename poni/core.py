@@ -136,7 +136,8 @@ class Item(dict):
 
     def verify_enabled(self):
         """Is verification (including deploy and audit) enabled for item?"""
-        return self.get_tree_property("verify", True)
+        return (self.get_tree_property("verify", True) 
+                and not self.get_tree_property("template", False))
 
     def get_tree_property(self, name, default=None):
         """Return property value from the closest ancestor (including self)"""

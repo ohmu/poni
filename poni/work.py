@@ -55,6 +55,7 @@ class Runner:
                        (task.stop_time - task.start_time))
         self.started.remove(task)
         self.stopped.add(task)
+        self.finished_queue.task_done()
 
     def run_all(self):
         while self.not_started or self.started:
