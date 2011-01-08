@@ -12,7 +12,7 @@ class PlugIn(config.PlugIn):
 
         remote = self.node.get_remote(override=arg.method)
         remote.execute("/root/inst-puppet-agent.sh")
-        self.log.info("%s/%s install: install: done",
+        self.log.info("%s/%s install - done",
                       self.node.name, self.config.name)
 
     def puppetrun(self, arg):
@@ -20,8 +20,8 @@ class PlugIn(config.PlugIn):
         remote.execute("puppetrun --all")
 
     def add_controls(self):
-        self.add_argh_control("install", self.install)
-        self.add_argh_control("puppetrun", self.puppetrun)
+        self.add_argh_control(self.install, requires=["puppet-master"])
+        self.add_argh_control(self.puppetrun)
 
     def add_actions(self):
         self.add_file("inst-puppet-agent.sh", mode=0500,

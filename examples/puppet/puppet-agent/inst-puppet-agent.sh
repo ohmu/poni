@@ -12,7 +12,7 @@ echo force-confdef >> /etc/dpkg/dpkg.cfg
 apt-get -q update
 
 # add puppet master to /etc/hosts
-#set $master = $get_node("puppet/master")
+#set $master = $get_node("example/master")
 echo >> /etc/hosts
 echo "# puppet master" >> /etc/hosts
 echo "$master.private.ip $master.private.dns.lower() puppet" >> /etc/hosts
