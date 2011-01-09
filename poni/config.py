@@ -285,7 +285,6 @@ class Manager:
                           dest_path)
 
     def add_file(self, **kw):
-        self.log.debug("add_file: %s", kw)
         self.files.append(kw)
 
 
@@ -311,11 +310,15 @@ class PlugIn:
         run a single remote shell-script, raise ControlError on non-zero
         exit-code
         """
-        remote = self.node.get_remote(override=arg.method)
-        exit_code = remote.execute(script_path, verbose=arg.verbose)
+        names = self.get_names()
+        rendered_path = str(CheetahTemplate(script_path,
+                                            searchList=[self.get_names()]))
+
+        remote = arg.node.get_remote(override=arg.method)
+        exit_code = remote.execute(rendered_path, verbose=arg.verbose)
         if exit_code:
             raise errors.ControlError("%r failed with exit code %r" % (
-                    script_path, exit_code))
+                    rendered_path, exit_code))
 
     def add_argh_control(self, handler, provides=None, requires=None):
         try:
@@ -347,14 +350,17 @@ class PlugIn:
         # overridden in subclass
         pass
 
-    def iter_control_operations(self):
+    def iter_control_operations(self, node, config):
         for name, prop in self.controls.iteritems():
             out = prop.copy()
             out["name"] = name
+            out["config"] = config
+            out["node"] = node
             yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
-                            method=None, send_output=None):
+                            method=None, send_output=None, node=None):
+        assert node
         parser = argh.ArghParser(prog="control")
         parser.add_commands([handler])
         full_args = [control_name] + args
@@ -362,6 +368,7 @@ class PlugIn:
         namespace.verbose = verbose
         namespace.method = method
         namespace.send_output = send_output
+        namespace.node = node
         parser.dispatch(argv=full_args, namespace=namespace)
 
     def add_file(self, source_path, dest_path=None, source_text=None,

@@ -71,7 +71,7 @@ class ControlTask(work.Task):
 
     def send_output(self, msg):
         # TODO: label each output line
-        self.log.info("%s/%s[%s]: %s" % (self.op["node"].name, 
+        self.log.info("%s/%s[%s]: %s" % (self.op["node"].name,
                                          self.op["config"].name,
                                          self.op["name"], msg))
 
@@ -95,12 +95,18 @@ class ControlTask(work.Task):
             for dep_op in self.op.get("depends", []):
                 if dep_op["result"]:
                     # dependency task has failed, cannot continue
-                    raise errors.ControlError("dependency task failed")
+                    dep_name = "%s/%s[%s]" % (dep_op["node"].name,
+                                              dep_op["config"].name,
+                                              dep_op["name"])
+
+                    raise errors.ControlError("dependency task %s failed" % (
+                            dep_name))
 
             handler_func = self.op["callback"]
-            ret = handler_func(self.op["name"], self.args, 
-                               verbose=self.verbose, 
-                               method=self.method, 
+            ret = handler_func(self.op["name"], self.args,
+                               node=self.op["node"],
+                               verbose=self.verbose,
+                               method=self.method,
                                send_output=self.send_output)
             self.log.debug("op %s returns: %r", self.op["name"], ret)
             self.op["result"] = ret
@@ -347,15 +353,15 @@ class Tool:
                                conf.name)
                 continue
 
-            for op in plugin.iter_control_operations():
+            for op in plugin.iter_control_operations(conf_node, conf):
                 all_ops.append(op)
                 for feature in op["provides"]:
                     ops = provider.setdefault(feature, [])
                     ops.append(op)
-                    
+
         def add_all_required_ops(op):
-            node = op["plugin"].node
-            conf = op["plugin"].config
+            node = op["node"]
+            conf = op["config"]
             tasks[(node.name, conf.name, op["name"])] = op
             for feature in op["requires"]:
                 try:
@@ -375,8 +381,8 @@ class Tool:
         tasks = {}
         comparison = core.ConfigMatch(arg.pattern, full_match=arg.full_match)
         for op in all_ops:
-            node = op["plugin"].node
-            conf = op["plugin"].config
+            node = op["node"]
+            conf = op["config"]
             # control op name, node name, config name, all must match
             if ((arg.operation != op["name"])
                 or not comparison.match_node(node.name)
@@ -390,11 +396,10 @@ class Tool:
 
         # assign tasks
         runner = work.Runner()
-        logger = self.log.info if arg.verbose else self.log.debug
         for op_id, op in tasks.iteritems():
             plugin = op["plugin"]
-            logger("%s: %s: control %r", plugin.node.name, plugin.config.name, 
-                   op["name"])
+            self.log.debug("%s: %s[%s] collected", op["node"].name,
+                           op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                method=arg.method)
             runner.add_task(task)
@@ -468,7 +473,7 @@ class Tool:
             except errors.RemoteError, error:
                 self.log.error("failed: %s", error)
                 ret = -1
- 
+
         return ret
 
     ## def handle_control(self, arg):
