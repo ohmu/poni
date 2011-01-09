@@ -289,6 +289,14 @@ class Manager:
         self.files.append(kw)
 
 
+def control(provides=None, requires=None):
+    """decorate a PlugIn method as a 'poni control' command"""
+    def wrap(method):
+        method.poni_control = dict(provides=provides, requires=requires)
+        return method
+
+    return wrap
+
 class PlugIn:
     def __init__(self, manager, config, node, top_config):
         self.log = logging.getLogger("plugin")
@@ -297,6 +305,17 @@ class PlugIn:
         self.top_config = top_config
         self.node = node
         self.controls = {}
+
+    def remote_execute(self, arg, script_path):
+        """
+        run a single remote shell-script, raise ControlError on non-zero
+        exit-code
+        """
+        remote = self.node.get_remote(override=arg.method)
+        exit_code = remote.execute(script_path, verbose=arg.verbose)
+        if exit_code:
+            raise errors.ControlError("%r failed with exit code %r" % (
+                    script_path, exit_code))
 
     def add_argh_control(self, handler, provides=None, requires=None):
         try:
@@ -315,7 +334,17 @@ class PlugIn:
                                    provides = provides or [],
                                    requires = requires or [])
 
+    def add_all_controls(self):
+        self.add_controls()
+
+        # add controls defined using the 'control' decorator
+        for name, prop in self.__class__.__dict__.iteritems():
+            if hasattr(prop, "poni_control"):
+                self.add_argh_control(getattr(self, prop.__name__),
+                                      **prop.poni_control)
+
     def add_controls(self):
+        # overridden in subclass
         pass
 
     def iter_control_operations(self):
@@ -371,6 +400,8 @@ class PlugIn:
 
     def render_text(self, source_path, dest_path):
         try:
+            # paths are always rendered as templates
+            dest_path = self.render_cheetah(None, dest_path)[0]
             return dest_path, file(source_path, "rb").read()
         except (IOError, OSError), error:
             raise errors.VerifyError(source_path, error)
@@ -400,7 +431,12 @@ class PlugIn:
         names = self.get_names()
         # TODO: template caching
         try:
-            text = str(CheetahTemplate(file=source_path, searchList=[names]))
+            if source_path is not None:
+                text = str(CheetahTemplate(file=source_path,
+                                           searchList=[names]))
+            else:
+                text = None
+
             if dest_path:
                 dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
 

@@ -76,7 +76,7 @@ class ConfigMatch:
 
         return self.match_config(conf.name)
 
-        
+
 class Item(dict):
     """Generic tree item type"""
     def __init__(self, typename, system, name, item_dir, conf_file, extra):
@@ -136,7 +136,7 @@ class Item(dict):
 
     def verify_enabled(self):
         """Is verification (including deploy and audit) enabled for item?"""
-        return (self.get_tree_property("verify", True) 
+        return (self.get_tree_property("verify", True)
                 and not self.get_tree_property("template", False))
 
     def get_tree_property(self, name, default=None):
@@ -236,7 +236,7 @@ class Config(Item):
         module = imp.load_source("plugin", plugin_path)
         plugin = module.PlugIn(manager, self, node, top_config)
         plugin.add_actions()
-        plugin.add_controls()
+        plugin.add_all_controls()
         top_config.plugin = plugin # TODO
 
     def collect_parents(self, manager, node, top_config=None):

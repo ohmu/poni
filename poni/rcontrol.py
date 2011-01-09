@@ -38,15 +38,17 @@ class RemoteControl:
             return color
         else:
             return colors.Output(sys.stdout, color="no").color
-            
+
     def execute(self, command, verbose=False, color=None):
         color = self.get_color(color)
         self.tag_line("BEGIN", command, verbose=verbose, color=color)
+        result = None
         try:
             result = self.execute_command(command)
             return result
         except Exception, error:
             result = "%s: %s" % (error.__class__.__name__, error)
+            raise
         finally:
             self.tag_line("END", command, result=result, verbose=verbose,
                           color=color)
