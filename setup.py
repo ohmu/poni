@@ -16,7 +16,6 @@ depends = [
     "path.py>=2.2.2",
     "paramiko>=1.7.6",
     "cheetah",
-    "boto>=2.0b3",
     "GitPython",
     "argh>=0.13",
     ]

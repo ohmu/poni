@@ -12,8 +12,12 @@ import time
 import logging
 from . import errors
 
+boto_requirement = '2.0'
+
 try:
+    import boto
     import boto.ec2
+    import boto.exception
 except ImportError:
     boto = None
 
@@ -129,6 +133,7 @@ class AwsProvider(Provider):
 
     def __init__(self, cloud_prop):
         assert boto, "boto is not installed, cannot access AWS"
+        assert boto.Version >= boto_requirement, "boto version is too old, cannot access AWS"
         Provider.__init__(self, AWS_EC2)
         self.log = logging.getLogger(AWS_EC2)
         self.region = cloud_prop["region"]
