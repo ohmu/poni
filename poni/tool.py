@@ -396,10 +396,11 @@ class Tool:
 
         # assign tasks
         runner = work.Runner()
+        logger = self.log.info if arg.verbose else self.log.debug
         for op_id, op in tasks.iteritems():
             plugin = op["plugin"]
-            self.log.debug("%s: %s[%s] collected", op["node"].name,
-                           op["config"].name, op["name"])
+            logger("scheduled to run: %s/%s[%s]", op["node"].name,
+                   op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                method=arg.method)
             runner.add_task(task)
@@ -409,14 +410,25 @@ class Tool:
 
         # collect results
         results = [task.op["result"] for task in runner.stopped]
+        assert len(results) == len(tasks)
+
+        if arg.verbose:
+            for task in runner.stopped:
+                res = task.op["result"]
+                if res:
+                    self.log.error("FAILED: %s/%s[%s]: %r",
+                                   task.op["node"].name,
+                                   task.op["config"].name, task.op["name"],
+                                   task.op["result"])
+
         self.log.debug("all tasks finished: %r", results)
         failed = [r for r in results if r]
         if failed:
             raise errors.ControlError("[%d/%d] control tasks failed" % (
-                    len(failed), len(results)))
+                    len(failed), len(tasks)))
         else:
             self.log.info("all [%d] control tasks finished successfully" % (
-                    len(results)))
+                    len(tasks)))
 
     @argh.alias("exec")
     @arg_verbose
