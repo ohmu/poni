@@ -327,6 +327,8 @@ class Tool:
     @argh.alias("control")
     @arg_verbose
     @arg_full_match
+    @argh.arg("-j", "--jobs", metavar="N", type=int,
+              help="max concurrent tasks (default: unlimited)")
     @argh.arg('pattern', type=str, help='config search pattern')
     @arg_host_access_method
     @argh.arg('operation', type=str, help='operation to execute')
@@ -395,7 +397,7 @@ class Tool:
             raise errors.UserError("no matching operations found")
 
         # assign tasks
-        runner = work.Runner()
+        runner = work.Runner(max_jobs=arg.jobs)
         logger = self.log.info if arg.verbose else self.log.debug
         for op_id, op in tasks.iteritems():
             plugin = op["plugin"]

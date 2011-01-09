@@ -26,13 +26,14 @@ class Task(threading.Thread):
 
 
 class Runner:
-    def __init__(self):
+    def __init__(self, max_jobs=None):
         self.log = logging.getLogger("runner")
         self.not_started = set()
         self.started = set()
         self.stopped = set()
         self.finished_queue = queue.Queue()
-        
+        self.max_jobs = max_jobs
+
     def add_task(self, task):
         task.runner = self
         self.not_started.add(task)
@@ -42,6 +43,9 @@ class Runner:
 
     def check(self):
         for task in list(self.not_started):
+            if self.max_jobs and (len(self.started) > self.max_jobs):
+                continue
+
             if not task.can_start():
                 continue
 
