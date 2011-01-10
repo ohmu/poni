@@ -4,7 +4,7 @@ Poni Changelog
 
 Version 0.4
 ===========
-:release date: under development
+:release date: 2011-01-10
 
 * ``poni control`` command dependencies using ``provides=["foo"]`` and 
   ``requires=["foo"]``
@@ -15,6 +15,7 @@ Version 0.4
 * updated puppet example to install everything using control commands
 * new ``template:bool`` system/node property for disabling control commands
   and config template verification for template nodes
+* limiting concurrent ``poni control`` tasks with ``--jobs=N``
 
 Version 0.3.1
 =============

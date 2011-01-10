@@ -11,7 +11,7 @@ class Task(threading.Thread):
         self.daemon = True
         self.runner = None
         self.start_time = None
-        self.stop_tie = None
+        self.stop_time = None
 
     def can_start(self):
         return True

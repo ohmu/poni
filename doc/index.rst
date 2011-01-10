@@ -36,6 +36,7 @@ Contents
    properties
    modify
    template-variables
+   plugins
    ec2
    remote
    vc
