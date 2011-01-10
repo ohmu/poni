@@ -1089,6 +1089,12 @@ class Tool:
 
         return exit_code
 
+    def execute(self, args):
+        exit_code = self.run(args)
+        if exit_code != 0:
+            raise errors.UserError("command failed with exit code %d" % exit_code)
+        return exit_code
+
     def main(self):
         """Setup logging and run a single command specified by sys.argv"""
         #format = "%(asctime)s\t%(threadName)s\t%(name)s\t%(levelname)s\t%(message)s"
