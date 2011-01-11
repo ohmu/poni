@@ -1,5 +1,11 @@
 from path import path
-import git
+
+try:
+    import git
+    if git.__version__ < '0.3':
+        git = None
+except ImportError:
+    git = None
 
 GIT_IGNORE = """\
 *~
@@ -13,6 +19,7 @@ class VersionControl:
 
 class GitVersionControl(VersionControl):
     def __init__(self, repo_dir, init=False):
+        assert git, "GitPython not installed or too old."
         VersionControl.__init__(self, repo_dir)
         if init:
             self.init_repo(repo_dir)
