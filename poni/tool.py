@@ -114,10 +114,14 @@ class ControlTask(work.Task):
             self.log.error("%s/%s[%s] failed: %s: %s" % (
                     self.op["node"].name, self.op["config"].name,
                     self.op["name"], error.__class__.__name__, error))
-            self.op["result"] = -1
-        except:
+            self.op["result"] = "%s: %s" % (error.__class__.__name__, error)
+        except Exception, error:
+            self.log.error("%s/%s[%s] failed: %s: %s" % (
+                    self.op["node"].name, self.op["config"].name,
+                    self.op["name"], error.__class__.__name__, error))
+            self.op["result"] = "Unhandled error: %s: %s" % (
+                error.__class__.__name__, error)
             self.log.exception("task exception")
-            self.op["result"] = -1
             raise
 
 
