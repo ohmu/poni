@@ -2,7 +2,7 @@ rst2html=rst2html
 
 all: dist doc readme example-doc
 
-include Makefile.debian
+include package.mk
 
 dist: doc readme
 	python setup.py sdist
