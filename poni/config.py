@@ -305,11 +305,16 @@ class PlugIn:
         self.node = node
         self.controls = {}
 
-    def remote_execute(self, arg, script_path, yield_stdout=False):
+    def remote_execute(self, arg, script_path):
+        for line in self.remote_gen_execute(arg, script_path):
+            pass
+
+    def remote_gen_execute(self, arg, script_path, yield_stdout=False):
         """
         run a single remote shell-script, raise ControlError on non-zero
-        exit-code
+        exit-code, optionally yields stdout line-per-line
         """
+        print "REMOTE_EXECUTE", arg, script_path, yield_stdout
         names = self.get_names()
         if isinstance(script_path, (list, tuple)):
             script_path = " ".join(script_path)
