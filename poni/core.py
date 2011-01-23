@@ -7,6 +7,7 @@ See LICENSE for details.
 """
 
 import re
+import sys
 import imp
 import shutil
 from path import path
@@ -373,10 +374,19 @@ class ConfigMan:
         self.config_path = self.root_dir / REPO_CONF_FILE
         self.node_cache = {}
         if must_exist:
-            # TODO: actually use it for something
-            self.load_config()
+            conf = self.load_config()
+            self.apply_library_paths(conf.get("libpath", {}))
 
         self.vc = vc.create_vc(self.root_dir)
+
+    def apply_library_paths(self, path_dict):
+        """add repo's custom library include paths to sys.path"""
+        for lib_path in path_dict.values():
+            lib_path = path(lib_path)
+            if not lib_path.isabs():
+                lib_path = self.root_dir / lib_path
+
+            sys.path.append(lib_path)
 
     def init_repo(self):
         if self.config_path.exists():
@@ -392,6 +402,12 @@ class ConfigMan:
             raise errors.RepoError("repository '%s' init failed: %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
 
+    def set_library_path(self, name, lib_path):
+        conf = self.load_config()
+        libpath = conf.setdefault("libpath", {})
+        libpath[name] = lib_path
+        self.save_config(conf)
+
     def load_config(self):
         try:
             return json.load(file(self.config_path))
@@ -400,6 +416,8 @@ class ConfigMan:
                 "%s: not a valid repo (hint: 'init'-command): %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
 
+    def save_config(self, conf):
+        util.json_dump(conf, self.config_path)
 
     def cleanup(self):
         for node in self.node_cache.itervalues():

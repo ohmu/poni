@@ -328,6 +328,44 @@ class Tool:
             self.log.info("config %r added to: %s", arg.config,
                           ", ".join(updates))
 
+    @argh.alias("add-library")
+    @arg_verbose
+    @arg_full_match
+    @argh.arg('-c', '--config', type=str, help='config search pattern')
+    @argh.arg('name', type=str, help='library name')
+    @argh.arg('path', type=path, help='library path within config')
+    def handle_add_library(self, arg):
+        """add a Python library from a config to PYTHONPATH"""
+        confman = core.ConfigMan(arg.root_dir)
+
+        if arg.config:
+            # path is relative to a config
+            configs = list(confman.find_config(arg.config))
+            if not configs:
+                raise errors.UserError(
+                    "no config matching %r found" % arg.config)
+            elif len(configs) > 1:
+                raise errors.UserError(
+                    "%r matched more than one config: %s" % (
+                        arg.config, ", ".join(("%s/%s" % (n.name, c.name))
+                                              for n, c in configs)))
+
+            node, conf = configs[0]
+            full_path = conf.path / arg.path
+            store_path = full_path[len(confman.root_dir):]
+        else:
+            # arbitrary system dir path
+            full_path = arg.path.abspath()
+            store_path = full_path
+
+        if not full_path.isdir():
+            raise errors.UserError("directory %r does not exist" % (
+                    str(full_path)))
+
+        confman.set_library_path(arg.name, store_path)
+        logger = self.log.info if arg.verbose else self.log.debug
+        logger("library %r path set: %s", arg.name, str(store_path))
+
     @argh.alias("control")
     @arg_verbose
     @arg_full_match
@@ -989,14 +1027,16 @@ class Tool:
             "-c", "--color", dest="color_mode", default="auto",
             choices=["on", "off", "auto"], help="use color highlighting")
 
-        parser.add_commands([
+        commands = [
             self.handle_list, self.handle_add_system, self.handle_init,
             self.handle_import, self.handle_script, self.handle_add_config,
             self.handle_update_config, self.handle_version,
-            self.handle_control, self.handle_require,
+            self.handle_control, self.handle_require, self.handle_add_library,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
-            ])
+            ]
+        commands.sort(key=lambda func: func.__name__)
+        parser.add_commands(commands)
 
         parser.add_commands([
                 self.handle_cloud_init, self.handle_cloud_terminate,
