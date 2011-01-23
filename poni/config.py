@@ -338,6 +338,7 @@ class PlugIn:
             return self.handle_argh_control(handler, control_name, args,
                                             **kwargs)
 
+        name = name.replace("_", "-")
         self.controls[name] = dict(callback = handle_control,
                                    plugin = self,
                                    node = self.node,
