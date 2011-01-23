@@ -314,7 +314,6 @@ class PlugIn:
         run a single remote shell-script, raise ControlError on non-zero
         exit-code, optionally yields stdout line-per-line
         """
-        print "REMOTE_EXECUTE", arg, script_path, yield_stdout
         names = self.get_names()
         if isinstance(script_path, (list, tuple)):
             script_path = " ".join(script_path)

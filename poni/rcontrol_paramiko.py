@@ -58,7 +58,6 @@ def interactive_shell(chan):
                 try:
                     x = chan.recv(1024)
                     if len(x) == 0:
-                        #print '\r\n*** EOF\r\n',
                         break
                     sys.stdout.write(x)
                     sys.stdout.flush()
