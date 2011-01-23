@@ -71,9 +71,9 @@ class ControlTask(work.Task):
 
     def send_output(self, msg):
         # TODO: label each output line
-        self.log.info("%s/%s[%s]: %s" % (self.op["node"].name,
-                                         self.op["config"].name,
-                                         self.op["name"], msg))
+        self.log.info("%s/%s [%s]: %s" % (self.op["node"].name,
+                                          self.op["config"].name,
+                                          self.op["name"], msg))
 
     def can_start(self):
         """return True when it is ok to start this task"""
@@ -95,9 +95,9 @@ class ControlTask(work.Task):
             for dep_op in self.op.get("depends", []):
                 if dep_op["result"]:
                     # dependency task has failed, cannot continue
-                    dep_name = "%s/%s[%s]" % (dep_op["node"].name,
-                                              dep_op["config"].name,
-                                              dep_op["name"])
+                    dep_name = "%s/%s [%s]" % (dep_op["node"].name,
+                                               dep_op["config"].name,
+                                               dep_op["name"])
 
                     raise errors.ControlError("dependency task %s failed" % (
                             dep_name))
@@ -111,12 +111,12 @@ class ControlTask(work.Task):
             self.log.debug("op %s returns: %r", self.op["name"], ret)
             self.op["result"] = ret
         except errors.Error, error:
-            self.log.error("%s/%s[%s] failed: %s: %s" % (
+            self.log.error("%s/%s [%s] failed: %s: %s" % (
                     self.op["node"].name, self.op["config"].name,
                     self.op["name"], error.__class__.__name__, error))
             self.op["result"] = "%s: %s" % (error.__class__.__name__, error)
         except Exception, error:
-            self.log.error("%s/%s[%s] failed: %s: %s" % (
+            self.log.error("%s/%s [%s] failed: %s: %s" % (
                     self.op["node"].name, self.op["config"].name,
                     self.op["name"], error.__class__.__name__, error))
             self.op["result"] = "Unhandled error: %s: %s" % (
@@ -405,7 +405,7 @@ class Tool:
         logger = self.log.info if arg.verbose else self.log.debug
         for op_id, op in tasks.iteritems():
             plugin = op["plugin"]
-            logger("scheduled to run: %s/%s[%s]", op["node"].name,
+            logger("scheduled to run: %s/%s [%s]", op["node"].name,
                    op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                method=arg.method)
@@ -422,7 +422,7 @@ class Tool:
             for task in runner.stopped:
                 res = task.op["result"]
                 if res:
-                    self.log.error("FAILED: %s/%s[%s]: %r",
+                    self.log.error("FAILED: %s/%s [%s]: %r",
                                    task.op["node"].name,
                                    task.op["config"].name, task.op["name"],
                                    task.op["result"])
