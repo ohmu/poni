@@ -198,7 +198,6 @@ class Config(Item):
             self.settings_dir.mkdir()
 
         full_path = self.settings_dir / file_name
-        print "SAVING:", full_path
         util.json_dump(layer, full_path)
         self.settings.reload()
 
