@@ -352,7 +352,7 @@ class Tool:
 
             node, conf = configs[0]
             full_path = conf.path / arg.path
-            store_path = full_path[len(confman.root_dir):]
+            store_path = confman.root_dir.relpathto(full_path)
         else:
             # arbitrary system dir path
             full_path = arg.path.abspath()
@@ -361,6 +361,11 @@ class Tool:
         if not full_path.isdir():
             raise errors.UserError("directory %r does not exist" % (
                     str(full_path)))
+
+        if full_path.isabs():
+            self.log.warning("absolute Python library path to %r stored, "
+                             "this may compromise repository portability",
+                             str(full_path))
 
         confman.set_library_path(arg.name, store_path)
         logger = self.log.info if arg.verbose else self.log.debug
