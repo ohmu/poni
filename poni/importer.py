@@ -53,11 +53,12 @@ class DebImporter(Importer):
                 write = (old != contents)
 
             logger = self.log.info if self.verbose else self.log.debug
+            pretty_path = confman.root_dir.relpathto(dest_path)
             if write:
                 file(dest_path, "wb").write(contents)
-                logger("imported: %s", dest_path)
+                logger("imported: %s", pretty_path)
             else:
-                logger("unchanged: %s", dest_path)
+                logger("unchanged: %s", pretty_path)
 
 
 def get_importer(source_path, **kwargs):
