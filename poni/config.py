@@ -305,20 +305,28 @@ class PlugIn:
         self.node = node
         self.controls = {}
 
-    def remote_execute(self, arg, script_path):
+    def remote_execute(self, arg, script_path, yield_stdout=False):
         """
         run a single remote shell-script, raise ControlError on non-zero
         exit-code
         """
         names = self.get_names()
+        if isinstance(script_path, (list, tuple)):
+            script_path = " ".join(script_path)
+
         rendered_path = str(CheetahTemplate(script_path,
                                             searchList=[self.get_names()]))
 
         remote = arg.node.get_remote(override=arg.method)
-        exit_code = remote.execute(rendered_path, verbose=arg.verbose)
+        lines = [] if yield_stdout else None
+        exit_code = remote.execute(rendered_path, verbose=arg.verbose,
+                                   output_lines=lines)
         if exit_code:
             raise errors.ControlError("%r failed with exit code %r" % (
                     rendered_path, exit_code))
+
+        for line in (lines or []):
+            yield line
 
     def add_argh_control(self, handler, provides=None, requires=None):
         try:

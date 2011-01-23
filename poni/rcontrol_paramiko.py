@@ -175,8 +175,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                     # TODO: will this catch all stderr output?
                     x = channel.recv_stderr(BS)
                     if x:
-                        sys.stderr.write(x)
-                        sys.stderr.flush()
+                        yield rcontrol.STDERR, x
 
                 for file_out in r:
                     x = file_out.recv(BS)
@@ -184,18 +183,19 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                         reading = False
                         break
 
-                    sys.stdout.write(x)
-                    sys.stdout.flush()
+                    yield rcontrol.STDOUT, x
 
-            return channel.recv_exit_status()
+            exit_code = channel.recv_exit_status()
         finally:
             if channel.recv_stderr_ready():
                 # TODO: will this catch all stderr output?
                 x = channel.recv_stderr(BS)
                 if x:
-                    sys.stderr.write(x)
-                    sys.stderr.flush()
+                    yield rcontrol.STDERR, x
+
             channel.close()
+
+        yield rcontrol.DONE, exit_code
 
     @convert_paramiko_errors
     def execute_shell(self):

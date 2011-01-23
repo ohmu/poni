@@ -415,7 +415,7 @@ class Tool:
         runner.run_all()
 
         # collect results
-        results = [task.op["result"] for task in runner.stopped]
+        results = [task.op.get("result") for task in runner.stopped]
         assert len(results) == len(tasks)
 
         if arg.verbose:

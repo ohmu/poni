@@ -13,8 +13,15 @@ import subprocess
 import logging
 import shutil
 import sys
+import select
 from . import errors
 from . import colors
+
+
+DONE = 0
+STDOUT = 1
+STDERR = 2
+
 
 class RemoteControl:
     def __init__(self, node):
@@ -39,13 +46,30 @@ class RemoteControl:
         else:
             return colors.Output(sys.stdout, color="no").color
 
-    def execute(self, command, verbose=False, color=None):
+    def execute(self, command, verbose=False, color=None, output_lines=None):
         color = self.get_color(color)
         self.tag_line("BEGIN", command, verbose=verbose, color=color)
         result = None
+        output_chunks = []
         try:
-            result = self.execute_command(command)
-            return result
+            while True:
+                for code, output in self.execute_command(command):
+                    if code == STDOUT:
+                        if output_lines is not None:
+                            output_chunks.append(output)
+                        else:
+                            sys.stdout.write(output)
+                            sys.stdout.flush()
+                    elif code == STDERR:
+                        sys.stderr.write(output)
+                        sys.stderr.flush()
+                    else: # DONE
+                        if output_lines is not None:
+                            output_lines.extend(
+                                ("".join(output_chunks)).splitlines())
+
+                        result = output
+                        return output
         except Exception, error:
             result = "%s: %s" % (error.__class__.__name__, error)
             raise
@@ -129,7 +153,19 @@ class LocalControl(RemoteControl):
 
     @convert_local_errors
     def execute_command(self, cmd):
-        return subprocess.call(cmd)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        fds = [process.stdout, process.stderr]
+        CHUNK = 2**20
+        while process.poll() is None:
+            r, w, e = select.select(fds, [], fds)
+            if process.stdout in r:
+                yield STDOUT, process.stdout.read(CHUNK)
+
+            if process.stderr in r:
+                yield STDERR, process.stderr.read(CHUNK)
+
+        yield DONE, process.returncode
 
     @convert_local_errors
     def execute_shell(self):
