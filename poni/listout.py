@@ -108,7 +108,7 @@ class ListOutput(colors.Output):
         return self.value_repr(entry["prop"], top_level=True)
 
     def format_controls(self, entry):
-        yield ", ".join(entry["controls"]), "controls"
+        yield ", ".join(sorted(entry["controls"])), "controls"
 
     def format_system(self, entry):
         name = entry["item"].name
