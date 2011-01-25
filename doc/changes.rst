@@ -2,11 +2,27 @@
 Poni Changelog
 ==============
 
+Version 0.4.2
+=============
+:release date: 2011-01-23
+
+* added ``poni add-library`` command for specifying directories (that can be
+  within Poni configs) which are added to the Python ``sys.path`` accessible
+  by Poni plugins
+* requires GitPython>=0.3.1 and Cheetah>=2.4.2
+
+Version 0.4.1
+=============
+:release date: 2011-01-11
+
+* bugfix: ``remote exec`` process exit code is now properly checked
+* better error messages for failed ``poni control`` commands
+
 Version 0.4
 ===========
 :release date: 2011-01-10
 
-* ``poni control`` command dependencies using ``provides=["foo"]`` and 
+* ``poni control`` command dependencies using ``provides=["foo"]`` and
   ``requires=["foo"]``
 * parallel execution of "control" commands, runs max one concurrent task per
   host and obeys control command dependencies
@@ -21,7 +37,7 @@ Version 0.3.1
 =============
 :release date: 2010-12-26
 
-* added ``poni require`` command that can be used to specify minimum poni 
+* added ``poni require`` command that can be used to specify minimum poni
   version required by a script, e.g. ``poni require 'poni_version >= "0.3.1"'``
 
 Version 0.3
@@ -30,25 +46,25 @@ Version 0.3
 
 * Poni is now in Python Package Index: http://pypi.python.org/pypi/poni and
   easy_installable
-* syntax change for setting properties, new syntax: 
+* syntax change for setting properties, new syntax:
   ``poni set NODE PROPERTY[:MOD1[:MODN[...]]]=VALUE``
-* allow multiple conversions using the ``set`` command, e.g. 
+* allow multiple conversions using the ``set`` command, e.g.
   ``poni set linux/ private.ip:prop:ipv4=node.host`` will get the ``node.host``
-  value, resolve it to an ipv4 address and store it to ``private.ip`` 
+  value, resolve it to an ipv4 address and store it to ``private.ip``
   (see http://melor.github.com/poni/modify.html#chaining-conversions)
 * setting properties supports UUIDs, resolving ipv4 and ipv6 addresses,
   decoding/encoding using Python codecs, JSON encoding/decoding, SI and IEEE
   multiplier suffies (e.g. ``10M`` or ``100Kib``) for numbers
-* basic support for custom ``poni control`` commands defined in config 
+* basic support for custom ``poni control`` commands defined in config
   plugins (see e.g. ``examples/puppet/puppet-agent/plugin.py``)
-* documented functions and variables that are available in templates: 
+* documented functions and variables that are available in templates:
   http://melor.github.com/poni/template-variables.html
-* ``poni deploy/audit --path-prefix=/foo/bar`` now creates sub-directories for 
+* ``poni deploy/audit --path-prefix=/foo/bar`` now creates sub-directories for
   each node to prevent conflicts when deploying files from multiple nodes to
   the same directory
-* Genshi XML-based template support using ``self.render_genshi_xml`` in 
+* Genshi XML-based template support using ``self.render_genshi_xml`` in
   plugins
-* ``find_config(PATTERN)`` is available in templates, yields matching configs 
+* ``find_config(PATTERN)`` is available in templates, yields matching configs
   and their nodes
 * added ``poni version`` command, displays the poni version number
 
@@ -72,7 +88,7 @@ Version 0.2
 * ``poni list`` arguments ``-n`` (show nodes, default), ``-s`` (show systems)
   and ``-c`` (show configs)
 * the top-level config is available to templates as ``$config``
-* renamed version-control commands: ``commit`` is now ``checkpoint`` and 
+* renamed version-control commands: ``commit`` is now ``checkpoint`` and
   ``status`` is now ``diff``
 * added ``--full-match``, ``-M`` to many commands, requires full pattern
   match (e.g. with node names) instead of partial match (which is default)
@@ -87,7 +103,7 @@ Version 0.2
 * ``poni add-node`` supports ``--copy-props`` (used with ``--inherit NODE``),
   copies all node properties from the source node
 * parent node's inherited configs are properly collected and used in deployment
-* basic repository version-control support with Git using ``poni vc init``, 
+* basic repository version-control support with Git using ``poni vc init``,
   ``poni vc checkpoint MSG`` and ``poni vc diff`` commands
 * ``poni add-config --copy-dir=DIR`` copies config templates, plugins, etc.
   from the given directory
