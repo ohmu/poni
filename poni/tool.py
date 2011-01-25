@@ -90,18 +90,20 @@ class ControlTask(work.Task):
 
         return True
 
+    def check_dependencies(self):
+        for dep_op in self.op.get("depends", []):
+            if dep_op["result"]:
+                # dependency task has failed, cannot continue
+                dep_name = "%s/%s [%s]" % (dep_op["node"].name,
+                                           dep_op["config"].name,
+                                           dep_op["name"])
+
+                raise errors.ControlError("dependency task %s failed" % (
+                        dep_name))
+
     def execute(self):
         try:
-            for dep_op in self.op.get("depends", []):
-                if dep_op["result"]:
-                    # dependency task has failed, cannot continue
-                    dep_name = "%s/%s [%s]" % (dep_op["node"].name,
-                                               dep_op["config"].name,
-                                               dep_op["name"])
-
-                    raise errors.ControlError("dependency task %s failed" % (
-                            dep_name))
-
+            self.check_dependencies()
             handler_func = self.op["callback"]
             ret = handler_func(self.op["name"], self.args,
                                node=self.op["node"],
@@ -425,10 +427,6 @@ class Tool:
             conf = op["config"]
             tasks[(node.name, conf.name, op["name"])] = op
 
-            if arg.no_deps:
-                # depenency tasks are not to be executed
-                return
-
             for feature in op["requires"]:
                 try:
                     provider_ops = provider[feature]
@@ -455,15 +453,29 @@ class Tool:
                 or not comparison.match_config(conf.name)):
                 continue
 
+            op["run"] = True # only explicit targets are marked for running
             add_all_required_ops(op)
 
         if not tasks:
             raise errors.UserError("no matching operations found")
 
+        if arg.no_deps:
+            # filter out the implicit dependency tasks
+            for op in all_ops:
+                depends = op.get("depends", [])
+                for dep_op in depends[:]:
+                    if not dep_op.get("run"):
+                        depends.remove(dep_op)
+
         # assign tasks
         runner = work.Runner(max_jobs=arg.jobs)
         logger = self.log.info if arg.verbose else self.log.debug
         for op_id, op in tasks.iteritems():
+            run = op.get("run") or (not arg.no_deps)
+            op["run"] = run
+            if not run:
+                continue
+
             plugin = op["plugin"]
             logger("scheduled to run: %s/%s [%s]", op["node"].name,
                    op["config"].name, op["name"])
@@ -476,7 +488,10 @@ class Tool:
 
         # collect results
         results = [task.op.get("result") for task in runner.stopped]
-        assert len(results) == len(tasks)
+        failed = [r for r in results if r]
+        skipped_count = sum(1 for op in tasks.itervalues() if not op["run"])
+        ran_count = len(tasks) - skipped_count
+        assert len(results) == ran_count
 
         if arg.verbose:
             for task in runner.stopped:
@@ -488,13 +503,14 @@ class Tool:
                                    task.op["result"])
 
         self.log.debug("all tasks finished: %r", results)
-        failed = [r for r in results if r]
         if failed:
-            raise errors.ControlError("[%d/%d] control tasks failed" % (
-                    len(failed), len(tasks)))
+            raise errors.ControlError(
+                "[%d/%d] (%d skipped) control tasks failed" % (
+                    len(failed), ran_count, skipped_count))
         else:
-            self.log.info("all [%d] control tasks finished successfully" % (
-                    len(tasks)))
+            self.log.info(
+                "all [%d] (%d skipped) control tasks finished successfully" % (
+                    ran_count, skipped_count))
 
     @argh.alias("exec")
     @arg_verbose
