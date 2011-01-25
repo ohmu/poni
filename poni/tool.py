@@ -1173,8 +1173,9 @@ class Tool:
 
     def execute(self, args):
         exit_code = self.run(args)
-        if exit_code != 0:
-            raise errors.UserError("command failed with exit code %d" % exit_code)
+        if exit_code:
+            raise errors.UserError(
+                "command %r failed with exit code %r" % (args, exit_code))
         return exit_code
 
     def main(self):
