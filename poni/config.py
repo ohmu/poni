@@ -45,7 +45,7 @@ class Manager:
                          error.__class__.__name__, error)
         self.error_count += 1
 
-    def copy_tree(self, entry, remote, path_prefix=""):
+    def copy_tree(self, entry, remote, path_prefix="", verbose=False):
         def progress(copied, total):
             sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
 
@@ -72,7 +72,7 @@ class Manager:
                 remote.utime(dest_path, (int(lstat.st_mtime),
                                          int(lstat.st_mtime)))
                 sys.stderr.write("\n")
-            else:
+            elif verbose:
                 self.log.info("already copied: %s", dest_path)
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
@@ -113,7 +113,8 @@ class Manager:
                 elif deploy:
                     # copy a directory recursively
                     remote = entry["node"].get_remote(override=access_method)
-                    self.copy_tree(entry, remote, path_prefix=item_path_prefix)
+                    self.copy_tree(entry, remote, path_prefix=item_path_prefix,
+                                   verbose=verbose)
                 else:
                     # verify
                     try:
