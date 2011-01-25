@@ -254,7 +254,18 @@ class Tool:
             if arg.verbose:
                 print "$ " + " ".join(wrap(a) for a in args)
 
-            self.parser.dispatch(argv=args, pre_call=set_repo_path)
+            # strip arguments following "--"
+            # TODO: this code is now in two places, refactor
+            namespace = argparse.Namespace()
+            try:
+                extra_loc = args.index("--")
+                namespace.extras = args[extra_loc + 1:]
+                args = args[:extra_loc]
+            except ValueError:
+                namespace.extras = []
+
+            self.parser.dispatch(argv=args, pre_call=set_repo_path,
+                                 namespace=namespace)
 
     @argh.alias("update-config")
     @arg_verbose
@@ -374,6 +385,7 @@ class Tool:
     @argh.alias("control")
     @arg_verbose
     @arg_full_match
+    @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
     @argh.arg("-j", "--jobs", metavar="N", type=int,
               help="max concurrent tasks (default: unlimited)")
     @argh.arg('pattern', type=str, help='config search pattern')
@@ -412,6 +424,11 @@ class Tool:
             node = op["node"]
             conf = op["config"]
             tasks[(node.name, conf.name, op["name"])] = op
+
+            if arg.no_deps:
+                # depenency tasks are not to be executed
+                return
+
             for feature in op["requires"]:
                 try:
                     provider_ops = provider[feature]
