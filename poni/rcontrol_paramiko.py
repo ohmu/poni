@@ -150,7 +150,8 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                                      error, retries))
 
                 if retries == 0:
-                    raise
+                    raise errors.RemoteError("ssh connect failed: %s: %s" % (
+                            error.__class__.__name__, error))
 
                 time.sleep(3)
                 retries -= 1
