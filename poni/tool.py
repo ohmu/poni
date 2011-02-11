@@ -14,6 +14,7 @@ import shlex
 import argh
 import glob
 import shutil
+import time
 from distutils.version import LooseVersion
 import argparse
 from path import path
@@ -29,6 +30,7 @@ from . import listout
 from . import colors
 from . import version
 from . import work
+from . import times
 
 
 import Cheetah.Template
@@ -103,6 +105,7 @@ class ControlTask(work.Task):
 
     def execute(self):
         try:
+            self.op["start_time"] = time.time()
             self.check_dependencies()
             handler_func = self.op["callback"]
             ret = handler_func(self.op["name"], self.args,
@@ -125,6 +128,8 @@ class ControlTask(work.Task):
                 error.__class__.__name__, error)
             self.log.exception("task exception")
             raise
+        finally:
+            self.op["stop_time"] = time.time()
 
 
 class Tool:
@@ -388,6 +393,8 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
+    @arg_flag("-t", "--show-times",
+              help="show timeline of execution for each tasks")
     @argh.arg("-j", "--jobs", metavar="N", type=int,
               help="max concurrent tasks (default: unlimited)")
     @argh.arg('pattern', type=str, help='config search pattern')
@@ -492,6 +499,17 @@ class Tool:
         skipped_count = sum(1 for op in tasks.itervalues() if not op["run"])
         ran_count = len(tasks) - skipped_count
         assert len(results) == ran_count
+
+        if arg.show_times:
+            # show task execution timelines
+            task_times = times.Times()
+            for i, task in enumerate(runner.stopped):
+                task_name = "%s/%s" % (task.op["node"].name,
+                                       task.op["config"].name)
+                task_times.add_task(i, task_name, task.op["start_time"],
+                                    task.op["stop_time"])
+
+            task_times.print_report()
 
         if arg.verbose:
             for task in runner.stopped:
