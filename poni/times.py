@@ -1,13 +1,22 @@
+import json
 import datetime
+from . import util
 
 timediff = lambda a, b: str(datetime.timedelta(seconds=int(a - b)))
 
 class Times:
     def __init__(self):
-        self.entry = {}
+        self.entry = []
+
+    def load(self, file_path):
+        self.entry = json.load(file(file_path))
+
+    def save(self, file_path):
+        util.json_dump(self.entry, file_path)
 
     def add_task(self, task_id, name, start, stop):
-        self.entry[task_id] = dict(name=name, start=start, stop=stop)
+        self.entry.append(dict(task_id=task_id, name=name, start=start,
+                               stop=stop))
 
     def positions(self, prop, start, stop):
         span = stop - start
@@ -45,12 +54,15 @@ class Times:
         return "%s%s ^%s%s %s" % (" " * begin, t0, " " * b, t, t1)
 
     def print_report(self):
-        first_start = min(e["start"] for e in self.entry.itervalues())
-        last_stop = max(e["stop"] for e in self.entry.itervalues())
+        if not self.entry:
+            return
+
+        first_start = min(e["start"] for e in self.entry)
+        last_stop = max(e["stop"] for e in self.entry)
         out = []
-        for key, prop in self.entry.iteritems():
+        for prop in self.entry:
             out.append((prop["start"],
-                        "%s: %s" % (key, prop["name"]),
+                        "%s: %s" % (prop["task_id"], prop["name"]),
                         self.time_line(prop, first_start, last_stop),
                         self.pointer_line(prop, first_start, last_stop)))
 
