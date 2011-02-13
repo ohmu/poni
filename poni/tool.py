@@ -71,11 +71,13 @@ class ControlTask(work.Task):
         self.verbose = verbose
         self.method = method
 
+    def __repr__(self):
+        return "%s/%s [%s]" % (self.op["node"].name, self.op["config"].name,
+                               self.op["name"])
+
     def send_output(self, msg):
         # TODO: label each output line
-        self.log.info("%s/%s [%s]: %s" % (self.op["node"].name,
-                                          self.op["config"].name,
-                                          self.op["name"], msg))
+        self.log.info("%s: %s", self, msg)
 
     def can_start(self):
         """return True when it is ok to start this task"""
@@ -867,9 +869,13 @@ class Tool:
                 print item
 
     @argh.alias("report")
+    @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
+              help='output file path (default: stdout)')
     def handle_report(self, arg):
         """show command execution timeline report"""
-        self.task_times.print_report()
+        out = file(arg.output_file, "w") if arg.output_file else sys.stdout
+        for chunk in self.task_times.iter_report():
+            out.write(chunk)
 
     @argh.alias("deploy")
     @arg_verbose

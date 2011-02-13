@@ -1,3 +1,4 @@
+import sys
 import json
 import datetime
 from . import util
@@ -54,6 +55,12 @@ class Times:
         return "%s%s ^%s%s %s" % (" " * begin, t0, " " * b, t, t1)
 
     def print_report(self):
+        for chunk in self.iter_report():
+            sys.stdout.write(chunk)
+
+        sys.stdout.flush()
+
+    def iter_report(self):
         if not self.entry:
             return
 
@@ -68,7 +75,7 @@ class Times:
 
         out.sort()
         longest = max(len(e[1]) for e in out)
-        f = "%%-%ds %%s\n%%%ds %%s" % (longest, longest)
+        f = "%%-%ds %%s\n%%%ds %%s\n" % (longest, longest)
         for start, title, tl, pl in out:
-            print f % (title, tl, "", pl)
+            yield f % (title, tl, "", pl)
 
