@@ -26,6 +26,8 @@ STDERR = 2
 class RemoteControl:
     def __init__(self, node):
         self.node = node
+        self.warn_timeout = 30.0 # seconds to wait before warning user after receiving any output
+        self.terminate_timeout = 300.0 # seconds to wait before disconnecting after receiving any output
 
     def tag_line(self, tag, command, result=None, verbose=False, color=None):
         assert color

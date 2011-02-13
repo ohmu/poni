@@ -54,7 +54,14 @@ class Runner:
             task.start()
 
     def wait_task_to_finish(self):
-        task = self.finished_queue.get()
+        try:
+            task = self.finished_queue.get(timeout=60.0)
+        except queue.Empty:
+            started = self.started
+            self.log.warning("task wait timeout: started=%r, not_started=%r",
+                             self.started, self.not_started)
+            return
+
         self.log.debug("task %s finished, took %.2f seconds", task,
                        (task.stop_time - task.start_time))
         self.started.remove(task)
