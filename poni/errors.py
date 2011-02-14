@@ -44,3 +44,6 @@ class RequirementError(Error):
 
 class ControlError(Error):
     """control error"""
+
+class OperationError(Error):
+    """operation error"""
