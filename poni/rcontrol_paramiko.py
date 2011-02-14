@@ -150,7 +150,8 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                                      error, retries))
 
                 if retries == 0:
-                    raise
+                    raise errors.RemoteError("ssh connect failed: %s: %s" % (
+                            error.__class__.__name__, error))
 
                 time.sleep(3)
                 retries -= 1
@@ -165,34 +166,53 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         transport = ssh.get_transport()
         channel = transport.open_session()
         BS = 2**16
+        rx_time = time.time()
+        log_name = "%s: %r" % (self.node.name, cmd)
+        next_warn = time.time() + self.warn_timeout
         try:
             channel.exec_command(cmd)
-            reading = True
-            while reading:
-                r, w, e = select.select([channel], [], [])
-                if channel.recv_stderr_ready():
-                    # TODO: will this catch all stderr output?
+            terminating = False
+            while True:
+                if channel.exit_status_ready():
+                    if terminating:
+                        # process terminated AND remaining output is read
+                        break
+                    else:
+                        # one more round of reads to get the remaining output
+                        terminating = True
+
+                r, w, e = select.select([channel], [], [], 1.0)
+
+                while channel.recv_stderr_ready():
+                    rx_time = time.time()
                     x = channel.recv_stderr(BS)
                     if x:
                         yield rcontrol.STDERR, x
 
-                for file_out in r:
-                    x = file_out.recv(BS)
-                    if len(x) == 0:
-                        reading = False
-                        break
+                while channel.recv_ready():
+                    rx_time = time.time()
+                    for file_out in r:
+                        x = file_out.recv(BS)
+                        if x:
+                            yield rcontrol.STDOUT, x
 
-                    yield rcontrol.STDOUT, x
+                now = time.time()
+                if now > (rx_time + self.terminate_timeout):
+                    # no output in a long time, terminate connection
+                    raise errors.RemoteError(
+                        "%s: no output in %.1s, terminating" % (
+                            log_name, self.terminate_timeout))
+
+                if now > next_warn:
+                    self.log.warning("%s: no output in %.1fs", log_name,
+                                     self.warn_timeout)
+                    next_warn = rx_time + (2 * self.warn_timeout)
+
 
             exit_code = channel.recv_exit_status()
         finally:
-            if channel.recv_stderr_ready():
-                # TODO: will this catch all stderr output?
-                x = channel.recv_stderr(BS)
-                if x:
-                    yield rcontrol.STDERR, x
-
-            channel.close()
+            if channel:
+                channel.close()
 
         yield rcontrol.DONE, exit_code
 

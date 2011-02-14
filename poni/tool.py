@@ -14,6 +14,7 @@ import shlex
 import argh
 import glob
 import shutil
+import time
 from distutils.version import LooseVersion
 import argparse
 from path import path
@@ -29,6 +30,7 @@ from . import listout
 from . import colors
 from . import version
 from . import work
+from . import times
 
 
 import Cheetah.Template
@@ -69,11 +71,13 @@ class ControlTask(work.Task):
         self.verbose = verbose
         self.method = method
 
+    def __repr__(self):
+        return "%s/%s [%s]" % (self.op["node"].name, self.op["config"].name,
+                               self.op["name"])
+
     def send_output(self, msg):
         # TODO: label each output line
-        self.log.info("%s/%s [%s]: %s" % (self.op["node"].name,
-                                          self.op["config"].name,
-                                          self.op["name"], msg))
+        self.log.info("%s: %s", self, msg)
 
     def can_start(self):
         """return True when it is ok to start this task"""
@@ -103,6 +107,7 @@ class ControlTask(work.Task):
 
     def execute(self):
         try:
+            self.op["start_time"] = time.time()
             self.check_dependencies()
             handler_func = self.op["callback"]
             ret = handler_func(self.op["name"], self.args,
@@ -125,6 +130,8 @@ class ControlTask(work.Task):
                 error.__class__.__name__, error)
             self.log.exception("task exception")
             raise
+        finally:
+            self.op["stop_time"] = time.time()
 
 
 class Tool:
@@ -134,6 +141,7 @@ class Tool:
         self.default_repo_path = default_repo_path
         self.sky = cloud.Sky()
         self.parser = self.create_parser()
+        self.task_times = times.Times()
 
     @argh.alias("add-system")
     @argh.arg('system', type=str, help='system name')
@@ -248,7 +256,7 @@ class Tool:
 
         lines = self.preprocess_script_lines(lines)
 
-        for line in lines:
+        for i, line in enumerate(lines):
             args = shlex.split(line, comments=True)
             if not args:
                 continue
@@ -266,8 +274,12 @@ class Tool:
             except ValueError:
                 namespace.extras = []
 
+            start = time.time()
             self.parser.dispatch(argv=args, pre_call=set_repo_path,
                                  namespace=namespace)
+            stop = time.time()
+            if namespace.time_op:
+                self.task_times.add_task("L%d" % (i+1), line, start, stop)
 
     @argh.alias("update-config")
     @arg_verbose
@@ -388,6 +400,8 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
+    @arg_flag("-t", "--show-times",
+              help="show timeline of execution for each tasks")
     @argh.arg("-j", "--jobs", metavar="N", type=int,
               help="max concurrent tasks (default: unlimited)")
     @argh.arg('pattern', type=str, help='config search pattern')
@@ -492,6 +506,13 @@ class Tool:
         skipped_count = sum(1 for op in tasks.itervalues() if not op["run"])
         ran_count = len(tasks) - skipped_count
         assert len(results) == ran_count
+
+        # add task times to report
+        for i, task in enumerate(runner.stopped):
+            task_name = "%s/%s" % (task.op["node"].name,
+                                   task.op["config"].name)
+            self.task_times.add_task(i, task_name, task.op["start_time"],
+                                     task.op["stop_time"])
 
         if arg.verbose:
             for task in runner.stopped:
@@ -847,6 +868,15 @@ class Tool:
             for item in manager.dynamic_conf:
                 print item
 
+    @argh.alias("report")
+    @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
+              help='output file path (default: stdout)')
+    def handle_report(self, arg):
+        """show command execution timeline report"""
+        out = file(arg.output_file, "w") if arg.output_file else sys.stdout
+        for chunk in self.task_times.iter_report():
+            out.write(chunk)
+
     @argh.alias("deploy")
     @arg_verbose
     @arg_full_match
@@ -1057,6 +1087,11 @@ class Tool:
         parser = argh.ArghParser()
         parser.add_argument("-D", "--debug", dest="debug", default=False,
                             action="store_true", help="enable debug output")
+        parser.add_argument("-L", "--time-log", metavar="FILE", type=path,
+                            help="update execution times to a file")
+        parser.add_argument("-T", "--time-op", default=False,
+                            action="store_true",
+                            help="time-log this operation")
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
             metavar="DIR",
@@ -1072,6 +1107,7 @@ class Tool:
             self.handle_control, self.handle_require, self.handle_add_library,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
+            self.handle_report,
             ]
         commands.sort(key=lambda func: func.__name__)
         parser.add_commands(commands)
@@ -1133,6 +1169,9 @@ class Tool:
             """tune the logging before executing commands"""
             self.tune_arg_namespace(arg)
 
+            if arg.time_log and arg.time_log.exists():
+                self.task_times.load(arg.time_log)
+
             if arg.debug:
                 logging.getLogger().setLevel(logging.DEBUG)
             else:
@@ -1155,10 +1194,14 @@ class Tool:
             namespace.extras = []
 
         try:
+            start = time.time()
             exit_code = self.parser.dispatch(argv=args,
                                              pre_call=adjust_logging,
                                              raw_output=True,
                                              namespace=namespace)
+            stop = time.time()
+            if namespace.time_op:
+                self.task_times.add_task("C", line, start, stop)
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
             return -1
@@ -1166,6 +1209,9 @@ class Tool:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1
         finally:
+            if namespace.time_log:
+                self.task_times.save(namespace.time_log)
+
             self.log.debug("rcontrol cleanup")
             rcontrol_all.manager.cleanup()
 
