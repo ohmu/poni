@@ -447,8 +447,8 @@ class Tool:
                 except KeyError:
                     raise errors.OperationError(
                         "%s/%s operation %r depends on feature %r, "
-                        "which is not provided by any config",
-                        node.name, config.name, arg.operation, feature)
+                        "which is not provided by any config" % (
+                        node.name, conf.name, arg.operation, feature))
 
                 depends = op.setdefault("depends", [])
                 for dep_op in provider_ops:

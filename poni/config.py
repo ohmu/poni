@@ -306,6 +306,9 @@ class PlugIn:
         self.node = node
         self.controls = {}
 
+    def add_actions(self):
+        pass
+
     def remote_execute(self, arg, script_path):
         for line in self.remote_gen_execute(arg, script_path):
             pass
