@@ -47,8 +47,12 @@ def get_dict_prop(item, address, verify=False):
     return item, old
 
 
-def set_dict_prop(item, address, value, verify=False):
+def set_dict_prop(item, address, value, verify=False, schema=None):
     item, old = get_dict_prop(item, address, verify=verify)
+    if verify and (old is DEF_VALUE) and (schema is not None):
+        schema_item, old = get_dict_prop(schema, address, verify=verify)
+        return set_dict_prop(item, address, value, verify=False)
+
     if verify:
         if old is DEF_VALUE:
             raise errors.InvalidProperty(

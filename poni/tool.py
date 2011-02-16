@@ -1012,7 +1012,7 @@ class Tool:
     @argh.alias("list")
     @arg_full_match
     @arg_flag("-l", "--show-layers", help="show settings layers")
-    @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @argh.arg('pattern', type=str, help='node search pattern', nargs="?")
     def handle_settings_list(self, arg):
         """list settings"""
         pattern = arg.pattern or "."
@@ -1030,13 +1030,19 @@ class Tool:
         """override settings values"""
         pattern = arg.pattern or "."
         confman = core.ConfigMan(arg.root_dir)
-        configs = list(confman.find_config(arg.pattern))
+        configs = list(confman.find_config(arg.pattern, all_configs=True, 
+                                           full_match=arg.full_match))
         if not configs:
             raise errors.UserError("no config matching %r found" % arg.pattern)
 
         # verify all updates first, collect them to a list
         updates = []
         for conf_node, conf in configs:
+            if conf_node != conf:
+                # TODO: 1. add-config CONF -i orignode/CONF 2. apply changes
+                raise errors.UserError("changing settings in a node-inherited "
+                                       "config is not supported yet")
+
             set_list = []
             converters = {
                 "prop": (
@@ -1071,7 +1077,7 @@ class Tool:
                 self.log.info("%s/%s: set %s to %r", conf.node.name, conf.name,
                               ".".join(addr), value)
                 addr[-1] = "!%s" % addr[-1]
-                util.set_dict_prop(layer, addr, value)
+                util.set_dict_prop(layer, addr, value, schema=conf.settings)
 
             conf.save_settings_layer(layer_file, layer)
 

@@ -320,16 +320,19 @@ class Node(Item):
 
                 yield conf
 
-    def iter_all_configs(self):
+    def iter_all_configs(self, handled=None):
+        handled = handled or set()
         for conf in self.iter_configs():
-            yield conf
+            if conf.name not in handled:
+                handled.add(conf.name)
+                yield conf
 
         parent_name = self.get("parent")
         if parent_name:
             # collect configs from parent node
             parent_path = self.confman.system_root / parent_name
             parent_node = self.confman.get_node(parent_path, self.system)
-            for conf in parent_node.iter_all_configs():
+            for conf in parent_node.iter_all_configs(handled=handled):
                 yield conf
 
     def collect(self, manager):
