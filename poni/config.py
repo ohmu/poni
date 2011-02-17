@@ -243,7 +243,6 @@ class Manager:
             if verbose:
                 self.log.info(self.audit_format, "OK",
                               entry["node"].name, dest_path)
-
         else:
             dest_dir = dest_path.dirname()
             try:
@@ -251,9 +250,9 @@ class Manager:
             except errors.RemoteError:
                 remote.makedirs(dest_dir)
 
-                remote.write_file(dest_path, output, mode=mode)
-                self.log.info(self.audit_format, "WROTE",
-                              entry["node"].name, dest_path)
+            remote.write_file(dest_path, output, mode=mode)
+            self.log.info(self.audit_format, "WROTE",
+                          entry["node"].name, dest_path)
 
         # post-processing is done always even if file is unchanged
         post_process = entry.get("post_process")
