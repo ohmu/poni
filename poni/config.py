@@ -61,6 +61,7 @@ class Manager:
             try:
                 rstat = remote.stat(dest_path)
                 # copy if mtime or size differs
+                # TODO: optional full contents comparison
                 copy = ((lstat.st_size != rstat.st_size)
                         or (lstat.st_mtime != rstat.st_mtime))
             except errors.RemoteError:
@@ -243,22 +244,22 @@ class Manager:
                 self.log.info(self.audit_format, "OK",
                               entry["node"].name, dest_path)
 
-            return
+        else:
+            dest_dir = dest_path.dirname()
+            try:
+                remote.stat(dest_dir)
+            except errors.RemoteError:
+                remote.makedirs(dest_dir)
 
-        dest_dir = dest_path.dirname()
-        try:
-            remote.stat(dest_dir)
-        except errors.RemoteError:
-            remote.makedirs(dest_dir)
+                remote.write_file(dest_path, output, mode=mode)
+                self.log.info(self.audit_format, "WROTE",
+                              entry["node"].name, dest_path)
 
-        remote.write_file(dest_path, output, mode=mode)
+        # post-processing is done always even if file is unchanged
         post_process = entry.get("post_process")
         if post_process:
             # TODO: remote support
             post_process(dest_path)
-
-        self.log.info(self.audit_format, "WROTE",
-                      entry["node"].name, dest_path)
 
     def audit_output(self, entry, dest_path, active_text, active_time,
                      output, show_diff=False, color_mode="auto",
@@ -296,6 +297,7 @@ def control(provides=None, requires=None):
         return method
 
     return wrap
+
 
 class PlugIn:
     def __init__(self, manager, config, node, top_config):
