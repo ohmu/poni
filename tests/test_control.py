@@ -31,18 +31,7 @@ class PlugIn(config.PlugIn):
 
 class TestControls(Helper):
     def test_basic_controls(self):
-        poni, repo = self.init_repo()
-        node = "node"
-        conf = "conf"
-        assert not poni.run(["add-node", node])
-        assert not poni.run(["add-config", node, conf])
-        conf_path = "%s/%s" % (node, conf)
-        output_dir = path(self.temp_file())
-        output_dir.makedirs()
-        plugin_py = output_dir / "plugin.py"
-        plugin_py.write_bytes(plugin_text)
-        assert not poni.run(["update-config", conf_path, plugin_py])
-
+        poni = self.repo_and_config("node", "conf", plugin_text)
         temp = self.temp_file()
 
         assert not poni.run(["control", ".", "foo", "--", temp])

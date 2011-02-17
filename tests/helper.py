@@ -34,6 +34,18 @@ class Helper:
         assert isinstance(config, dict)
         return poni, repo
 
+    def repo_and_config(self, node, conf, plugin_text):
+        poni, repo = self.init_repo()
+        assert not poni.run(["add-node", node])
+        assert not poni.run(["add-config", node, conf])
+        conf_path = "%s/%s" % (node, conf)
+        output_dir = path(self.temp_file())
+        output_dir.makedirs()
+        plugin_py = output_dir / "plugin.py"
+        plugin_py.write_bytes(plugin_text)
+        assert not poni.run(["update-config", conf_path, plugin_py])
+        return poni
+
 
 
 def combos(seq):
