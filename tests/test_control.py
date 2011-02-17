@@ -34,18 +34,12 @@ class TestControls(Helper):
         poni = self.repo_and_config("node", "conf", plugin_text)
         temp = self.temp_file()
 
-        assert not poni.run(["control", ".", "foo", "--", temp])
-        assert file(temp).read() == "foo"
-        os.unlink(temp)
+        def cmd_output(cmd, output):
+            assert not poni.run(["control", ".", cmd, "--", temp])
+            assert file(temp).read() == output
+            os.unlink(temp)
 
-        assert not poni.run(["control", ".", "bar", "--", temp])
-        assert file(temp).read() == "foobar"
-        os.unlink(temp)
-
-        assert not poni.run(["control", ".", "baz", "--", temp])
-        assert file(temp).read() == "foobaz"
-        os.unlink(temp)
-
-        assert not poni.run(["control", ".", "bax", "--", temp])
-        assert file(temp).read() == "bax"
-        os.unlink(temp)
+        cmd_output("foo", "foo")
+        cmd_output("bar", "foobar")
+        cmd_output("baz", "foobaz")
+        cmd_output("bax", "bax")
