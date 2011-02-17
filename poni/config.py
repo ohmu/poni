@@ -289,10 +289,14 @@ class Manager:
         self.files.append(kw)
 
 
-def control(provides=None, requires=None):
+def control(provides=None, requires=None, optional_requires=None):
     """decorate a PlugIn method as a 'poni control' command"""
     def wrap(method):
-        method.poni_control = dict(provides=provides, requires=requires)
+        assert isinstance(provides or [], (list, tuple))
+        assert isinstance(requires or [], (list, tuple))
+        assert isinstance(optional_requires or [], (list, tuple))
+        method.poni_control = dict(provides=provides, requires=requires,
+                                   optional_requires=optional_requires)
         return method
 
     return wrap
@@ -337,7 +341,8 @@ class PlugIn:
         for line in (lines or []):
             yield line
 
-    def add_argh_control(self, handler, provides=None, requires=None):
+    def add_argh_control(self, handler, provides=None, requires=None,
+                         optional_requires=None):
         try:
             name = handler.argh_alias
         except AttributeError:
@@ -348,12 +353,15 @@ class PlugIn:
                                             **kwargs)
 
         name = name.replace("_", "-")
-        self.controls[name] = dict(callback = handle_control,
-                                   plugin = self,
-                                   node = self.node,
-                                   config = self.config,
-                                   provides = provides or [],
-                                   requires = requires or [])
+        self.controls[name] = dict(
+            callback = handle_control,
+            plugin = self,
+            node = self.node,
+            config = self.config,
+            provides = provides or [],
+            requires = requires or [],
+            optional_requires = optional_requires or []
+            )
 
     def add_all_controls(self):
         self.add_controls()

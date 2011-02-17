@@ -441,10 +441,17 @@ class Tool:
             conf = op["config"]
             tasks[(node.name, conf.name, op["name"])] = op
 
-            for feature in op["requires"]:
+            reqs = [(True, req) for req in op["requires"]]
+            reqs.extend((False, req) for req in op["optional_requires"])
+
+            for must_have, feature in reqs:
                 try:
                     provider_ops = provider[feature]
                 except KeyError:
+                    if not must_have:
+                        # this feature is optional, missing provider is ok
+                        continue
+
                     raise errors.OperationError(
                         "%s/%s operation %r depends on feature %r, "
                         "which is not provided by any config" % (
