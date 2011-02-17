@@ -387,7 +387,7 @@ class Tool:
             raise errors.UserError("directory %r does not exist" % (
                     str(full_path)))
 
-        if full_path.isabs():
+        if store_path.isabs():
             self.log.warning("absolute Python library path to %r stored, "
                              "this may compromise repository portability",
                              str(full_path))
