@@ -390,7 +390,7 @@ class Tool:
         if store_path.isabs():
             self.log.warning("absolute Python library path to %r stored, "
                              "this may compromise repository portability",
-                             str(full_path))
+                             str(store_path))
 
         confman.set_library_path(arg.name, store_path)
         logger = self.log.info if arg.verbose else self.log.debug
