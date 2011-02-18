@@ -292,9 +292,9 @@ class Manager:
 def control(provides=None, requires=None, optional_requires=None):
     """decorate a PlugIn method as a 'poni control' command"""
     def wrap(method):
-        assert isinstance(provides or [], (list, tuple))
-        assert isinstance(requires or [], (list, tuple))
-        assert isinstance(optional_requires or [], (list, tuple))
+        assert isinstance(provides, (list, tuple, type(None)))
+        assert isinstance(requires, (list, tuple, type(None)))
+        assert isinstance(optional_requires, (list, tuple, type(None)))
         method.poni_control = dict(provides=provides, requires=requires,
                                    optional_requires=optional_requires)
         return method
