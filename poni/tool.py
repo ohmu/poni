@@ -858,8 +858,8 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_target_nodes_0_to_n
-    @arg_flag("-D", "--show-dynamic", dest="show_dynamic",
-              help="show dynamic configuration")
+    @arg_flag("-B", "--buckets", dest="show_buckets",
+              help="show dynamic buckets")
     @arg_flag("--raw", dest="show_raw", help="show raw templates")
     @arg_flag("-d", "--diff", dest="show_diff",
               help="show raw template vs. rendered output diff")
@@ -867,13 +867,14 @@ class Tool:
         """render and show node config files"""
         confman = core.ConfigMan(arg.root_dir)
         manager = self.verify_op(confman, arg.nodes,
-                                 show=(not arg.show_dynamic),
+                                 show=(not arg.show_buckets),
                                  full_match=arg.full_match,
                                  raw=arg.show_raw, color_mode=arg.color_mode,
                                  show_diff=arg.show_diff)
-        if arg.show_dynamic:
-            for item in manager.dynamic_conf:
-                print item
+        if arg.show_buckets:
+            for name, items in manager.buckets.iteritems():
+                for i, item in enumerate(items):
+                    print "%s #%d: %r" % (name, i, item)
 
     @argh.alias("report")
     @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
