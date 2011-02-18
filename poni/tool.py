@@ -1038,7 +1038,7 @@ class Tool:
         """override settings values"""
         pattern = arg.pattern or "."
         confman = core.ConfigMan(arg.root_dir)
-        configs = list(confman.find_config(arg.pattern, all_configs=True, 
+        configs = list(confman.find_config(arg.pattern, all_configs=True,
                                            full_match=arg.full_match))
         if not configs:
             raise errors.UserError("no config matching %r found" % arg.pattern)
@@ -1046,7 +1046,7 @@ class Tool:
         # verify all updates first, collect them to a list
         updates = []
         for conf_node, conf in configs:
-            if conf_node != conf:
+            if conf_node != conf.node:
                 # TODO: 1. add-config CONF -i orignode/CONF 2. apply changes
                 raise errors.UserError("changing settings in a node-inherited "
                                        "config is not supported yet")
