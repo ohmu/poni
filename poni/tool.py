@@ -1214,7 +1214,7 @@ class Tool:
                                              namespace=namespace)
             stop = time.time()
             if namespace.time_op:
-                self.task_times.add_task("C", line, start, stop)
+                self.task_times.add_task("C", " ".join(args), start, stop)
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
             return -1
