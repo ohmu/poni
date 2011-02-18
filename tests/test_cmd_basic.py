@@ -147,3 +147,14 @@ class TestCommands(Helper):
         assert not poni.run(["deploy"])
         output = output_file.bytes()
         assert output == template_text
+
+    def test_require(self):
+        poni, repo = self.init_repo()
+        assert not poni.run(["require", "poni_version>='0.1'"])
+        assert not poni.run(["require", "-v", "poni_version<'100'"])
+        assert poni.run(["require", "poni_version=='0.0'"]) == -1
+        assert poni.run(["require", "xxx"]) == -1
+
+    def test_version(self):
+        poni, repo = self.init_repo()
+        assert not poni.run(["version"])
