@@ -16,6 +16,9 @@ class Task(threading.Thread):
     def can_start(self):
         return True
 
+    def execute(self):
+        assert False, "override in sub-class"
+
     def run(self):
         try:
             self.start_time = time.time()
