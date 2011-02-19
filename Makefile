@@ -40,7 +40,7 @@ pylint:
 	python -m pylint.lint poni/*.py
 
 tests:
-	nosetests
+	nosetests --processes=2
 
 coverage:
 	nosetests --with-coverage --cover-package=poni --cover-html

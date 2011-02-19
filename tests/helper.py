@@ -52,9 +52,9 @@ class Helper:
 
 
 
-def combos(seq):
+def combos(seq, max_len=None):
     seq = list(seq)
-    for length in range(0, len(seq) + 1):
+    for length in range(0, max_len or (len(seq) + 1)):
         for combo in itertools.combinations(seq, length):
             yield combo
 
