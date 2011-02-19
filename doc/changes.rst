@@ -2,6 +2,29 @@
 Poni Changelog
 ==============
 
+Version 0.4.4
+=============
+:release date: TBD
+
+* operations can be timed (``poni --clock`` or ``control --clock-tasks``) and 
+  results stored in a log file (``--time-log FILE``), reports printed out with
+  ``poni --time-log FILE report``
+* added warning messages for ``control`` tasks that do not send output in a 
+  long while, kill jobs after five minutes of inactivity
+* added support for ``optional_requires`` task dependencies, such tasks are not
+  required to exist but are guaranteed to be run before the dependent task
+* ``deploy`` post-process actions are run even if file is unchanged
+* bugfix: paramiko ssh connection error is reported neatly
+* bugfix: various small fixes
+
+Version 0.4.3
+=============
+:release date: 2011-01-25
+
+* control tasks can be run without dependent tasks with ``--no-deps``
+* bugfix: control tasks with in ``script`` files 
+* bugfix: Tool.execute() exit code check
+
 Version 0.4.2
 =============
 :release date: 2011-01-23
