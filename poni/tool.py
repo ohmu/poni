@@ -400,7 +400,7 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
-    @arg_flag("-t", "--show-times",
+    @arg_flag("-t", "--clock-tasks", dest="show_times",
               help="show timeline of execution for each tasks")
     @argh.arg("-j", "--jobs", metavar="N", type=int,
               help="max concurrent tasks (default: unlimited)")
@@ -1103,7 +1103,7 @@ class Tool:
                             action="store_true", help="enable debug output")
         parser.add_argument("-L", "--time-log", metavar="FILE", type=path,
                             help="update execution times to a file")
-        parser.add_argument("-T", "--time-op", default=False,
+        parser.add_argument("-T", "--clock", default=False, dest="time_op",
                             action="store_true",
                             help="time-log this operation")
         parser.add_argument(
