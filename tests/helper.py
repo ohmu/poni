@@ -34,10 +34,14 @@ class Helper:
         assert isinstance(config, dict)
         return poni, repo
 
-    def repo_and_config(self, node, conf, plugin_text):
+    def repo_and_config(self, node, conf, plugin_text, copy=None):
         poni, repo = self.init_repo()
         assert not poni.run(["add-node", node])
-        assert not poni.run(["add-config", node, conf])
+        add_conf = ["add-config", node, conf]
+        if copy:
+            add_conf.extend(["-d", copy])
+
+        assert not poni.run(add_conf)
         conf_path = "%s/%s" % (node, conf)
         output_dir = path(self.temp_file())
         output_dir.makedirs()
