@@ -1226,7 +1226,6 @@ class Tool:
             if namespace.time_log:
                 self.task_times.save(namespace.time_log)
 
-            self.log.debug("rcontrol cleanup")
             rcontrol_all.manager.cleanup()
 
         return exit_code

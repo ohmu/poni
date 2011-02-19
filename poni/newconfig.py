@@ -37,7 +37,6 @@ class Config(dict):
 
         self.layers.sort()
 
-        self.log.debug("settings files: %r", self.layers)
         for sort_key, layer_name, file_path in self.layers:
             try:
                 config_dict = json.load(file(file_path, "rb"))
