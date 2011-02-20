@@ -15,9 +15,9 @@ class Times:
     def save(self, file_path):
         util.json_dump(self.entry, file_path)
 
-    def add_task(self, task_id, name, start, stop):
+    def add_task(self, task_id, name, start, stop, args=None):
         self.entry.append(dict(task_id=task_id, name=name, start=start,
-                               stop=stop))
+                               stop=stop, args=args))
 
     def positions(self, prop, start, stop):
         span = stop - start

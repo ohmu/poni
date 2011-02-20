@@ -279,7 +279,8 @@ class Tool:
                                  namespace=namespace)
             stop = time.time()
             if namespace.time_op:
-                self.task_times.add_task("L%d" % (i+1), line, start, stop)
+                self.task_times.add_task("L%d" % (i+1), line, start, stop,
+                                         args=args)
 
     @argh.alias("update-config")
     @arg_verbose
@@ -1103,9 +1104,8 @@ class Tool:
                             action="store_true", help="enable debug output")
         parser.add_argument("-L", "--time-log", metavar="FILE", type=path,
                             help="update execution times to a file")
-        parser.add_argument("-T", "--clock", default=False, dest="time_op",
-                            action="store_true",
-                            help="time-log this operation")
+        parser.add_argument("-T", "--clock", metavar="NAME", dest="time_op",
+                            help="time-log this operation as NAME")
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
             metavar="DIR",
@@ -1215,7 +1215,9 @@ class Tool:
                                              namespace=namespace)
             stop = time.time()
             if namespace.time_op:
-                self.task_times.add_task("C", " ".join(args), start, stop)
+                op_name = namespace.time_op \
+                    if (namespace.time_op != "-") else (" ".join(args))
+                self.task_times.add_task("C", op_name, start, stop, args=args)
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
             return -1

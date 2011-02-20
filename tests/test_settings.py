@@ -28,4 +28,10 @@ class TestSettings(Helper):
         
         assert not poni.run(["settings", "list"])
         # TODO: verify output
-        # TODO: change settings + verify list output
+
+        assert not poni.run(["settings", "set", "node/conf", "foo=baz"])
+        assert not poni.run(["settings", "list"])
+        # TODO: verify list output
+
+    # TODO: test for invalid 'set' value types
+    # TODO: test for inherited scenarios
