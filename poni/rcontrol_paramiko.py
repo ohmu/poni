@@ -165,6 +165,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         ssh = self.get_ssh()
         transport = ssh.get_transport()
         channel = transport.open_session()
+        channel.set_combine_stderr(True) # TODO: separate stdout/stderr?
         BS = 2**16
         rx_time = time.time()
         log_name = "%s: %r" % (self.node.name, cmd)
@@ -181,7 +182,8 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                         # one more round of reads to get the remaining output
                         terminating = True
 
-                r, w, e = select.select([channel], [], [], 1.0)
+                if not terminating:
+                    r, w, e = select.select([channel], [], [], 1.0)
 
                 while channel.recv_stderr_ready():
                     rx_time = time.time()
@@ -191,10 +193,9 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
                 while channel.recv_ready():
                     rx_time = time.time()
-                    for file_out in r:
-                        x = file_out.recv(BS)
-                        if x:
-                            yield rcontrol.STDOUT, x
+                    x = channel.recv(BS)
+                    if x:
+                        yield rcontrol.STDOUT, x
 
                 now = time.time()
                 if now > (rx_time + self.terminate_timeout):
