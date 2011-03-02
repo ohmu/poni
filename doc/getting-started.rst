@@ -227,18 +227,18 @@ Auditing
 --------
 Checking that the deployed configuration is still up-to-date and intact is simple::
 
-  $ poni audit --path-prefix=/tmp
+  $ poni audit -v --path-prefix=/tmp
   manager INFO          OK webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
 
 Let's see what happens if the file is changed::
 
   $ echo hello >> /tmp/etc/postgres/8.4/pg_hba.conf
-  $ poni audit --path-prefix=/tmp
+  $ poni audit -v --path-prefix=/tmp
   manager WARNING  DIFFERS webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
 
 The difference to the proper contents can be viewed by adding the ``--diff`` argument::
 
-  $ poni audit --path-prefix=/tmp --diff
+  $ poni audit -v --path-prefix=/tmp --diff
   manager WARNING  DIFFERS webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
   --- config TODO:mtime
   +++ active 2010-12-04 21:21:58
@@ -252,6 +252,6 @@ To repair the file, simply run the ``deploy`` command again::
 
   $ poni deploy postgres1 --path-prefix=/tmp
   manager INFO       WROTE webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
-  $ poni audit --path-prefix=/tmp --diff
+  $ poni audit -v --path-prefix=/tmp --diff
   manager INFO          OK webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
 
