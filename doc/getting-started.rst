@@ -142,25 +142,21 @@ Above we were a bit lazy and only wrote ``postg`` above as the target node.
   matching can be enabled by adding the ``-M`` option.
 
 We want to deploy a file describing the DB access permissions named ``pg_hba.conf`` to
-the backend node::
+the backend node. Use an editor to create a file named ``pg_hba.conf`` with the following contents::
 
-  $ cat > pg_hba.conf <<EOF
   # This the pg_hba.conf for $node.name
   #
   # TYPE  DATABASE        USER            ADDRESS                 METHOD
   local   all             all                                     trust
-  EOF
 
 Every Poni config needs a ``plugin.py`` file that tells Poni what files need to be
-installed and where::
+installed and where. Use an editor to create the file with the following contents::
 
-  $ cat > plugin.py <<EOF
   from poni import config
 
   class PlugIn(config.PlugIn):
       def add_actions(self):
           self.add_file("pg_hba.conf", dest_path="/etc/postgres/8.4/")
-  EOF
 
 The above plugin will install a single file ``pg_hba.conf`` into the directory
 ``/etc/postgres/8.4/``.
