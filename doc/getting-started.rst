@@ -125,7 +125,7 @@ Our example DB backend uses PostgreSQL 8.4 as the database  so we will call it `
 We can create the config and view it using the ``-c`` option::
 
   $ poni add-config postg pg84
-  $ poni list -c
+  $ poni list -nc
       node webshop/backend/postgres1
     config webshop/backend/postgres1/pg84
       node webshop/frontend/http1
@@ -198,7 +198,8 @@ For this exercise we'll deploy the files locally instead of copying them over th
 network. By default Poni attempts an SSH based deployment::
 
   $ poni deploy postgres1
-  poni    ERROR   RemoteError: webshop/backend/postgres1: 'host' property not set
+  poni    ERROR   RemoteError: webshop/backend/postgres1: 'host' property not set  poni    ERROR   VerifyError: failed: there were 1 errors
+
 
 Node and system properties can be adjusted with the ``set`` command. We'll set a special
 property ``deploy`` to the value ``local`` that tells Poni to install the files to the
@@ -214,12 +215,13 @@ are a couple of automatically set properties ``depth`` (how deep is the node in 
 system hierarchy) and ``index`` (tells the location of the node within its sub-system).
 
 Now deployment can be completed and we'll override the target directory for this exercise
-using the ``--path-prefix`` argument::
+using the ``--path-prefix`` argument, which makes it possible to install all the template files from multiple nodes under a single directory. Sub-directories are added automatically for each system and node level to prevent files from different nodes colliding::
 
   $ poni deploy postgres1 --path-prefix=/tmp
-  manager INFO       WROTE webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
-  $ cat /tmp/etc/postgres/8.4/pg_hba.conf
-  # This is the pg_hba.conf for webshop/backend/postgres1
+  manager INFO       WROTE webshop/backend/postgres1: /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
+
+  $ cat /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
+  # This the pg_hba.conf for webshop/backend/postgres1
   # TYPE  DATABASE        USER            ADDRESS                 METHOD
   local   all             all                                     trust
 
@@ -228,30 +230,29 @@ Auditing
 Checking that the deployed configuration is still up-to-date and intact is simple::
 
   $ poni audit -v --path-prefix=/tmp
-  manager INFO          OK webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+  manager	INFO	      OK webshop/backend/postgres1: /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
 
 Let's see what happens if the file is changed::
 
-  $ echo hello >> /tmp/etc/postgres/8.4/pg_hba.conf
+  $ echo hello >> /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
   $ poni audit -v --path-prefix=/tmp
-  manager WARNING  DIFFERS webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+  manager	WARNING	 DIFFERS webshop/backend/postgres1: /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
 
 The difference to the proper contents can be viewed by adding the ``--diff`` argument::
 
   $ poni audit -v --path-prefix=/tmp --diff
-  manager WARNING  DIFFERS webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
-  --- config TODO:mtime
-  +++ active 2010-12-04 21:21:58
-  @@ -1,3 +1,4 @@
-   # This is the pg_hba.conf for webshop/backend/postgres1
+  manager	WARNING	 DIFFERS webshop/backend/postgres1: /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
+  --- config
+  +++ active 2011-03-02 19:38:41
+  @@ -2,3 +2,4 @@
    # TYPE  DATABASE        USER            ADDRESS                 METHOD
    local   all             all                                     trust
+
   +hello
 
 To repair the file, simply run the ``deploy`` command again::
 
   $ poni deploy postgres1 --path-prefix=/tmp
-  manager INFO       WROTE webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
+  manager	INFO	   WROTE webshop/backend/postgres1: /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
   $ poni audit -v --path-prefix=/tmp --diff
-  manager INFO          OK webshop/backend/postgres1: /tmp/etc/postgres/8.4/pg_hba.conf
-
+  manager	INFO	      OK webshop/backend/postgres1: /tmp/webshop/backend/postgres1/etc/postgres/8.4/pg_hba.conf
