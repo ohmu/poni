@@ -19,7 +19,7 @@ The following variables are accessible from templates:
      - ``poni.core.Node``
      - ``$node.private.dns``
    * - ``settings``
-     - Config settings (with all settings layers applied)
+     - Config settings (with all settings layers applied), shortcut to ``$config.settings``
      - dict
      - ``$settings.my_server.http_port``
    * - ``s``
@@ -33,7 +33,7 @@ The following variables are accessible from templates:
    * - ``config``
      - Config properties
      - ``poni.core.Config``
-     - ``$system.get("parent", "orphan!")``
+     - ``$config.name``, ``$config.settings``
    * - ``plugin``
      - Current config's plug-in object. Allows e.g. calling custom methods
        defined in your ``plugin.py`` file.
