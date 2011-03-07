@@ -172,6 +172,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         next_warn = time.time() + self.warn_timeout
         try:
             channel.exec_command(cmd)
+            channel.shutdown_write()
             terminating = False
             while True:
                 if channel.exit_status_ready():
@@ -214,7 +215,13 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
             exit_code = channel.recv_exit_status()
         finally:
             if channel:
-                channel.close()
+                pass
+                # experimental: channel.close() disabled temporarily due to the following resulting problem:
+#paramiko.transport      ERROR     File "/usr/lib/pymodules/python2.6/paramiko/pipe.py", line 66, in set
+#paramiko.transport      ERROR       os.write(self._wfd, '*')
+#paramiko.transport      ERROR   OSError: [Errno 32] Broken pipe
+
+                #channel.close()
 
         yield rcontrol.DONE, exit_code
 
