@@ -94,6 +94,12 @@ class Item(dict):
         self.conf_file = conf_file
         self.update(extra or {})
 
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
     def showable(self):
         """Yields (key, value) for all items visible by default"""
         for k, v in sorted(self.iteritems()):
@@ -173,6 +179,13 @@ class Config(Item):
         self.settings = newconfig.Config(self.get_settings_dirs())
         self.controls = None
         self.plugin = None
+
+    def __hash__(self):
+        # TODO: create new full_name property
+        return hash("%s/%s" % (self.node.name, self.name))
+
+    def __eq__(self, other):
+        return ((self.name == other.name) and (self.node.name == other.node.name))
 
     def get_plugin(self):
         if self.plugin:
