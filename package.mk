@@ -34,3 +34,6 @@ deb-clean:
 
 deb: debian
 	dpkg-buildpackage -S -us -uc
+
+.PHONY: debian
+

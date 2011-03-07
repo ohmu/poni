@@ -186,14 +186,16 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                     r, w, e = select.select([channel], [], [], 1.0)
 
                 while channel.recv_stderr_ready():
-                    rx_time = time.time()
                     x = channel.recv_stderr(BS)
+                    rx_time = time.time()
+                    next_warn = time.time() + self.warn_timeout
                     if x:
                         yield rcontrol.STDERR, x
 
                 while channel.recv_ready():
-                    rx_time = time.time()
                     x = channel.recv(BS)
+                    rx_time = time.time()
+                    next_warn = time.time() + self.warn_timeout
                     if x:
                         yield rcontrol.STDOUT, x
 
@@ -207,8 +209,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                 if now > next_warn:
                     self.log.warning("%s: no output in %.1fs", log_name,
                                      self.warn_timeout)
-                    next_warn = rx_time + (2 * self.warn_timeout)
-
+                    next_warn = time.time() + self.warn_timeout
 
             exit_code = channel.recv_exit_status()
         finally:
