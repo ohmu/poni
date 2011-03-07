@@ -296,8 +296,8 @@ class Tool:
         for source_path in arg.source:
             for conf_node, conf in configs:
                 if arg.verbose:
-                    self.log.info("%s/%s: added %r", conf.node.name,
-                                  conf.name, str(source_path))
+                    self.log.info("%s: added %r", conf.node.full_name,
+                                  str(source_path))
                 if source_path.isfile():
                     shutil.copy2(source_path, conf.path)
                 elif source_path.isdir():
@@ -1072,7 +1072,8 @@ class Tool:
                     # needs to be set
                     set_list.append((addr, value))
                 else:
-                    self.log.info("%s/%s: %r: no change", conf.node.name,
+                    # TODO: must be set anyway (in case default changes!)
+                    self.log.info("%s/%s: %r: no change", conf_node.name,
                                   conf.name, ".".join(addr))
 
             if set_list:
@@ -1083,7 +1084,7 @@ class Tool:
         for conf, update in updates:
             layer = conf.load_settings_layer(layer_file)
             for addr, value in update:
-                self.log.info("%s/%s: set %s to %r", conf.node.name, conf.name,
+                self.log.info("%s: set %s to %r", conf.full_name,
                               ".".join(addr), value)
                 addr[-1] = "!%s" % addr[-1]
                 util.set_dict_prop(layer, addr, value, schema=conf.settings)

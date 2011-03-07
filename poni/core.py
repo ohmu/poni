@@ -180,9 +180,13 @@ class Config(Item):
         self.controls = None
         self.plugin = None
 
+    def get_full_name(self):
+        return "%s/%s" % (self.node.name, self.name)
+
+    full_name = property(get_full_name, doc="get full config path name")
+
     def __hash__(self):
-        # TODO: create new full_name property
-        return hash("%s/%s" % (self.node.name, self.name))
+        return hash(self.full_name)
 
     def __eq__(self, other):
         return ((self.name == other.name) and (self.node.name == other.node.name))
@@ -228,7 +232,7 @@ class Config(Item):
                 raise errors.Error("need exactly one parent config %r" % (
                         parent_config_name))
 
-        yield "%s/%s" % (self.node.name, self.name), self.settings_dir
+        yield self.full_name, self.settings_dir
 
     def saveable(self):
         return self.iteritems()
@@ -261,13 +265,13 @@ class Config(Item):
         matches = list(self.node.confman.find_config(parent_name,
                                                      full_match=True))
         if len(matches) == 0:
-            raise errors.Error("config '%s/%s' parent config %r not found" % (
-                    self.node.name, self.name, parent_name))
+            raise errors.Error("config %r parent config %r not found" % (
+                    self.full_name, parent_name))
         elif len(matches) > 1:
-            names = (("%s/%s" % (c.node.name, c.name)) for pn, c in matches)
-            raise errors.Error("config %s/%s's parent config %r matches "
+            names = (c.full_name for pn, c in matches)
+            raise errors.Error("config %r's parent config %r matches "
                                "multiple configs: %s" % (
-                    self.node.name, self.name, parent_name, ", ".join(names)))
+                    self.full_name, parent_name, ", ".join(names)))
 
         parent_conf_node, parent_conf = matches[0]
         parent_conf.collect(manager, node, top_config=top_config)
@@ -497,8 +501,7 @@ class ConfigMan:
             raise errors.Error("no config %r found" % (pattern))
         elif len(configs) > 1:
             raise errors.Error("found multiple %r configs: %s" % (
-                    pattern, ", ".join(("%s/%s" % (c.node.name, c.name))
-                                       for cn, c in configs)))
+                    pattern, ", ".join(c.full_name for cn, c in configs)))
 
         return configs[0]
 
