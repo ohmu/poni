@@ -18,9 +18,10 @@ except ImportError:
     import simplejson as json
 
 
-DEF_VALUE = object()
+DEF_VALUE = object() # used as default value where None cannot be used
 
 
+# TODO: refactor and write tests for get_dict_prop/set_dict_prop
 def get_dict_prop(item, address, verify=False):
     error = False
     for part in address[:-1]:
@@ -41,9 +42,9 @@ def get_dict_prop(item, address, verify=False):
     if error or (not isinstance(item, dict)):
         raise errors.InvalidProperty(
             "%r does not exist" % (".".join(address)))
-    
+
     old = item.get(address[-1], DEF_VALUE)
-    
+
     return item, old
 
 
@@ -73,13 +74,21 @@ def set_dict_prop(item, address, value, verify=False, schema=None):
 def json_dump(data, file_path):
     """safe json dump to file, writes to temp file first"""
     temp_path = "%s.json_dump.tmp" % file_path
-    out = file(temp_path, "wb")
-    json.dump(data, out, indent=4, sort_keys=True)
-    out.close()
+    with file(temp_path, "wb") as out:
+        json.dump(data, out, indent=4, sort_keys=True)
+
     os.rename(temp_path, file_path)
 
 
 def parse_prop(prop_str, converters=None):
+    """
+    parse and return (keyname, value) from input 'prop_str'
+
+    'prop_str' may contain converters, for example:
+
+      'foo=hello' => ('foo', 'hello')
+      'bar:int=123' => ('bar', 123)
+    """
     val_parts = prop_str.split("=", 1)
     if len(val_parts) == 1:
         # no value specified
@@ -101,11 +110,12 @@ def parse_prop(prop_str, converters=None):
     except (ValueError, recode.Error), error:
         raise errors.InvalidProperty("%s: %s" % (error.__class__.__name__,
                                                  error))
-    
+
     return out
 
-    
+
 def parse_count(count_str):
+    """parse and return integers (start, end) from input 'N' or 'N..M'"""
     ranges = count_str.split("..")
     try:
         if len(ranges) == 1:
@@ -123,6 +133,7 @@ def format_error(error):
 
 
 def dir_stats(dir_path):
+    """return a statistics dict about a directory and its contents"""
     out = {"path": dir_path, "file_count": 0, "total_bytes": 0}
     for file_path in path(dir_path).walkfiles():
         out["file_count"] += 1
@@ -132,6 +143,11 @@ def dir_stats(dir_path):
 
 
 def path_iter_dict(dict_obj, prefix=[]):
+    """
+    yield (path, value) for each item in a dict possibly containing other dicts
+
+    'path' is in format 'key1.key2.valuename'
+    """
     for key, value in sorted(dict_obj.iteritems()):
         location = prefix + [key]
         if isinstance(value, dict):
