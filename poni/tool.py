@@ -910,11 +910,20 @@ class Tool:
     def handle_audit(self, arg):
         """audit active node configs"""
         confman = core.ConfigMan(arg.root_dir)
-        self.verify_op(confman, arg.nodes, show=False, deploy=False,
-                       audit=True, show_diff=arg.show_diff,
-                       full_match=arg.full_match, path_prefix=arg.path_prefix,
-                       access_method=arg.method, color_mode=arg.color_mode,
-                       verbose=arg.verbose)
+        manager = self.verify_op(confman, arg.nodes, show=False, deploy=False,
+                                 audit=True, show_diff=arg.show_diff,
+                                 full_match=arg.full_match,
+                                 path_prefix=arg.path_prefix,
+                                 access_method=arg.method,
+                                 color_mode=arg.color_mode,
+                                 verbose=arg.verbose)
+        if manager.error_count:
+            raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
+                           manager.error_count, len(manager.files)))
+        elif not manager.files:
+            self.log.info("no files to audit")
+        else:
+            self.log.info("all [%d] files ok", len(manager.files))
 
     @argh.alias("verify")
     @arg_verbose
