@@ -60,10 +60,22 @@ class RemoteControl:
                         if output_lines is not None:
                             output_chunks.append(output)
                         else:
-                            sys.stdout.write(output)
+                            if not verbose:
+                                sys.stdout.write(output)
+                            else:
+                                for line in output.splitlines(True):
+                                    sys.stdout.write(
+                                        "[%s] %s" % (color(self.node.name,
+                                                           "node"), line))
                             sys.stdout.flush()
                     elif code == STDERR:
-                        sys.stderr.write(output)
+                        if not verbose:
+                            sys.stderr.write(output)
+                        else:
+                            for line in output.splitlines(True):
+                                sys.stderr.write(
+                                    "{%s} %s" % (color(self.node.name,
+                                                       "node"), line))
                         sys.stderr.flush()
                     else: # DONE
                         if output_lines is not None:
