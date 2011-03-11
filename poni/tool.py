@@ -296,7 +296,7 @@ class Tool:
         for source_path in arg.source:
             for conf_node, conf in configs:
                 if arg.verbose:
-                    self.log.info("%s: added %r", conf.node.full_name,
+                    self.log.info("%s: added %r", conf.full_name,
                                   str(source_path))
                 if source_path.isfile():
                     shutil.copy2(source_path, conf.path)
