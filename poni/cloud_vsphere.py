@@ -1,8 +1,15 @@
-import os
 import copy
-import time
 import logging
+import os
+import random
+import time
 from . import cloudbase
+
+try:
+    from pyvsphere.vim25 import Vim, ManagedObject
+    pyvsphere_available = True
+except ImportError:
+    pyvsphere_available = False
 
 class VSphereProvider(cloudbase.Provider):
     def __init__(self, cloud_prop):
@@ -13,10 +20,7 @@ class VSphereProvider(cloudbase.Provider):
         assert self.vi_username, "either the enviroment variable VI_USERNAME or vi_username property must be set for vSphere instances"
         self.vi_password = os.environ.get('VI_PASSWORD') or cloud_prop.get("vi_password")
         assert self.vi_password, "either the enviroment variable VI_PASSWORD or vi_password property must be set for vSphere instances"
-        try:
-            from pyvsphere.vim25 import Vim
-        except ImportError:
-            assert 0, "pyvsphere must be installed for vSphere instances to work"
+        assert pyvsphere_available, "pyvsphere must be installed for vSphere instances to work"
         self.vim = Vim(self.vi_url)
         self.vim.login(self.vi_username, self.vi_password)
         self.instances = {}
@@ -38,6 +42,9 @@ class VSphereProvider(cloudbase.Provider):
         assert vm_name, "vm_name must be specified for vSphere instances"
         base_vm_name = prop.get('base_vm_name', None)
         assert base_vm_name, "base_vm_name must be specified for vSphere instances"
+        placement = prop.get('placement', None)
+        resource_pool = prop.get('resource_pool', None)
+        datastore = prop.get('datastore', None)
         instance = self.instances.get(instance_id)
         if not instance:
             vm_state = 'VM_NON_EXISTENT'
@@ -53,7 +60,9 @@ class VSphereProvider(cloudbase.Provider):
                         vm_state = 'VM_RUNNING'
             self.log.debug("Instance %s is in %s state", vm_name, vm_state)
             instance = dict(id=instance_id, vm=vm, vm_name=vm_name,
-                            base_vm_name=base_vm_name, vm_state=vm_state)
+                            base_vm_name=base_vm_name, vm_state=vm_state,
+                            placement=placement, resource_pool=resource_pool,
+                            datastore=datastore)
             self.instances[instance_id] = instance
         return instance
 
@@ -184,8 +193,14 @@ class VSphereProvider(cloudbase.Provider):
         """
         base_vm = self._base_vm_cache.get(base_vm_name, None)
         if not base_vm:
-            base_vm = self.vim.find_vm_by_name(base_vm_name)
+            base_vm = self.vim.find_vm_by_name(base_vm_name, ['storage', 'summary'])
             if base_vm:
+                base_vm.size = sum([x.committed for x in base_vm.storage.perDatastoreUsage])
+                assert base_vm.size > 0, "base vm size is zero? Very unlikely..."
+                host = ManagedObject(base_vm.summary.runtime.host, self.vim, ['parent'])
+                cr = ManagedObject(host.parent, self.vim, ['name', 'datastore'])
+                # Fetch info on all the datastores available to this ComputeResource
+                base_vm.available_datastores = [ManagedObject(x, self.vim, ['name', 'summary', 'info']) for x in cr.datastore]
                 self._base_vm_cache[base_vm_name] = base_vm
         return base_vm
 
@@ -211,6 +226,19 @@ class VSphereProvider(cloudbase.Provider):
             return (hasattr(task, 'summary') and
                     getattr(task.summary.guest, 'ipAddress', None))
 
+        def place_vm(base_vm, placement_strategy='random'):
+            """ Place the VM to the available datastores either randomly or wherever there is most space """
+            assert placement_strategy in ['random', 'most-space'], "unknown placement strategy, must be either 'random' or 'most-space'"
+            # Make a list of datastores that have enough space and sort it by free space
+            possible_targets = sorted([x for x in base_vm.available_datastores if x.summary.freeSpace > base_vm.size], key=lambda x: x.summary.freeSpace, reverse=True)
+            assert len(possible_targets) > 0, "no suitable datastore found. Are they all low on space?"
+            if placement_strategy == 'random':
+                target = random.choice(possible_targets)
+            if placement_strategy == 'most-space':
+                target = possible_targets[0]
+            target.summary.freeSpace -= base_vm.size
+            return target
+
         vm_name = instance['vm_name']
         base_vm = self._get_base_vm(instance['base_vm_name'])
         assert base_vm, "base VM %s not found, check the cloud.base_vm_name property for %s" % (instance['base_vm_name'], vm_name)
@@ -229,8 +257,15 @@ class VSphereProvider(cloudbase.Provider):
                     task = (yield task)
                 self.log.debug("CLONE(%s) DELETE DONE" % vm_name)
 
+        # Use the specified target datastore or pick one automagically based on the placement strategy
+        if instance['datastore']:
+            datastore=instance['datastore']
+        else:
+            placement_strategy = instance['placement'] or 'random'
+            datastore=place_vm(base_vm, placement_strategy=placement_strategy)
+
         self.log.debug("CLONE(%s) CLONE STARTING" % vm_name)
-        task = base_vm.clone_vm_task(vm_name, linked_clone=False)
+        task = base_vm.clone_vm_task(vm_name, linked_clone=False, datastore=datastore, resource_pool=instance['resource_pool'])
         while not done(task):
             task = (yield task)
         self.log.debug("CLONE(%s) CLONE DONE" % vm_name)
