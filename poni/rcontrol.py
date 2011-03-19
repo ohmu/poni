@@ -42,41 +42,53 @@ class RemoteControl:
 
         print color("--- %s" % tag, "header"), desc, color("---", "header")
 
-    def get_color(self, color):
+    def get_color(self, color, out_file=None):
+        out_file = out_file or sys.stdout
         if color:
             return color
         else:
-            return colors.Output(sys.stdout, color="no").color
+            return colors.Output(out_file, color="no").color
 
-    def execute(self, command, verbose=False, color=None, output_lines=None):
-        color = self.get_color(color)
-        self.tag_line("BEGIN", command, verbose=verbose, color=color)
+    def execute(self, command, verbose=False, color=None, output_lines=None, output_file=None, quiet=False):
+        if output_file is not None:
+            stdout_file = output_file
+            stderr_file = output_file
+        elif not quiet:
+            stdout_file = sys.stdout
+            stderr_file = sys.stderr
+        else:
+            stdout_file = None
+            stderr_file = None
+
         result = None
         output_chunks = []
+        color = self.get_color(color, out_file=stdout_file)
+        self.tag_line("BEGIN", command, verbose=verbose, color=color)
+
         try:
             while True:
                 for code, output in self.execute_command(command):
                     if code == STDOUT:
                         if output_lines is not None:
                             output_chunks.append(output)
-                        else:
-                            if not verbose:
-                                sys.stdout.write(output)
+                        elif stdout_file:
+                            if not verbose or stdout_file:
+                                stdout_file.write(output)
                             else:
                                 for line in output.splitlines(True):
-                                    sys.stdout.write(
+                                    stdout_file.write(
                                         "[%s] %s" % (color(self.node.name,
                                                            "node"), line))
-                            sys.stdout.flush()
+                            stdout_file.flush()
                     elif code == STDERR:
-                        if not verbose:
-                            sys.stderr.write(output)
-                        else:
+                        if not verbose or stdout_file:
+                            stderr_file.write(output)
+                        elif stderr_file:
                             for line in output.splitlines(True):
-                                sys.stderr.write(
+                                stderr_file.write(
                                     "{%s} %s" % (color(self.node.name,
                                                        "node"), line))
-                        sys.stderr.flush()
+                        stderr_file.flush()
                     else: # DONE
                         if output_lines is not None:
                             output_lines.extend(

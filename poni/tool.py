@@ -38,18 +38,18 @@ from Cheetah.Template import Template as CheetahTemplate
 
 TOOL_NAME = "poni"
 
+def arg_flag(*args, **kwargs):
+    return argh.arg(*args, default=False, action="store_true", **kwargs)
+
 # common arguments
-arg_full_match = argh.arg("-M", "--full-match", default=False,
-                          dest="full_match", action="store_true",
+arg_full_match = arg_flag("-M", "--full-match", dest="full_match",
                           help="require full regexp match")
-arg_nodes_only = argh.arg("-N", "--nodes", default=False,
-                          dest="nodes_only", action="store_true",
+arg_nodes_only = arg_flag("-N", "--nodes", dest="nodes_only",
                           help="apply only to nodes (not systems)")
-arg_systems_only = argh.arg("-S", "--systems", default=False,
-                          dest="systems_only", action="store_true",
+arg_systems_only = arg_flag("-S", "--systems", dest="systems_only",
                           help="apply only to systems (not nodes)")
-arg_verbose = argh.arg("-v", "--verbose", default=False, action="store_true",
-                       help="verbose output")
+arg_verbose = arg_flag("-v", "--verbose", help="verbose output")
+arg_quiet = arg_flag("-q", "--quiet", help="do not show remote command output")
 arg_path_prefix = argh.arg('--path-prefix', type=str, default="",
                            help='additional prefix for all deployed files')
 arg_target_nodes_0_to_n = argh.arg('nodes', type=str,
@@ -58,18 +58,20 @@ arg_target_nodes = argh.arg('nodes', type=str, help='target nodes (regexp)')
 arg_host_access_method = argh.arg("-m", "--method",
                                   choices=rcontrol_all.METHODS.keys(),
                                   help="override host access method")
-
-def arg_flag(*args, **kwargs):
-    return argh.arg(*args, default=False, action="store_true", **kwargs)
+arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
+                          help="write command output to files in DIR")
 
 
 class ControlTask(work.Task):
-    def __init__(self, op, args, verbose=False, method=None):
+    def __init__(self, op, args, verbose=False, method=None, quiet=False,
+                 output_dir=None):
         work.Task.__init__(self)
         self.op = op
         self.args = args
         self.verbose = verbose
         self.method = method
+        self.quiet = quiet
+        self.output_dir = output_dir
 
     def __repr__(self):
         return "%s/%s [%s]" % (self.op["node"].name, self.op["config"].name,
@@ -113,6 +115,8 @@ class ControlTask(work.Task):
             ret = handler_func(self.op["name"], self.args,
                                node=self.op["node"],
                                verbose=self.verbose,
+                               quiet=self.quiet,
+                               output_dir=self.output_dir,
                                method=self.method,
                                send_output=self.send_output)
             self.log.debug("op %s returns: %r", self.op["name"], ret)
@@ -401,6 +405,8 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
+    @arg_quiet
+    @arg_output_dir
     @arg_flag("-t", "--clock-tasks", dest="show_times",
               help="show timeline of execution for each tasks")
     @argh.arg("-j", "--jobs", metavar="N", type=int,
@@ -502,6 +508,7 @@ class Tool:
             logger("scheduled to run: %s/%s [%s]", op["node"].name,
                    op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
+                               quiet=arg.quiet, output_dir=arg.output_dir,
                                method=arg.method)
             runner.add_task(task)
 
@@ -534,15 +541,17 @@ class Tool:
         self.log.debug("all tasks finished: %r", results)
         if failed:
             raise errors.ControlError(
-                "[%d/%d] (%d skipped) control tasks failed" % (
+                "[%d/%d] control tasks failed (%d skipped)" % (
                     len(failed), ran_count, skipped_count))
         else:
             self.log.info(
-                "all [%d] (%d skipped) control tasks finished successfully" % (
+                "all [%d] control tasks finished successfully (%d skipped)" % (
                     ran_count, skipped_count))
 
     @argh.alias("exec")
     @arg_verbose
+    @arg_quiet
+    @arg_output_dir
     @arg_full_match
     @arg_target_nodes
     @arg_host_access_method
@@ -550,9 +559,16 @@ class Tool:
     def handle_remote_exec(self, arg):
         """run a shell-command"""
         confman = core.ConfigMan(arg.root_dir)
-        color = colors.Output(sys.stdout, color=arg.color_mode).color
         def rexec(arg, node, remote):
-            return remote.execute(arg.cmd, verbose=arg.verbose, color=color)
+            color = colors.Output(sys.stdout, color=arg.color_mode).color
+            if arg.output_dir:
+                output_file_path = arg.output_dir / ("%s.log" % node.name.replace("/", "_"))
+                output_file = output_file_path.open("wt")
+            else:
+                output_file = None
+
+            return remote.execute(arg.cmd, verbose=arg.verbose, color=color, quiet=arg.quiet,
+                                  output_file=output_file)
 
         rexec.doc = "exec: %r" % arg.cmd
         result = self.remote_op(confman, arg, rexec)
@@ -598,19 +614,6 @@ class Tool:
                 ret = -1
 
         return ret
-
-    ## def handle_control(self, arg):
-    ##     confman = core.ConfigMan(arg.root_dir)
-    ##     re_conf = re.compile(arg.configs)
-    ##     for node in confman.find(arg.nodes):
-    ##         for conf in node.iter_configs():
-    ##             if not re_conf.search(conf.name):
-    ##                 continue
-
-    ##             doc, controls = conf.get_controls()
-    ##             control_func = controls.get(arg.control)
-    ##             if control_func:
-    ##                 control_func()
 
     @argh.alias("init")
     def handle_vc_init(self, arg):

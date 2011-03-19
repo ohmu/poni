@@ -333,7 +333,8 @@ class PlugIn:
         remote = arg.node.get_remote(override=arg.method)
         lines = [] if yield_stdout else None
         exit_code = remote.execute(rendered_path, verbose=arg.verbose,
-                                   output_lines=lines)
+                                   output_lines=lines, quiet=arg.quiet,
+                                   output_file=arg.output_file)
         if exit_code:
             raise errors.ControlError("%r failed with exit code %r" % (
                     rendered_path, exit_code))
@@ -385,6 +386,7 @@ class PlugIn:
             yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
+                            quiet=False, output_dir=None,
                             method=None, send_output=None, node=None):
         assert node
         parser = argh.ArghParser(prog="control")
@@ -392,9 +394,16 @@ class PlugIn:
         full_args = [control_name] + args
         namespace = argparse.Namespace()
         namespace.verbose = verbose
+        namespace.quiet = quiet
         namespace.method = method
         namespace.send_output = send_output
         namespace.node = node
+        if output_dir:
+            output_file_path = output_dir / ("%s.log" % node.name.replace("/", "_"))
+            namespace.output_file = file(output_file_path, "at")
+        else:
+            namespace.output_file = None
+
         parser.dispatch(argv=full_args, namespace=namespace)
 
     def add_file(self, source_path, dest_path=None, source_text=None,
