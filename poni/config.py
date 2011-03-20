@@ -217,9 +217,13 @@ class Manager:
                 active_text = None
 
             if active_text and audit:
-                self.audit_output(entry, dest_path, active_text, active_time,
-                                  output, show_diff=show_diff,
-                                  color_mode=color_mode, verbose=verbose)
+                audit_error = self.audit_output(
+                    entry, dest_path, active_text, active_time, output,
+                    show_diff=show_diff, color_mode=color_mode,
+                    verbose=verbose)
+
+                if audit_error:
+                    error_count += 1
 
             if deploy and dest_path and (not failed) and (not filtered_out):
                 remote = entry["node"].get_remote(override=access_method)
@@ -263,7 +267,9 @@ class Manager:
     def audit_output(self, entry, dest_path, active_text, active_time,
                      output, show_diff=False, color_mode="auto",
                      verbose=False):
+        error = False
         if (active_text is not None) and (active_text != output):
+            error = True
             self.log.warning(self.audit_format, "DIFFERS",
                              entry["node"].name, dest_path)
             if show_diff:
@@ -284,6 +290,8 @@ class Manager:
         elif active_text and verbose:
             self.log.info(self.audit_format, "OK", entry["node"].name,
                           dest_path)
+
+        return error
 
     def add_file(self, **kw):
         self.files.append(kw)
