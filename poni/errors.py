@@ -12,6 +12,9 @@ class Error(Exception):
 class InvalidProperty(Error):
     """invalid property"""
 
+class MissingProperty(Error):
+    """missing property"""
+
 class UserError(Error):
     """user error"""
 

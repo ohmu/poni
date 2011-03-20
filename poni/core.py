@@ -287,6 +287,37 @@ class Node(Item):
         self.config_cache = {}
         self.update(json.load(file(self.conf_file)))
 
+    def addr(self, network=None):
+        """Return node's network address for the given network name"""
+        network = network or "private"
+        if network == "private":
+            default = ["private.dns", "private.ip"]
+        else:
+            default = []
+
+        addr_map = self.get_tree_property("addr_map", {})
+        addr_prop_list = addr_map.get(network, default)
+
+        for addr_prop_name in addr_prop_list:
+            item = self
+            for part in addr_prop_name.split("."):
+                item = item.get(part)
+                if not isinstance(item, (dict, str, unicode, type(None))):
+                    raise errors.InvalidProperty(
+                        "node %s: wrong data type %s found looking for network address at property %r" % (
+                            self.name, type(item), addr_prop_name))
+
+                elif item is None:
+                    break
+
+            if item is not None:
+                return item
+
+        raise errors.MissingProperty(
+            "node %s: no address found for network %r from properties %s" % (
+                self.name, network,
+                ", ".join(repr(a) for a in addr_prop_list)))
+
     def cleanup(self):
         for remote in self._remotes.values():
             remote.close()
