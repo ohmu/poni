@@ -86,7 +86,7 @@ class Manager:
         reports = [f for f in self.files if f.get("report")]
 
         color = colors.Output(sys.stdout, color=color_mode).color
-        error_count = 0
+        stats = util.PropDict(dict(error_count=0, file_count=0))
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
@@ -137,6 +137,7 @@ class Manager:
                 # dir handled, next!
                 continue
 
+            stats["file_count"] += 1
             source_path = entry["config"].path / entry["source_path"]
             try:
                 dest_path = entry["dest_path"]
@@ -157,7 +158,7 @@ class Manager:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
-                error_count += 1
+                stats["error_count"] += 1
 
             if show and not filtered_out:
                 if show_diff:
@@ -210,7 +211,7 @@ class Manager:
                     if audit:
                         self.log.error("%s: %s: %s: %s", node_name, dest_path,
                                        error.__class__.__name__, error)
-                        error_count += 1
+                        stats["error_count"] += 1
 
                     active_text = None
             else:
@@ -223,7 +224,7 @@ class Manager:
                     verbose=verbose)
 
                 if audit_error:
-                    error_count += 1
+                    stats["error_count"] += 1
 
             if deploy and dest_path and (not failed) and (not filtered_out):
                 remote = entry["node"].get_remote(override=access_method)
@@ -232,13 +233,15 @@ class Manager:
                                      active_text, verbose=verbose,
                                      mode=entry.get("mode"))
                 except errors.RemoteError, error:
-                    error_count += 1
+                    stats["error_count"] += 1
                     self.log.error("%s: %s: %s", node_name, dest_path, error)
                     # NOTE: continuing
 
-        if error_count:
-            raise errors.VerifyError("failed: there were %s errors" % (
-                    error_count))
+        if stats["error_count"]:
+            raise errors.VerifyError(
+                "failed: there were [%(error_count)s/%(file_count)s] errors" % stats)
+
+        return stats
 
     def deploy_file(self, remote, entry, dest_path, output, active_text,
                     verbose=False, mode=None):

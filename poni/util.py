@@ -155,3 +155,8 @@ def path_iter_dict(dict_obj, prefix=[]):
                 yield item
         else:
             yield ".".join(location), value
+
+
+class PropDict(dict):
+    def __getattr__(self, name):
+        return self.get(name, None)
