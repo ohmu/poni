@@ -33,7 +33,7 @@ def convert_paramiko_errors(method):
     def wrapper(self, *args, **kw):
         try:
             return method(self, *args, **kw)
-        except (socket.error, paramiko.SSHException, IOError), error:
+        except (socket.error, paramiko.SSHException, IOError, EOFError), error:
             # TODO: should IOError be catched here?
             raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                  error))
