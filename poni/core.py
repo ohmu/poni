@@ -100,6 +100,11 @@ class Item(dict):
     def __eq__(self, other):
         return self.name == other.name
 
+    def get_full_path(self):
+        return self.name
+
+    full_path = property(get_full_path, doc="get full node path")
+
     def showable(self):
         """Yields (key, value) for all items visible by default"""
         for k, v in sorted(self.iteritems()):
@@ -180,10 +185,11 @@ class Config(Item):
         self.controls = None
         self.plugin = None
 
-    def get_full_name(self):
+    def get_full_path(self):
         return "%s/%s" % (self.node.name, self.name)
 
-    full_name = property(get_full_name, doc="get full config path name")
+    full_path = property(get_full_path, doc="get full config path")
+    full_name = full_path # backward compatibility
 
     def __hash__(self):
         return hash(self.full_name)
