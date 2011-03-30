@@ -208,7 +208,8 @@ class Manager:
                     else:
                         active_time = ""
                 except errors.RemoteError, error:
-                    if audit:
+                    failed = True
+                    if audit or deploy:
                         self.log.error("%s: %s: %s: %s", node_name, dest_path,
                                        error.__class__.__name__, error)
                         stats["error_count"] += 1
