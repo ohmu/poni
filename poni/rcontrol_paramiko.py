@@ -138,27 +138,22 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         self.log.debug("ssh connect: host=%s, user=%s, key=%s",
                        host, user, key_file)
 
-        retries = 10
-        while True:
+        end_time = time.time() + self.connect_timeout
+        while time.time() < end_time:
             try:
                 ssh.connect(host, username=user, key_filename=key_file)
-                break
+                self._ssh = ssh
+                return self._ssh
             except (socket.error, paramiko.SSHException), error:
-                self.log.warning("ssh connection to %r failed: %s: %s, "
-                                 "retries remaining=%s" % (
-                                  host, error.__class__.__name__,
-                                     error, retries))
+                remaining = max(0, end_time - time.time())
+                self.log.warning("%s: ssh connection to %s failed: %s: %s, "
+                                 "retry time remaining=%.0fs" % (
+                                 self.node.name, host,
+                                 error.__class__.__name__, error, remaining))
+                time.sleep(5)
 
-                if retries == 0:
-                    raise errors.RemoteError("ssh connect failed: %s: %s" % (
-                            error.__class__.__name__, error))
-
-                time.sleep(3)
-                retries -= 1
-
-        self._ssh = ssh
-
-        return self._ssh
+        raise errors.RemoteError("%s: ssh connect failed: %s: %s" % (
+                self.node.name, error.__class__.__name__, error))
 
     @convert_paramiko_errors
     def execute_command(self, cmd):

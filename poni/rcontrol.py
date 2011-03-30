@@ -223,4 +223,6 @@ class SshRemoteControl(RemoteControl):
         else:
             self.key_filename = node.get_tree_property("ssh-key")
 
+        self.connect_timeout = node.get_tree_property("ssh-timeout", 60.0)
+
 
