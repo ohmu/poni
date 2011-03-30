@@ -1201,9 +1201,9 @@ class Tool:
             if arg.debug:
                 logging.getLogger().setLevel(logging.DEBUG)
             else:
-                # paramiko is very talkative at INFO level...
+                # paramiko is very talkative even at ERROR level...
                 paramiko_logger = logging.getLogger('paramiko.transport')
-                paramiko_logger.setLevel(logging.WARNING)
+                paramiko_logger.setLevel(logging.CRITICAL)
 
                 # boto blabbers http errors at ERROR severity...
                 boto_logger = logging.getLogger('boto')
