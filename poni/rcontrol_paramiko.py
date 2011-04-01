@@ -15,6 +15,7 @@ from . import rcontrol
 import select
 import termios
 import tty
+import errno
 from path import path
 
 import warnings
@@ -33,8 +34,13 @@ def convert_paramiko_errors(method):
     def wrapper(self, *args, **kw):
         try:
             return method(self, *args, **kw)
-        except (socket.error, paramiko.SSHException, IOError, EOFError), error:
-            # TODO: should IOError be catched here?
+        except IOError, error:
+            if error.errno == errno.ENOENT:
+                raise errors.RemoteFileDoesNotExist(str(error))
+            else:
+                raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
+                                                     error))
+        except (socket.error, paramiko.SSHException, EOFError), error:
             raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                  error))
 
@@ -236,7 +242,14 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
     def stat(self, file_path):
         file_path = str(file_path)
         sftp = self.get_sftp()
-        return sftp.stat(file_path)
+        try:
+            return sftp.stat(file_path)
+        except paramiko.SSHException, error:
+            print error, dir(error)
+            if xxx:
+                raise errors.RemoteFileDoesNotExist(file_path)
+            else:
+                raise error
 
     @convert_paramiko_errors
     def put_file(self, source_path, dest_path, callback=None):

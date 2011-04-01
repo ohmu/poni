@@ -33,6 +33,9 @@ class CloudError(Error):
 class RemoteError(Error):
     """remote error"""
 
+class RemoteFileDoesNotExist(RemoteError):
+    """remote file does not exist"""
+
 class RepoError(Error):
     """repository error"""
 

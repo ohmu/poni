@@ -207,6 +207,12 @@ class Manager:
                             stat.st_mtime)
                     else:
                         active_time = ""
+                except errors.RemoteFileDoesNotExist, error:
+                    active_text = None
+                    if audit:
+                        self.log.error("%s: %s: %s: %s", node_name, dest_path,
+                                       error.__class__.__name__, error)
+                        stats["error_count"] += 1
                 except errors.RemoteError, error:
                     failed = True
                     if audit or deploy:

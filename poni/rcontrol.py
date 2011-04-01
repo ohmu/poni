@@ -14,6 +14,7 @@ import logging
 import shutil
 import sys
 import select
+import errno
 from . import errors
 from . import colors
 
@@ -141,7 +142,13 @@ def convert_local_errors(method):
     def wrapper(self, *args, **kw):
         try:
             return method(self, *args, **kw)
-        except (OSError, IOError), error:
+        except IOError, error:
+            if error.errno == errno.ENOENT:
+                raise errors.RemoteFileDoesNotExist(str(error))
+            else:
+                raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
+                                                     error))
+        except OSError, error:
             raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                  error))
 
