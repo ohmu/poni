@@ -461,9 +461,13 @@ class PlugIn:
             raise errors.VerifyError(source_path, error)
 
     def add_edge(self, bucket_name, dest_node, dest_config, **kwargs):
+        self.record(bucket_name, dest_node=dest_node, dest_config=dest_config,
+                    **kwargs)
+
+    def add_record(self, bucket_name, **kwargs):
         self.manager.get_bucket(bucket_name).append(
             dict(source_node=self.node, source_config=self.top_config,
-                 dest_node=dest_node, dest_config=dest_config, **kwargs))
+                 **kwargs))
 
     def get_names(self):
         names = dict(node=self.node,
@@ -478,6 +482,7 @@ class PlugIn:
                      config=self.top_config,
                      bucket=self.manager.get_bucket,
                      edge=self.add_edge,
+                     record=self.add_record,
                      plugin=self)
         return names
 
