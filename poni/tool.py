@@ -898,10 +898,17 @@ class Tool:
     def handle_deploy(self, arg):
         """deploy node configs"""
         confman = core.ConfigMan(arg.root_dir)
-        self.verify_op(confman, arg.nodes, show=False, deploy=True,
-                       verbose=arg.verbose, full_match=arg.full_match,
-                       path_prefix=arg.path_prefix, access_method=arg.method,
-                       color_mode=arg.color_mode)
+        manager, stats = self.verify_op(
+            confman, arg.nodes, show=False, deploy=True, verbose=arg.verbose,
+            full_match=arg.full_match, path_prefix=arg.path_prefix,
+            access_method=arg.method, color_mode=arg.color_mode)
+        if stats.error_count:
+            raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
+                           stats.error_count, stats.file_count))
+        elif not stats.file_count:
+            self.log.info("no files to deploy")
+        else:
+            self.log.info("all [%d] files ok", stats.file_count)
 
     @argh.alias("audit")
     @arg_verbose
