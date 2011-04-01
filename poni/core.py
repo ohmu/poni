@@ -29,6 +29,7 @@ SETTINGS_DIR = "settings"
 DONT_SHOW = set(["cloud"])
 DONT_SAVE = set(["index", "sub_count", "depth"])
 
+g_plugin_counter = 0
 
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
@@ -256,7 +257,12 @@ class Config(Item):
             # no plugin, nothing to verify
             return
 
-        module = imp.load_source("plugin", plugin_path)
+        # use a unique module name when importing the plugin
+        global g_plugin_counter
+        module = imp.load_source("_poni_plugin_%r" % g_plugin_counter,
+                                 plugin_path)
+        g_plugin_counter += 1
+
         plugin = module.PlugIn(manager, self, node, top_config)
         plugin.add_actions()
         plugin.add_all_controls()
