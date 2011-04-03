@@ -41,10 +41,11 @@ class RemoteControl:
         if result is not None:
             tag = "%s (%s)" % (tag, result)
 
-        out_line = "%s %s %s\n" % (color("--- %s" % tag, "header"),
-                                 desc,
-                                 color("---", "header"))
-        print out_line
+        out_line = "%s %s %s %s\n" % (color("---", "header"),
+                                      tag,
+                                      desc,
+                                      color("---", "header"))
+        sys.stdout.write(out_line)
 
     def get_color(self, color, out_file=None):
         out_file = out_file or sys.stdout
@@ -67,7 +68,8 @@ class RemoteControl:
         result = None
         output_chunks = []
         color = self.get_color(color, out_file=stdout_file)
-        self.tag_line("BEGIN", command, verbose=verbose, color=color)
+        self.tag_line(color("BEGIN", "header"), command, verbose=verbose,
+                      color=color)
 
         try:
             while True:
@@ -98,14 +100,18 @@ class RemoteControl:
                             output_lines.extend(
                                 ("".join(output_chunks)).splitlines())
 
-                        result = output
+                        if not output:
+                            result = color("OK", "op_ok")
+                        else:
+                            result = color(output, "op_error")
                         return output
         except Exception, error:
-            result = "%s: %s" % (error.__class__.__name__, error)
+            result = color("%s: %s" % (error.__class__.__name__, error),
+                           "op_error")
             raise
         finally:
-            self.tag_line("END", command, result=result, verbose=verbose,
-                          color=color)
+            self.tag_line(color("END", "header"), command, result=result,
+                          verbose=verbose, color=color)
 
     def shell(self, verbose=False, color=None):
         color = self.get_color(color)

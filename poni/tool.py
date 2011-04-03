@@ -64,7 +64,7 @@ arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
 
 class ControlTask(work.Task):
     def __init__(self, op, args, verbose=False, method=None, quiet=False,
-                 output_dir=None):
+                 output_dir=None, color_mode="auto"):
         work.Task.__init__(self)
         self.op = op
         self.args = args
@@ -72,6 +72,7 @@ class ControlTask(work.Task):
         self.method = method
         self.quiet = quiet
         self.output_dir = output_dir
+        self.color_mode = color_mode
 
     def __repr__(self):
         return "%s/%s [%s]" % (self.op["node"].name, self.op["config"].name,
@@ -118,6 +119,7 @@ class ControlTask(work.Task):
                                quiet=self.quiet,
                                output_dir=self.output_dir,
                                method=self.method,
+                               color_mode=self.color_mode,
                                send_output=self.send_output)
             self.log.debug("op %s returns: %r", self.op["name"], ret)
             self.op["result"] = ret
@@ -509,7 +511,7 @@ class Tool:
                    op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                quiet=arg.quiet, output_dir=arg.output_dir,
-                               method=arg.method)
+                               method=arg.method, color_mode=arg.color_mode)
             runner.add_task(task)
 
         # execute tasks

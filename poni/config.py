@@ -350,9 +350,11 @@ class PlugIn:
 
         remote = arg.node.get_remote(override=arg.method)
         lines = [] if yield_stdout else None
+        color = colors.Output(sys.stdout, color=arg.color_mode).color
         exit_code = remote.execute(rendered_path, verbose=arg.verbose,
                                    output_lines=lines, quiet=arg.quiet,
-                                   output_file=arg.output_file)
+                                   output_file=arg.output_file,
+                                   color=color)
         if exit_code:
             raise errors.ControlError("%r failed with exit code %r" % (
                     rendered_path, exit_code))
@@ -404,7 +406,7 @@ class PlugIn:
             yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
-                            quiet=False, output_dir=None,
+                            quiet=False, output_dir=None, color_mode="auto",
                             method=None, send_output=None, node=None):
         assert node
         parser = argh.ArghParser(prog="control")
@@ -416,6 +418,7 @@ class PlugIn:
         namespace.method = method
         namespace.send_output = send_output
         namespace.node = node
+        namespace.color_mode = color_mode
         if output_dir:
             output_file_path = output_dir / ("%s.log" % node.name.replace("/", "_"))
             namespace.output_file = file(output_file_path, "at")
