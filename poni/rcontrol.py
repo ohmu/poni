@@ -41,7 +41,10 @@ class RemoteControl:
         if result is not None:
             tag = "%s (%s)" % (tag, result)
 
-        print color("--- %s" % tag, "header"), desc, color("---", "header")
+        out_line = "%s %s %s\n" % (color("--- %s" % tag, "header"),
+                                 desc,
+                                 color("---", "header"))
+        print out_line
 
     def get_color(self, color, out_file=None):
         out_file = out_file or sys.stdout
