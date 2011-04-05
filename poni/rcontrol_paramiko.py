@@ -242,14 +242,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
     def stat(self, file_path):
         file_path = str(file_path)
         sftp = self.get_sftp()
-        try:
-            return sftp.stat(file_path)
-        except paramiko.SSHException, error:
-            print error, dir(error)
-            if xxx:
-                raise errors.RemoteFileDoesNotExist(file_path)
-            else:
-                raise error
+        return sftp.stat(file_path)
 
     @convert_paramiko_errors
     def put_file(self, source_path, dest_path, callback=None):
