@@ -142,12 +142,13 @@ def dir_stats(dir_path):
     return out
 
 
-def path_iter_dict(dict_obj, prefix=[]):
+def path_iter_dict(dict_obj, prefix=None):
     """
     yield (path, value) for each item in a dict possibly containing other dicts
 
     'path' is in format 'key1.key2.valuename'
     """
+    prefix = prefix or []
     for key, value in sorted(dict_obj.iteritems()):
         location = prefix + [key]
         if isinstance(value, dict):
