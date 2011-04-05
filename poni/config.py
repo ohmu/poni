@@ -470,8 +470,8 @@ class PlugIn:
             raise errors.VerifyError(source_path, error)
 
     def add_edge(self, bucket_name, dest_node, dest_config, **kwargs):
-        self.record(bucket_name, dest_node=dest_node, dest_config=dest_config,
-                    **kwargs)
+        self.add_record(bucket_name, dest_node=dest_node, dest_config=dest_config,
+                        **kwargs)
 
     def add_record(self, bucket_name, **kwargs):
         self.manager.get_bucket(bucket_name).append(
