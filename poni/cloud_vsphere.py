@@ -45,6 +45,7 @@ class VSphereProvider(cloudbase.Provider):
         placement = prop.get('placement', None)
         resource_pool = prop.get('resource_pool', None)
         datastore = prop.get('datastore', None)
+        hardware = prop.get('hardware', None)
         instance = self.instances.get(instance_id)
         if not instance:
             vm_state = 'VM_NON_EXISTENT'
@@ -62,7 +63,7 @@ class VSphereProvider(cloudbase.Provider):
             instance = dict(id=instance_id, vm=vm, vm_name=vm_name,
                             base_vm_name=base_vm_name, vm_state=vm_state,
                             placement=placement, resource_pool=resource_pool,
-                            datastore=datastore)
+                            datastore=datastore, hardware=hardware)
             self.instances[instance_id] = instance
         return instance
 
@@ -271,6 +272,36 @@ class VSphereProvider(cloudbase.Provider):
         self.log.debug("CLONE(%s) CLONE DONE" % vm_name)
 
         clone = self.vim.find_vm_by_name(vm_name)
+
+        # Reconfigure the VM hardware as specified
+        hardware = instance["hardware"]
+        if hardware:
+            # Find if any new disks or NICs need to be added to the VM
+            disks = [hardware.get("disk%d" % x) for x in xrange(10) if hardware.get("disk%d" % x)]
+            nics = [hardware.get("nic%d" % x) for x in xrange(10) if hardware.get("nic%d" % x)]
+            spec = self.vim.create_object('VirtualMachineConfigSpec')
+            if hardware["ram"]:
+                spec.memoryMB = int(hardware["ram"])
+            if hardware["cpus"]:
+                spec.numCPUs = int(hardware["cpus"])
+            for disk in disks:
+                provisioning = disk.get("provisioning", "thin")
+                assert provisioning in ["thin", "thick"], "disk provisioning must be either 'thick' or 'thin', not %s" % provisioning
+                disk_mode = disk.get("mode", "persistent")
+                disk_spec = clone.spec_new_disk(size=int(disk["size"]), thin=provisioning=='thin', disk_mode=disk_mode)
+                spec.deviceChange.append(disk_spec)
+            for nic in nics:
+                network = nic.get("network")
+                assert network, "network name must be specified for NICs"
+                nic_type = nic.get("nic_type", "vmxnet2")
+                nic_spec = clone.spec_new_nic(network=network, nic_type=nic_type)
+                spec.deviceChange.append(nic_spec)
+
+            self.log.debug("CLONE(%s) RECONFIG_VM STARTING" % vm_name)
+            task = clone.reconfig_vm_task(spec=spec)
+            while not done(task):
+                task = (yield task)
+            self.log.debug("CLONE(%s) RECONFIG_VM DONE" % vm_name)
 
         self.log.debug("CLONE(%s) POWERON STARTING" % vm_name)
         task = clone.power_on_task()
