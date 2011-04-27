@@ -86,7 +86,8 @@ class VSphereProvider(cloudbase.Provider):
         Return instance status string for the instance specified in the given
         cloud properties dict.
         """
-        assert 0, "implement in sub-class"
+        instance = self._get_instance(prop)
+        return instance["vm_state"]
 
     def terminate_instances(self, props):
         """
