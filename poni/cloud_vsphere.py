@@ -45,6 +45,7 @@ class VSphereProvider(cloudbase.Provider):
         placement = prop.get('placement', None)
         resource_pool = prop.get('resource_pool', None)
         datastore = prop.get('datastore', None)
+        datastore_filter = prop.get('datastore_filter', '')
         hardware = prop.get('hardware', None)
         instance = self.instances.get(instance_id)
         if not instance:
@@ -63,7 +64,7 @@ class VSphereProvider(cloudbase.Provider):
             instance = dict(id=instance_id, vm=vm, vm_name=vm_name,
                             base_vm_name=base_vm_name, vm_state=vm_state,
                             placement=placement, resource_pool=resource_pool,
-                            datastore=datastore, hardware=hardware)
+                            datastore=datastore, datastore_filter=datastore_filter, hardware=hardware)
             self.instances[instance_id] = instance
         return instance
 
@@ -185,7 +186,7 @@ class VSphereProvider(cloudbase.Provider):
 
         return updated_props
 
-    def _get_base_vm(self, base_vm_name):
+    def _get_base_vm(self, base_vm_name, datastore_filter=''):
         """
         Get a VM object for the base image for cloning with a bit of caching
 
@@ -199,10 +200,9 @@ class VSphereProvider(cloudbase.Provider):
             if base_vm:
                 base_vm.size = sum([x.committed for x in base_vm.storage.perDatastoreUsage])
                 assert base_vm.size > 0, "base vm size is zero? Very unlikely..."
-                host = ManagedObject(base_vm.summary.runtime.host, self.vim, ['parent'])
-                cr = ManagedObject(host.parent, self.vim, ['name', 'datastore'])
-                # Fetch info on all the datastores available to this ComputeResource
-                base_vm.available_datastores = [ManagedObject(x, self.vim, ['name', 'summary', 'info']) for x in cr.datastore]
+                # List all available datastores that contain <datastore_filter> as substring
+                base_vm.available_datastores = [x for x in self.vim.find_entities_by_type('Datastore', ['name', 'summary', 'info'])
+                                                if datastore_filter in x.name]
                 self._base_vm_cache[base_vm_name] = base_vm
         return base_vm
 
@@ -242,7 +242,7 @@ class VSphereProvider(cloudbase.Provider):
             return target
 
         vm_name = instance['vm_name']
-        base_vm = self._get_base_vm(instance['base_vm_name'])
+        base_vm = self._get_base_vm(instance['base_vm_name'], instance['datastore_filter'])
         assert base_vm, "base VM %s not found, check the cloud.base_vm_name property for %s" % (instance['base_vm_name'], vm_name)
 
         if nuke_old:
