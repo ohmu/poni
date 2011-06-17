@@ -25,6 +25,7 @@ class VSphereProvider(cloudbase.Provider):
         self.vim.login(self.vi_username, self.vi_password)
         self.instances = {}
         self._base_vm_cache = {}
+        self._cluster_datastore_cache = {}
 
     @classmethod
     def get_provider_key(cls, cloud_prop):
@@ -44,6 +45,7 @@ class VSphereProvider(cloudbase.Provider):
         assert base_vm_name, "base_vm_name must be specified for vSphere instances"
         placement = prop.get('placement', None)
         resource_pool = prop.get('resource_pool', None)
+        cluster = prop.get('cluster', None)
         datastore = prop.get('datastore', None)
         datastore_filter = prop.get('datastore_filter', '')
         hardware = prop.get('hardware', None)
@@ -63,7 +65,7 @@ class VSphereProvider(cloudbase.Provider):
             self.log.debug("Instance %s is in %s state", vm_name, vm_state)
             instance = dict(id=instance_id, vm=vm, vm_name=vm_name,
                             base_vm_name=base_vm_name, vm_state=vm_state,
-                            placement=placement, resource_pool=resource_pool,
+                            placement=placement, resource_pool=resource_pool, cluster=cluster,
                             datastore=datastore, datastore_filter=datastore_filter, hardware=hardware)
             self.instances[instance_id] = instance
         return instance
@@ -186,7 +188,7 @@ class VSphereProvider(cloudbase.Provider):
 
         return updated_props
 
-    def _get_base_vm(self, base_vm_name, datastore_filter=''):
+    def _get_base_vm(self, instance):
         """
         Get a VM object for the base image for cloning with a bit of caching
 
@@ -194,17 +196,33 @@ class VSphereProvider(cloudbase.Provider):
 
         @returns: VM object or None if not found
         """
+        base_vm_name = instance['base_vm_name']
+        datastore_filter = instance['datastore_filter']
+        cluster = instance['cluster']
         base_vm = self._base_vm_cache.get(base_vm_name, None)
         if not base_vm:
             base_vm = self.vim.find_vm_by_name(base_vm_name, ['storage', 'summary'])
             if base_vm:
                 base_vm.size = sum([x.committed for x in base_vm.storage.perDatastoreUsage])
                 assert base_vm.size > 0, "base vm size is zero? Very unlikely..."
+                if cluster:
+                    datastores = self._datastores_in_cluster(cluster)
+                else:
+                    datastores = self.vim.find_entities_by_type('Datastore', ['name', 'summary', 'info'])
                 # List all available datastores that contain <datastore_filter> as substring
-                base_vm.available_datastores = [x for x in self.vim.find_entities_by_type('Datastore', ['name', 'summary', 'info'])
-                                                if datastore_filter in x.name]
+                base_vm.available_datastores = [x for x in datastores if datastore_filter in x.name]
+                self.log.debug("Datastores for VM %s: %s" % (base_vm_name, ','.join([x.name for x in base_vm.available_datastores])))
                 self._base_vm_cache[base_vm_name] = base_vm
         return base_vm
+
+    def _datastores_in_cluster(self, clustername):
+        """ Find and return the list of available datastores for a ClusterComputeResource """
+        if clustername not in self._cluster_datastore_cache:
+            ccr = self.vim.find_entity_by_name('ClusterComputeResource', clustername, ['name', 'datastore'])
+            assert ccr, "specified ClusterComputeResource '%s' not found" % clustername
+            datastores = [ManagedObject(x, self.vim, ['name', 'summary', 'info']) for x in ccr.datastore]
+            self._cluster_datastore_cache[clustername] = datastores
+        return self._cluster_datastore_cache.get(clustername, [])
 
     def _clone_vm(self, instance, nuke_old=False):
         """
@@ -242,7 +260,7 @@ class VSphereProvider(cloudbase.Provider):
             return target
 
         vm_name = instance['vm_name']
-        base_vm = self._get_base_vm(instance['base_vm_name'], instance['datastore_filter'])
+        base_vm = self._get_base_vm(instance)
         assert base_vm, "base VM %s not found, check the cloud.base_vm_name property for %s" % (instance['base_vm_name'], vm_name)
 
         if nuke_old:
