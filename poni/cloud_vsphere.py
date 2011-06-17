@@ -246,13 +246,14 @@ class VSphereProvider(cloudbase.Provider):
         assert base_vm, "base VM %s not found, check the cloud.base_vm_name property for %s" % (instance['base_vm_name'], vm_name)
 
         if nuke_old:
-            clone = self.vim.find_vm_by_name(vm_name)
+            clone = self.vim.find_vm_by_name(vm_name, ['summary'])
             if clone:
-                self.log.debug("CLONE(%s) POWEROFF STARTING" % vm_name)
-                task = clone.power_off_task()
-                while not done(task):
-                    task = (yield task)
-                self.log.debug("CLONE(%s) POWEOFF DONE" % vm_name)
+                if clone.power_state() == 'poweredOn':
+                    self.log.debug("CLONE(%s) POWEROFF STARTING" % vm_name)
+                    task = clone.power_off_task()
+                    while not done(task):
+                        task = (yield task)
+                    self.log.debug("CLONE(%s) POWEOFF DONE" % vm_name)
                 self.log.debug("CLONE(%s) DELETE STARTING" % vm_name)
                 task = clone.delete_vm_task()
                 while not done(task):
