@@ -348,7 +348,7 @@ class VSphereProvider(cloudbase.Provider):
             for nic in nics:
                 network = nic.get("network")
                 assert network, "network name must be specified for NICs"
-                nic_type = nic.get("nic_type", "vmxnet2")
+                nic_type = nic.get("nic_type", "vmxnet3")
                 nic_spec = clone.spec_new_nic(network=network, nic_type=nic_type)
                 spec.deviceChange.append(nic_spec)
 
