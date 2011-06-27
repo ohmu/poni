@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import time
+from . import errors
 from . import cloudbase
 
 try:
@@ -54,7 +55,6 @@ class VSphereProvider(cloudbase.Provider):
         if not instance:
             vm = None
             vm_state = 'VM_NON_EXISTENT'
-
             # self.vms is a cache mechanism to get around the fact
             # that vim.find_vm_by_name is O(N*M) in time complexity
             if self.vms is None:
@@ -62,10 +62,8 @@ class VSphereProvider(cloudbase.Provider):
                 for e in self.vim.find_entities_by_type('VirtualMachine', ['summary', 'snapshot']) or []:
                     self.vms[e.name] = e
             vm = self.vms.get(vm_name)
-
             if vm:
                 self.log.debug('VM %s already exists', vm_name)
-                self.vms[vm_name] = vm
                 vm_state = 'VM_DIRTY'
                 if (hasattr(vm, 'snapshot') and
                     vm.snapshot.rootSnapshotList and
@@ -151,51 +149,77 @@ class VSphereProvider(cloudbase.Provider):
         """
         jobs = {}
         tasks = {}
-        for prop in props:
-            instance_id = prop['instance']
-            instance = self._get_instance(prop)
-            assert instance, "instance %s not found. Very bad. Should not happen. Ever." % instance_id
-            vm_state = instance['vm_state']
-            job = None
-            if wait_state == 'running':
-                # Get the VM running from whatever state it's in
-                if vm_state == 'VM_CLEAN':
-                    job = self._revert_vm(instance)
-                elif vm_state == 'VM_NON_EXISTENT':
-                    job = self._clone_vm(instance, nuke_old=True)
-                elif vm_state == 'VM_DIRTY':
-                    job = self._clone_vm(instance, nuke_old=True)
-            else:
-                # Handle the update
-                if vm_state == 'VM_RUNNING':
-                    job = self._update_vm(instance)
-            if job:
-                jobs[instance_id] = job
-                tasks[instance_id] = None
-        # Keep running the jobs until they are all done
         updated_props = {}
-        while jobs:
-            if [tasks[x] for x in tasks if tasks[x]]:
-                _,tasks = self.vim.update_many_objects(tasks)
-            for instance_id in list(jobs):
-                try:
-                    job = jobs[instance_id]
-                    # This is where the magic happens: the generator is fed the
-                    # latest updated Task and returns the same or the next one
-                    # to poll.
-                    tasks[instance_id] = job.send(tasks[instance_id])
-                except StopIteration:
-                    self.log.debug("%s entered state: %s", instance_id, wait_state)
-                    del tasks[instance_id]
-                    del jobs[instance_id]
-                    self.instances[instance_id]['vm_state'] = 'VM_RUNNING'
-                    # Collect the IP address which should be in there by now
-                    ipv4=self.instances[instance_id]['ipv4']
-                    private=dict(ip=ipv4,
-                                 dns=ipv4)
-                    updated_props[instance_id] = dict(host=ipv4, private=private)
-            # self.log.info("[%s/%s] instances %r, waiting...", len(updated_props), len(props), wait_state)
-            time.sleep(2)
+        error_count = 0
+        # 8 is a magical value from experience, infinity (None/0)
+        # causes some cloning operations to fail. vCenter itself
+        # queues things nicely, but it gets "Resources currently in
+        # use by other operations. Waiting." probably from disk, and
+        # finally fails. So this value might be hardware configuration
+        # dependent (number of LUNs, hosts etc.).
+        #
+        # As an example, 21 concurrent clones caused 4 errors to occur
+        # on configuration with six datastores (LUNs) and 7 ESX hosts.
+        max_jobs = 8
+
+        # Keep creating and running the jobs until they are all done
+        while props or jobs:
+            while (not max_jobs or len(jobs) < max_jobs) and props:
+                prop = props.pop(0)
+                self.log.info("prop=%r len(props)=%d", prop, len(props))
+                instance_id = prop['instance']
+                instance = self._get_instance(prop)
+                assert instance, "instance %s not found. Very bad. Should not happen. Ever." % instance_id
+                vm_state = instance['vm_state']
+                job = None
+                if wait_state == 'running':
+                    # Get the VM running from whatever state it's in
+                    if vm_state == 'VM_CLEAN':
+                        job = self._revert_vm(instance)
+                    elif vm_state == 'VM_NON_EXISTENT':
+                        job = self._clone_vm(instance, nuke_old=True)
+                    elif vm_state == 'VM_DIRTY':
+                        job = self._clone_vm(instance, nuke_old=True)
+                else:
+                    # Handle the update
+                    if vm_state == 'VM_RUNNING':
+                        job = self._update_vm(instance)
+                if job:
+                    jobs[instance_id] = job
+                    tasks[instance_id] = None
+
+            if jobs:
+                if [tasks[x] for x in tasks if tasks[x]]:
+                    _,tasks = self.vim.update_many_objects(tasks)
+                for instance_id in list(jobs):
+                    try:
+                        job = jobs[instance_id]
+                        # This is where the magic happens: the generator is fed the
+                        # latest updated Task and returns the same or the next one
+                        # to poll.
+                        tasks[instance_id] = job.send(tasks[instance_id])
+                    except StopIteration:
+                        self.log.debug("%s entered state: %s", instance_id, wait_state)
+                        del tasks[instance_id]
+                        del jobs[instance_id]
+                        self.instances[instance_id]['vm_state'] = 'VM_RUNNING'
+                        # Collect the IP address which should be in there by now
+                        ipv4=self.instances[instance_id]['ipv4']
+                        private=dict(ip=ipv4,
+                                     dns=ipv4)
+                        updated_props[instance_id] = dict(host=ipv4, private=private)
+                    except Exception, err:
+                        self.log.error("%s failed: %s", instance_id, err)
+                        del tasks[instance_id]
+                        del jobs[instance_id]
+                        error_count += 1
+
+                # self.log.info("[%s/%s] instances %r, waiting...", len(updated_props), len(props), wait_state)
+                self.log.debug("#props=%d #jobs=%d errors=%d", len(props), len(jobs), error_count)
+                time.sleep(2)
+
+        if error_count:
+            raise errors.CloudError("%d jobs failed" % error_count)
 
         return updated_props
 
@@ -334,10 +358,14 @@ class VSphereProvider(cloudbase.Provider):
                 task = (yield task)
             self.log.debug("CLONE(%s) RECONFIG_VM DONE" % vm_name)
 
+        assert clone, "Could not clone vm %s" % (vm_name)
+
         self.log.debug("CLONE(%s) POWERON STARTING" % vm_name)
         task = clone.power_on_task()
         while not done(task):
             task = (yield task)
+        clone.update_local_view(['summary'])
+        assert clone.power_state() == 'poweredOn', "%s was not successfully powered on" % vm_name
         self.log.debug("CLONE(%s) POWERON DONE" % vm_name)
 
         self.log.debug("CLONE(%s) WAITING FOR IP" % (vm_name))
@@ -421,6 +449,8 @@ class VSphereProvider(cloudbase.Provider):
             task = vm.power_off_task()
             while not done(task):
                 task = (yield task)
+            vm.update_local_view(['summary'])
+            assert vm.power_state() == 'poweredOff', "%s was not successfully powered off" % vm_name
             self.log.debug("DELETE(%s) POWEROFF DONE" % vm_name)
 
         self.log.debug("DELETE(%s) DELETE STARTING" % vm_name)
