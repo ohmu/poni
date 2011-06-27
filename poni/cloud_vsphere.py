@@ -24,6 +24,7 @@ class VSphereProvider(cloudbase.Provider):
         self.vim = Vim(self.vi_url)
         self.vim.login(self.vi_username, self.vi_password)
         self.instances = {}
+        self.vms = None
         self._base_vm_cache = {}
         self._cluster_datastore_cache = {}
 
@@ -51,10 +52,20 @@ class VSphereProvider(cloudbase.Provider):
         hardware = prop.get('hardware', None)
         instance = self.instances.get(instance_id)
         if not instance:
+            vm = None
             vm_state = 'VM_NON_EXISTENT'
-            vm = self.vim.find_vm_by_name(vm_name, ['summary', 'snapshot'])
+
+            # self.vms is a cache mechanism to get around the fact
+            # that vim.find_vm_by_name is O(N*M) in time complexity
+            if self.vms is None:
+                self.vms = {}
+                for e in self.vim.find_entities_by_type('VirtualMachine', ['summary', 'snapshot']) or []:
+                    self.vms[e.name] = e
+            vm = self.vms.get(vm_name)
+
             if vm:
                 self.log.debug('VM %s already exists', vm_name)
+                self.vms[vm_name] = vm
                 vm_state = 'VM_DIRTY'
                 if (hasattr(vm, 'snapshot') and
                     vm.snapshot.rootSnapshotList and
