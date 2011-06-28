@@ -150,6 +150,7 @@ class VSphereProvider(cloudbase.Provider):
         jobs = {}
         tasks = {}
         updated_props = {}
+        props = props[:] # make a copy because we pop() from it
         error_count = 0
         # 8 is a magical value from experience, infinity (None/0)
         # causes some cloning operations to fail. vCenter itself
@@ -163,10 +164,10 @@ class VSphereProvider(cloudbase.Provider):
         max_jobs = 8
 
         # Keep creating and running the jobs until they are all done
+        next_report = time.time() + 10.0
         while props or jobs:
             while (not max_jobs or len(jobs) < max_jobs) and props:
                 prop = props.pop(0)
-                self.log.info("prop=%r len(props)=%d", prop, len(props))
                 instance_id = prop['instance']
                 instance = self._get_instance(prop)
                 assert instance, "instance %s not found. Very bad. Should not happen. Ever." % instance_id
@@ -214,8 +215,10 @@ class VSphereProvider(cloudbase.Provider):
                         del jobs[instance_id]
                         error_count += 1
 
-                # self.log.info("[%s/%s] instances %r, waiting...", len(updated_props), len(props), wait_state)
-                self.log.debug("#props=%d #jobs=%d errors=%d", len(props), len(jobs), error_count)
+                if time.time() >= next_report:
+                    self.log.info("%s instances %r, waiting...", len(updated_props), wait_state)
+                    next_report = time.time() + 10.0
+
                 time.sleep(2)
 
         if error_count:
