@@ -59,7 +59,7 @@ class Config(dict):
 
         for key, value in update.iteritems():
             first = key[:1]
-            if key[:1] in ["!", "+", "-"]:
+            if first in ["!", "+", "-"]:
                 try:
                     target_value = target[key[1:]]
                 except KeyError:
@@ -81,7 +81,7 @@ class Config(dict):
                         "%s: unknown setting %r (not in default settings)" % (
                             file_path, key))
 
-                self.apply_update(target[key], value, file_path)
+                self.apply_update(value, target[key], file_path)
 
 
 class Proxy:
