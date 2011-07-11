@@ -87,7 +87,7 @@ Let's see how the system looks now::
 
 The ``list`` command shows only nodes by default. Let's also view the systems::
 
-  $ poni list -s
+  $ poni list -sn
     system webshop
     system webshop/backend
       node webshop/backend/postgres1
