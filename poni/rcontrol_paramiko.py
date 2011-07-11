@@ -205,7 +205,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                 if now > (rx_time + self.terminate_timeout):
                     # no output in a long time, terminate connection
                     raise errors.RemoteError(
-                        "%s: no output in %.1s, terminating" % (
+                        "%s: no output in %.1f seconds, terminating" % (
                             log_name, self.terminate_timeout))
 
                 if now > next_warn:
