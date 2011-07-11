@@ -448,7 +448,9 @@ class ConfigMan:
             if not lib_path.isabs():
                 lib_path = self.root_dir / lib_path
 
-            sys.path.append(lib_path)
+            lib_path = str(lib_path)
+            if not lib_path in sys.path:
+                sys.path.append(lib_path)
 
     def init_repo(self):
         if self.config_path.exists():
@@ -466,8 +468,12 @@ class ConfigMan:
 
     def set_library_path(self, name, lib_path):
         conf = self.load_config()
+        lib_path = str(lib_path)
         libpath = conf.setdefault("libpath", {})
         libpath[name] = lib_path
+        if lib_path not in sys.path:
+            sys.path.append(lib_path)
+
         self.save_config(conf)
 
     def load_config(self):
