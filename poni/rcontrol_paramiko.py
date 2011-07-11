@@ -166,36 +166,47 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         ssh = self.get_ssh()
         transport = ssh.get_transport()
         channel = transport.open_session()
+        if not channel:
+            raise errors.RemoteError("failed to open an SSH session to %s" % (
+                    self.node.name))
+
         channel.set_combine_stderr(True) # TODO: separate stdout/stderr?
         BS = 2**16
         rx_time = time.time()
         log_name = "%s: %r" % (self.node.name, cmd)
         next_warn = time.time() + self.warn_timeout
+        waiting = [True, True, True] # process, stdout, stderr
         try:
             channel.exec_command(cmd)
             channel.shutdown_write()
-            terminating = False
-            while True:
-                if channel.exit_status_ready():
-                    if terminating:
-                        # process terminated AND remaining output is read
-                        break
-                    else:
-                        # one more round of reads to get the remaining output
-                        terminating = True
+            while any(waiting):
+                if waiting[0] and channel.exit_status_ready():
+                    # process has finished executing, but there still may be
+                    # output to read from stdout or stderr
+                    waiting[0] = False
 
-                if not terminating:
-                    r, w, e = select.select([channel], [], [], 1.0)
+                r, w, e = select.select([channel], [], [], 1.0)
 
-                while channel.recv_stderr_ready():
+                while waiting[2] and channel.recv_stderr_ready():
                     x = channel.recv_stderr(BS)
+                    if not x:
+                        waiting[2] = False # finished reading from stdout
+                        break;
+
                     rx_time = time.time()
                     next_warn = time.time() + self.warn_timeout
                     if x:
                         yield rcontrol.STDERR, x
 
-                while channel.recv_ready():
+                while (not waiting[0]) or (waiting[1] and channel.recv_ready()):
+                    # read all the remaining output until stdout is closed OR
+                    # read just everything that is available
                     x = channel.recv(BS)
+                    if not x:
+                        waiting[1] = False
+                        waiting[2] = False # don't wait for stderr either
+                        break;
+
                     rx_time = time.time()
                     next_warn = time.time() + self.warn_timeout
                     if x:
