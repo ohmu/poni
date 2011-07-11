@@ -141,7 +141,7 @@ class Manager:
             source_path = entry["config"].path / entry["source_path"]
             try:
                 dest_path = entry["dest_path"]
-                if dest_path[-1:] == "/":
+                if dest_path and dest_path[-1:] == "/":
                     # dest path ending in slash: use source filename
                     dest_path = path(dest_path) / source_path.basename()
 
@@ -150,15 +150,21 @@ class Manager:
                 else:
                     dest_path, output = render(source_path, dest_path)
 
-                dest_path = path(item_path_prefix + dest_path).normpath()
+                if dest_path:
+                    dest_path = path(item_path_prefix + dest_path).normpath()
+
                 if (not audit and not deploy) and verbose:
                     # plain verify mode
-                    self.log.info("OK: %s file: %s", node_name, dest_path)
+                    self.log.info("OK: %s: %s", node_name, dest_loc)
             except (IOError, errors.Error), error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
                 stats["error_count"] += 1
+
+            if output and entry["dest_bucket"]:
+                # add the rendered output to the specified bucket
+                entry["config"].plugin.add_record(entry["dest_bucket"], text=output)
 
             if show and not filtered_out:
                 if show_diff:
@@ -174,9 +180,16 @@ class Manager:
                 else:
                     show_output = output
 
+                if dest_path:
+                    dest_loc = dest_path
+                elif entry.get("dest_bucket"):
+                    dest_loc = "bucket:%s" % entry["dest_bucket"]
+                else:
+                    dest_loc = "(just rendered)"
+
                 identity = "%s%s%s" % (color(node_name, "node"),
                                        color(": path=", "header"),
-                                       color(dest_path, "path"))
+                                       color(dest_loc, "path"))
                 sys.stdout.write("%s %s %s\n" % (color("--- BEGIN", "header"),
                                                identity,
                                                color("---", "header")))
@@ -428,6 +441,7 @@ class PlugIn:
         parser.dispatch(argv=full_args, namespace=namespace)
 
     def add_file(self, source_path, dest_path=None, source_text=None,
+                 dest_bucket=None,
                  render=None, report=False, post_process=None, mode=None):
         render = render or self.render_cheetah
         return self.manager.add_file(node=self.node, config=self.config,
@@ -436,6 +450,7 @@ class PlugIn:
                                      source_text=source_text,
                                      render=render, report=report,
                                      post_process=post_process,
+                                     dest_bucket=dest_bucket,
                                      mode=mode)
 
     def add_dir(self, source_path, dest_path, render=None):
