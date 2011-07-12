@@ -8,6 +8,7 @@ import copy
 import datetime
 import getpass
 import hashlib
+import json
 import logging
 import os
 import paramiko
@@ -32,12 +33,9 @@ class LibvirtProvider(Provider):
         self.hosts = []
         self.hosts_online = None
         self.instances = {}
-        hosts = os.environ.get('LV_HOSTS') or cloud_prop.get("lv_hosts")
-        assert hosts, "either the enviroment variable LV_HOSTS or lv_hosts property must be set for libvirt instances"
-        for hosts1 in hosts.split(","):
-            for host in hosts1.split():
-                url = "qemu+ssh://root@%s/system" % (host, )
-                self.hosts.append(PoniLVConn(host, url))
+        profile = json.load(open(cloud_prop["profile"], "rb"))
+        for host in profile["nodes"]:
+            self.hosts.append(PoniLVConn(host))
 
     @classmethod
     def get_provider_key(cls, cloud_prop):
@@ -108,13 +106,12 @@ class LibvirtProvider(Provider):
             pool = prop.get("storage_pool", "default")
             ipv6pre = prop.get("ipv6_prefix")
 
-            if vm_state == "VM_DIRTY":
-                conns = instance["vm_conns"]
-                if len(conns) > 1:
-                    [conn.delete_vm(instance["vm_name"]) for conn in conns]
-                conn = random.choice(conns)
-            elif vm_state == "VM_NON_EXISTENT":
-                conn = random.choice(self.conns)
+            if vm_state in ("VM_DIRTY", "VM_NON_EXISTENT"):
+                # Delete any existing instances
+                [conn.delete_vm(instance["vm_name"]) for conn in instance["vm_conns"]]
+                # Select the best place for this host
+                nodes = sorted((conn.weight, conn) for conn in self.conns)
+                conn = nodes[-1][1]
             elif vm_state == "VM_RUNNING":
                 continue
             else:
@@ -188,38 +185,64 @@ class LibvirtProvider(Provider):
 
 
 class PoniLVConn(object):
-    def __init__(self, host, uri):
+    def __init__(self, host, uri=None):
+        if not uri:
+            uri = "qemu+ssh://root@%s/system" % (host, )
         self.host = host
         self.uri = uri
         self.conn = None
         self.vms = None
+        self.vms_online = 0
+        self.vms_offline = 0
+        self.cpus_online = 0
         self.pools = None
+        self.node = None
 
     def __repr__(self):
         return "PoniLVConn(%r)" % (self.host)
 
+    @property
+    def weight(self):
+        online = float((self.vms_online + self.cpus_online / 4) or 1)
+        return self.node["total_mhz"] / online
+
     def connect(self, uri = None):
         self.conn = libvirt.open(uri or self.uri)
-        self.list()
+        self.refresh_list()
+        self.refresh_node()
 
-    def list(self):
+    def refresh_node(self):
+        assert self.conn, "not connected"
+        keys = ("cpu", "memory", "cpus", "mhz", "nodes", "sockets", "cores", "threads")
+        info = self.conn.getInfo()
+        node = dict(zip(keys, info))
+        node["total_mhz"] = node["sockets"] * node["cores"] * node["mhz"]
+        self.node = node
+
+    def refresh_list(self):
+        assert self.conn, "not connected"
         self.vms = {}
+        self.vms_online = 0
+        self.vms_offline = 0
         for dom_id in self.conn.listDomainsID():
             dom = PoniLVDom(self, self.conn.lookupByID(dom_id))
             self.vms[dom.name] = dom
+            self.vms_online += 1
         for name in self.conn.listDefinedDomains():
             dom = PoniLVDom(self, self.conn.lookupByName(name))
             self.vms[dom.name] = dom
+            self.vms_offline += 1
         self.pools = {}
         for name in self.conn.listStoragePools():
             pool = PoniLVPool(self.conn.storagePoolLookupByName(name))
             self.pools[name] = pool
+        self.cpus_online = sum(dom.info["cpus"] for dom in self.vms.itervalues() if dom.info["cputime"] > 0)
 
     def delete_vm(self, vm_name):
         if vm_name not in self.vms:
             raise LVPError("%r is not defined" % (vm_name, ))
         self.vms[vm_name].delete()
-        self.list() # refresh
+        self.refresh_list()
 
     def clone_vm(self, name, pool, spec, overwrite = False):
         desc = """
@@ -343,16 +366,15 @@ class PoniLVConn(object):
         new_desc = desc % spec
         vm = self.conn.defineXML(new_desc)
         vm.create()
-        self.list() # refresh
+        self.refresh_list()
         return self.vms[name]
 
 
 class PoniLVPool(object):
     def __init__(self, pool):
         self.pool = pool
-        self.xml = pool.XMLDesc(0)
         self.path = None
-        self.parse_xml()
+        self.__read_desc()
 
     def clone_volume(self, source, target, megabytes):
         desc = """
@@ -371,8 +393,9 @@ class PoniLVPool(object):
         new_desc = desc % dict(name = target, megabytes = megabytes, source = source, poolpath = self.path)
         return self.pool.createXML(new_desc, 0)
 
-    def parse_xml(self):
-        tree = xmlparse(self.xml)
+    def __read_desc(self):
+        xml = self.pool.XMLDesc(0)
+        tree = xmlparse(xml)
         pools = tree.getElementsByTagName("pool")
         if pools:
             targets = pools[0].getElementsByTagName("target")
@@ -387,10 +410,11 @@ class PoniLVDom(object):
         self.conn = conn
         self.dom = dom
         self.name = dom.name()
-        self.xml = dom.XMLDesc(0)
         self.macs = []
         self.disks = []
-        self.parse_xml()
+        self.info = {}
+        self.__dom_info()
+        self.__read_desc()
 
     def ipv6_addr(self, prefix = "fe80::"):
         return [mac_to_ipv6(prefix, mac) for mac in self.macs]
@@ -412,8 +436,14 @@ class PoniLVDom(object):
                 raise
         self.dom.undefine()
 
-    def parse_xml(self):
-        tree = xmlparse(self.xml)
+    def __dom_info(self):
+        keys = ("state", "maxmem", "memory", "cpus", "cputime")
+        vals = self.dom.info()
+        self.info = dict(zip(keys, vals))
+
+    def __read_desc(self):
+        xml = self.dom.XMLDesc(0)
+        tree = xmlparse(xml)
         doms = tree.getElementsByTagName("domain")
         if not doms:
             return
