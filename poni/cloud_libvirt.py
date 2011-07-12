@@ -249,14 +249,7 @@ class PoniLVConn(object):
                   <target dev='vda' bus='virtio'/>
                   <alias name='virtio-disk0'/>
                 </disk>
-                <interface type='bridge'>
-                  <mac address='%(mac)s'/>
-                  <source bridge='br0'/>
-                  <target dev='vnet0'/>
-                  <model type='virtio'/>
-                  <alias name='net0'/>
-                  <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
-                </interface>
+                %(interfaces)s
                 <serial type='pty'>
                   <target port='0'/>
                   <alias name='serial0'/>
@@ -280,7 +273,20 @@ class PoniLVConn(object):
               </devices>
             </domain>
             """
+        interface_desc = """
+                <interface type='%(type)s'>
+                  <model type='virtio'/>
+                  <mac address='%(mac)s'/>
+                  <source %(type)s='%(network)s'/>
+                </interface>
+                """
         spec = copy.deepcopy(spec)
+        default_network = spec.get("default_network", "default")
+        def macaddr(index):
+            # NOTE: mac address is based on name to have predictable DHCP addresses
+            mac_ext = hashlib.md5(name).hexdigest()
+            return "52:54:00:%s:%s:%02x" % (mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16)^index)
+
         if name in self.vms:
             if not overwrite:
                 raise LVPError("%r vm already exists" % (name, ))
@@ -310,10 +316,27 @@ class PoniLVConn(object):
             spec["hardware.disk"] = 8192
         if "hardware.diskcache" not in spec:
             spec["hardware.diskcache"] = "default"
-        if "mac" not in spec:
-            # NOTE: mac address is based on name to have predictable DHCP addresses
-            mac_ext = hashlib.md5(name).hexdigest()
-            spec["mac"] = "52:54:00:%s:%s:%s" % (mac_ext[0:2], mac_ext[2:4], mac_ext[4:6])
+        # Set up interfaces - any hardware.nicX entries in spec,
+        # failing that create one interface by default.
+        spec["interfaces"] = ""
+        nspecs = []
+        for i in xrange(100):
+            nspec = spec.get("hardware.nic%d" % i)
+            if not isinstance(nspec, dict):
+                break
+            nspecs.append(nspec)
+        if not nspecs:
+            nspecs.append({})
+        for i, nspec in enumerate(nspecs):
+            ispec = {
+                "mac": nspec.get("mac", macaddr(i)),
+                "type": nspec.get("type", "network"),
+                "network": nspec.get("network", default_network),
+            }
+            if "bridge" in nspec: # support for old style bridge-only defs
+                ispec["type"] = "bridge"
+                ispec["network"] = nspec["bridge"]
+            spec["interfaces"] += interface_desc % ispec
         vol = self.pools[pool].clone_volume(spec["source_image"], name, spec["hardware.disk"])
         vol_path = vol.path()
         spec["disk_path"] = vol_path
