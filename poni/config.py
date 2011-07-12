@@ -514,6 +514,9 @@ class PlugIn:
         names = self.get_names()
         # TODO: template caching
         try:
+            if source_path:
+                source_path = str(CheetahTemplate(source_path, searchList=[names]))
+
             if source_path is not None:
                 text = str(CheetahTemplate(file=source_path,
                                            searchList=[names]))
