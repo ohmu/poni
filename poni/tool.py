@@ -445,7 +445,13 @@ class Tool:
                     ops = provider.setdefault(feature, [])
                     ops.append(op)
 
+        handled = set()
         def add_all_required_ops(op):
+            key = (op["node"].name, op["config"].name, op["name"])
+            if key in handled:
+                return
+            handled.add(key)
+
             node = op["node"]
             conf = op["config"]
             tasks[(node.name, conf.name, op["name"])] = op
