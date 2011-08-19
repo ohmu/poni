@@ -33,9 +33,12 @@ class LibvirtProvider(Provider):
         self.hosts = []
         self.hosts_online = None
         self.instances = {}
+        self.ssh_key = None
         profile = json.load(open(cloud_prop["profile"], "rb"))
+        if "ssh_key" in profile:
+            self.ssh_key = os.path.expandvars(os.path.expanduser(profile["ssh_key"]))
         for host in profile["nodes"]:
-            self.hosts.append(PoniLVConn(host))
+            self.hosts.append(PoniLVConn(host, keyfile = self.ssh_key))
 
     @classmethod
     def get_provider_key(cls, cloud_prop):
@@ -47,6 +50,15 @@ class LibvirtProvider(Provider):
     @property
     def conns(self):
         if not self.hosts_online:
+            if libvirt.getVersion() < 9004:
+                # libvirt support for no_verify was introduced in 0.9.4
+                procs = []
+                for conn in self.hosts:
+                    args = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no",
+                            "root@%s" % (conn.host, ), "uptime"]
+                    procs.append(subprocess.Popen(args))
+                [proc.wait() for proc in procs]
+
             self.hosts_online = []
             for conn in self.hosts:
                 try:
@@ -185,9 +197,10 @@ class LibvirtProvider(Provider):
 
 
 class PoniLVConn(object):
-    def __init__(self, host, uri=None):
+    def __init__(self, host, uri=None, keyfile=None):
         if not uri:
-            uri = "qemu+ssh://root@%s/system" % (host, )
+            uri = "qemu+ssh://root@{0}/system?no_tty=1&no_verify=1&keyfile={1}".\
+                  format(host, keyfile or "")
         self.host = host
         self.uri = uri
         self.conn = None
