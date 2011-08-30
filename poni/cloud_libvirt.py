@@ -233,6 +233,15 @@ class PoniLVConn(object):
         self.node = node
 
     def refresh_list(self):
+        try:
+            self.__refresh_list()
+        except libvirt.libvirtError, ex:
+            if "Domain not found" not in str(ex):
+                raise
+            # retry
+            self.__refresh_list()
+
+    def __refresh_list(self):
         assert self.conn, "not connected"
         self.vms = {}
         self.vms_online = 0
@@ -433,6 +442,12 @@ class PoniLVDom(object):
         return [mac_to_ipv6(prefix, mac) for mac in self.macs]
 
     def delete(self):
+        try:
+            self.dom.destroy()
+        except libvirt.libvirtError, ex:
+            if "domain is not running" not in str(ex):
+                raise
+
         # lookup and delete storage
         for disk in self.disks:
             delete_ok = False
@@ -441,12 +456,9 @@ class PoniLVDom(object):
                 vol = self.conn.conn.storageVolLookupByPath(disk)
                 vol.delete(0)
             except libvirt.libvirtError, ex:
-                raise LVPError("%r: deletion failed: %r" % (disk, ex))
-        try:
-            self.dom.destroy()
-        except libvirt.libvirtError, ex:
-            if "domain is not running" not in str(ex):
-                raise
+                if not "Storage volume not found" in str(ex):
+                    raise LVPError("%r: deletion failed: %r" % (disk, ex))
+
         self.dom.undefine()
 
     def __dom_info(self):
