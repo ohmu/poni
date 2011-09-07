@@ -30,11 +30,7 @@ class RemoteControl:
         self.warn_timeout = 30.0 # seconds to wait before warning user after receiving any output
         self.terminate_timeout = 300.0 # seconds to wait before disconnecting after receiving any output
 
-    def tag_line(self, tag, command, result=None, verbose=False, color=None):
-        assert color
-        if not verbose:
-            return
-
+    def get_out_line(self, color, tag, command, result):
         desc = "%s (%s): %s" % (color(self.node.name, "node"),
                                 color(self.node.get("host"), "host"),
                                 color(command, "command"))
@@ -45,7 +41,19 @@ class RemoteControl:
                                       tag,
                                       desc,
                                       color("---", "header"))
-        sys.stdout.write(out_line)
+        return out_line
+
+    def tag_line(self, tag, command, result=None, verbose=False, color=None,
+                 out_file=None):
+        assert color
+        if out_file and not out_file.isatty():
+            no_color = self.get_color(None, out_file=out_file)
+            plain_out = self.get_out_line(no_color, tag, command, result)
+            out_file.write(plain_out)
+
+        if verbose:
+            color_out = self.get_out_line(color, tag, command, result)
+            sys.stdout.write(color_out)
 
     def get_color(self, color, out_file=None):
         out_file = out_file or sys.stdout
@@ -69,7 +77,7 @@ class RemoteControl:
         output_chunks = []
         color = self.get_color(color, out_file=stdout_file)
         self.tag_line(color("BEGIN", "header"), command, verbose=verbose,
-                      color=color)
+                      color=color, out_file=stdout_file)
 
         try:
             while True:
@@ -111,7 +119,7 @@ class RemoteControl:
             raise
         finally:
             self.tag_line(color("END", "header"), command, result=result,
-                          verbose=verbose, color=color)
+                          verbose=verbose, color=color, out_file=stdout_file)
 
     def shell(self, verbose=False, color=None):
         color = self.get_color(color)
