@@ -161,7 +161,7 @@ class VSphereProvider(cloudbase.Provider):
         #
         # As an example, 21 concurrent clones caused 4 errors to occur
         # on configuration with six datastores (LUNs) and 7 ESX hosts.
-        max_jobs = 8
+        max_jobs = int(os.environ.get("PONI_MAX_VSPHERE_JOBS", 8))
 
         # Keep creating and running the jobs until they are all done
         next_report = time.time() + 10.0
