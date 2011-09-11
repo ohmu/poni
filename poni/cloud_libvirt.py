@@ -12,7 +12,7 @@ import json
 import logging
 import os
 import paramiko
-import random
+import re
 import socket
 import subprocess
 import time
@@ -22,6 +22,19 @@ from xml.dom.minidom import parseString as xmlparse
 import libvirt
 from poni.cloudbase import Provider
 from poni.errors import CloudError
+
+
+if getattr(paramiko.SSHClient, "connect_socket", None):
+    SshClientLVP = paramiko.SSHClient
+else:
+    class SSHClientLVP(paramiko.SSHClient):
+        def connect_socket(self, sock, username, key_filename):
+            self._transport = paramiko.Transport(sock)
+            if self._log_channel is not None:
+                self._transport.set_log_channel(self._log_channel)
+            self._transport.start_client()
+            paramiko.resource.ResourceManager.register(self, self._transport) # pylint: disable=E1120
+            self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
 
 class LVPError(CloudError):
     """LibvirtProvider error"""
@@ -109,7 +122,7 @@ class LibvirtProvider(Provider):
         Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert wait_state == "running", "libvirt only handles running stuff"
-        fwds = {}
+        result = {}
         home = os.environ.get("HOME")
         for prop in props:
             instance_id = prop['instance']
@@ -128,71 +141,75 @@ class LibvirtProvider(Provider):
                 continue
             else:
                 continue # XXX: throw an error?
+            instance["vm_conns"] = [conn]
             vm = conn.clone_vm(instance["vm_name"], pool, prop, overwrite = True)
-            ipv6_addr = vm.ipv6_addr(ipv6pre)
-            tun_port = random.randint(30000, 60000)
-            if conn.host not in fwds:
-                fwds[conn.host] = []
-            fwds[conn.host].append("-L%d:[%s]:22" % (tun_port, ipv6_addr[0]))
+            ipv6_addr = vm.ipv6_addr(ipv6pre)[0]
             self.instances[instance_id]['ipproto'] = prop.get("ipproto", "ipv4")
-            self.instances[instance_id]['ipv6'] = ipv6_addr[0]
-            self.instances[instance_id]['tunnel_port'] = tun_port
+            self.instances[instance_id]['ipv6'] = ipv6_addr
             self.instances[instance_id]["vm_state"] = "VM_RUNNING"
             ssh_key_path = "%s/.ssh/%s" % (home, prop["ssh_key"])
             self.instances[instance_id]["ssh_key"] = ssh_key_path
 
         # get ipv4 addresses for the hosts (XXX: come up with something better)
-        result = {}
+        tunnels = {}
+        failed = []
+        tries = 0
+        objs = []
+        start = time.time()
 
-        # fire up ssh tunnels
-        tuns = []
-        for host, ports in fwds.iteritems():
-            args = ["/usr/bin/ssh"] + ports + ["root@%s" % (host, ), "sleep 120"]
-            print args
-            tuns.append(subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE))
+        while (tries == 0) or failed:
+            tries += 1
+            if tries > 10:
+                raise LVPError("Connecting to %r failed" % (failed, ))
 
-        # look up addresses
-        missing = 1
-        while missing:
-            missing = 0
+            self.log.info("getting ip addresses: round #%r, time spent=%.02fs", tries, (time.time() - start))
+            if failed:
+                time.sleep(2)
+                failed = []
+
             for instance_id, instance in self.instances.iteritems():
-                if "tunnel_port" not in instance:
+                if instance["ipproto"] in instance:
+                    # address already exists (ie lookup done or we're using ipv6)
+                    if instance_id not in result:
+                        addr = instance[instance['ipproto']]
+                        result[instance_id] = dict(host=addr, private=dict(ip=addr, dns=addr))
                     continue
-                if "ipv4" in instance:
-                    continue
-                try:
-                    client = paramiko.SSHClient()
+
+                conn = instance["vm_conns"][0]
+                if conn not in tunnels:
+                    client = SSHClientLVP()
                     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    client.connect("localhost", port = int(instance["tunnel_port"]), username = "root",
-                        key_filename = instance["ssh_key"])
-                    stdin, stdout, stderr = client.exec_command('ip -4 addr show scope global')
-                    data = stdout.read()
-                    client.close()
+                    client.connect(conn.host, username = conn.username, key_filename = conn.keyfile)
+                    tunnels[conn] = client
+                trans = tunnels[conn].get_transport()
+
+                ipv4 = None
+                try:
+                    tunchan = trans.open_channel("direct-tcpip", (instance["ipv6"], 22), ("localhost", 0))
+                    client = SSHClientLVP()
+                    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    client.connect_socket(tunchan, username = "root", key_filename = instance["ssh_key"])
+                    cmdchan = client.get_transport().open_session()
+                    cmdchan.set_combine_stderr(True)
+                    cmdchan.exec_command('ip -4 addr show scope global')
+                    cmdchan.shutdown_write()
+                    data = cmdchan.recv(1024)
+                    objs.extend((tunchan, cmdchan, client))
                 except (socket.error, paramiko.SSHException), ex:
                     self.log.warning("connecting to %r failed: %r", instance, ex)
-                    if "failures" not in instance:
-                        instance["failures"] = 1
-                    else:
-                        instance["failures"] += 1
-                    if instance["failures"] > 10:
-                        raise LVPError("%r failed" % (instance, ))
-                    missing += 1
-                    continue
+                else:
+                    if data:
+                        ipv4 = data.partition(" inet ")[2].partition("/")[0]
 
-                if not data:
-                    missing += 1
-                    continue
-                ipv4 = data.partition(" inet ")[2].partition("/")[0]
                 if not ipv4:
-                    missing += 1
-                    continue
-                instance['ipv4'] = ipv4
+                    failed.append(instance)
+                else:
+                    self.log.info("Got address %r for %r", ipv4, instance)
+                    instance['ipv4'] = ipv4
+                    addr = instance[instance['ipproto']]
+                    result[instance_id] = dict(host=addr, private=dict(ip=addr, dns=addr))
 
-                addr = instance[instance['ipproto']]
-                result[instance_id] = dict(host=addr, private=dict(ip=addr, dns=addr))
-            time.sleep(2)
-
-        [tun.kill() for tun in tuns]
+        [client.close() for client in tunnels.itervalues()]
         return result
 
 
@@ -201,6 +218,9 @@ class PoniLVConn(object):
         if not uri:
             uri = "qemu+ssh://root@{0}/system?no_tty=1&no_verify=1&keyfile={1}".\
                   format(host, keyfile or "")
+        m = re.search("://(.+?)@", uri)
+        self.username = m and m.group(1)
+        self.keyfile = keyfile
         self.host = host
         self.uri = uri
         self.conn = None
