@@ -5,7 +5,9 @@ Copyright (c) 2010-2011 Mika Eloranta
 See LICENSE for details.
 
 """
+from . import errors
 from . import cloud_aws
+from .cloudbase import Provider # provides backward compatibility with older extensions
 
 
 PROVIDERS = {
