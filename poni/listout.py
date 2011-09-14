@@ -162,7 +162,7 @@ class ListOutput(colors.Output):
 
     def output_pairs(self):
         for entry in self.iter_tree():
-            indent = (entry["item"]["depth"] - 1) * self.indent
+            indent = (entry["item"].get("depth", 0) - 1) * self.indent
             if entry["type"] not in ["system", "node", "config"]:
                 indent += self.hindent
 
