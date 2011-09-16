@@ -6,6 +6,7 @@ See LICENSE for details.
 
 """
 
+import os
 import re
 import sys
 import imp
@@ -29,7 +30,7 @@ SETTINGS_DIR = "settings"
 DONT_SHOW = set(["cloud"])
 DONT_SAVE = set(["index", "sub_count", "depth"])
 
-g_plugin_counter = 0
+g_plugin_module_cache = {}
 
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
@@ -257,11 +258,18 @@ class Config(Item):
             # no plugin, nothing to verify
             return
 
-        # use a unique module name when importing the plugin
-        global g_plugin_counter
-        module = imp.load_source("_poni_plugin_%r" % g_plugin_counter,
-                                 plugin_path)
-        g_plugin_counter += 1
+        global g_plugin_module_cache
+        cache_key = (plugin_path, os.stat(plugin_path).st_mtime)
+        module = g_plugin_module_cache.get(cache_key)
+        if not module:
+            # reload the plugin module only if it is not in cache or it has
+            # been modified
+            # use a unique module name when importing the plugin
+            module = imp.load_source(
+                "_poni_plugin_%r" % len(g_plugin_module_cache),
+                plugin_path)
+
+            g_plugin_module_cache[cache_key] = module
 
         plugin = module.PlugIn(manager, self, node, top_config)
         plugin.add_actions()
