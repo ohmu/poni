@@ -124,6 +124,8 @@ class LibvirtProvider(Provider):
         assert wait_state == "running", "libvirt only handles running stuff"
         result = {}
         home = os.environ.get("HOME")
+        self.log.info("cloning VM instances")
+        cloning_start = time.time()
         for prop in props:
             instance_id = prop['instance']
             instance = self.__get_instance(prop)
@@ -143,6 +145,7 @@ class LibvirtProvider(Provider):
                 continue # XXX: throw an error?
             instance["vm_conns"] = [conn]
             vm = conn.clone_vm(instance["vm_name"], pool, prop, overwrite = True)
+            self.log.info("cloned VM successfully: %s", instance["vm_name"])
             ipv6_addr = vm.ipv6_addr(ipv6pre)[0]
             self.instances[instance_id]['ipproto'] = prop.get("ipproto", "ipv4")
             self.instances[instance_id]['ipv6'] = ipv6_addr
@@ -150,6 +153,7 @@ class LibvirtProvider(Provider):
             ssh_key_path = "%s/.ssh/%s" % (home, prop["ssh_key"])
             self.instances[instance_id]["ssh_key"] = ssh_key_path
 
+        self.log.info("cloning done: took %.2fs" % (time.time() - cloning_start))
         # get ipv4 addresses for the hosts (XXX: come up with something better)
         tunnels = {}
         failed = []
@@ -193,18 +197,29 @@ class LibvirtProvider(Provider):
                     cmdchan.set_combine_stderr(True)
                     cmdchan.exec_command('ip -4 addr show scope global')
                     cmdchan.shutdown_write()
+                    exec_start = time.time()
+                    while (not cmdchan.exit_status_ready()) and ((time.time() - exec_start) < 10.0):
+                        time.sleep(0.05)
+
+                    if cmdchan.exit_status_ready():
+                        exit_code = cmdchan.recv_exit_status()
+                        if exit_code != 0:
+                            self.log.warning("remote command non-zero exit status: exitcode=%s, %r", exit_code, instance)
+
                     data = cmdchan.recv(1024)
                     objs.extend((tunchan, cmdchan, client))
-                except (socket.error, paramiko.SSHException), ex:
+                except (socket.error, socket.gaierror, paramiko.SSHException), ex:
                     self.log.warning("connecting to %r failed: %r", instance, ex)
                 else:
                     if data:
                         ipv4 = data.partition(" inet ")[2].partition("/")[0]
+                    else:
+                        self.log.warning("no data received from: %r", instance)
 
                 if not ipv4:
                     failed.append(instance)
                 else:
-                    self.log.info("Got address %r for %r", ipv4, instance)
+                    self.log.info("Got address %r for %s", ipv4, instance["vm_name"])
                     instance['ipv4'] = ipv4
                     addr = instance[instance['ipproto']]
                     result[instance_id] = dict(host=addr, private=dict(ip=addr, dns=addr))
