@@ -31,6 +31,7 @@ DONT_SHOW = set(["cloud"])
 DONT_SAVE = set(["index", "sub_count", "depth"])
 
 g_plugin_module_cache = {}
+g_plugin_cache = {}
 
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
@@ -258,6 +259,11 @@ class Config(Item):
             # no plugin, nothing to verify
             return
 
+        plugin_key = (manager, self, node, top_config)
+        plugin = g_plugin_cache.get(plugin_key)
+        if plugin:
+            return plugin
+
         global g_plugin_module_cache
         cache_key = (plugin_path, os.stat(plugin_path).st_mtime)
         module = g_plugin_module_cache.get(cache_key)
@@ -275,6 +281,7 @@ class Config(Item):
         plugin.add_actions()
         plugin.add_all_controls()
         top_config.plugin = plugin # TODO
+        g_plugin_cache[plugin_key] = plugin
 
     def collect_parents(self, manager, node, top_config=None):
         top_config = top_config or self
@@ -449,6 +456,9 @@ class ConfigMan:
 
         self.vc = vc.create_vc(self.root_dir)
 
+    def reset_cache(self):
+        self.node_cache = {}
+
     def apply_library_paths(self, path_dict):
         """add repo's custom library include paths to sys.path"""
         for lib_path in path_dict.values():
@@ -479,8 +489,11 @@ class ConfigMan:
         lib_path = str(lib_path)
         libpath = conf.setdefault("libpath", {})
         libpath[name] = lib_path
-        if lib_path not in sys.path:
-            sys.path.append(lib_path)
+
+        # apply the path to sys.path
+        sys_lib_path = lib_path if path(lib_path).isabs() else (self.root_dir / lib_path)
+        if sys_lib_path not in sys.path:
+            sys.path.append(sys_lib_path)
 
         self.save_config(conf)
 
@@ -551,6 +564,15 @@ class ConfigMan:
 
         return node
 
+    def get_system(self, parent_system, name, current, level, extra):
+        key = ("system", parent_system, name, current, level, tuple(extra.items()))
+        system = self.node_cache.get(key)
+        if not system:
+            system = System(parent_system, name, current, level, extra=extra)
+            self.node_cache[key] = system
+
+        return system
+
     def get_config(self, pattern):
         configs = list(self.find_config(pattern, all_configs=True,
                                         full_match=True))
@@ -610,7 +632,7 @@ class ConfigMan:
             # system dir
             subdirs = current.dirs()
             subdirs.sort()
-            system = System(system, name, current, len(subdirs), extra=extra)
+            system = self.get_system(system, name, current, len(subdirs), extra)
             if (systems and (current != self.system_root) and ok_depth
                 and match_op(name)) and not exclude(name):
                 yield system

@@ -31,11 +31,15 @@ except ImportError:
 class Manager:
     def __init__(self, confman):
         self.log = logging.getLogger("manager")
+        self.reset()
+        self.confman = confman
+        self.audit_format = "%8s %s: %s"
+        self.frozen = False
+
+    def reset(self):
         self.files = []
         self.error_count = 0
-        self.confman = confman
         self.buckets = {}
-        self.audit_format = "%8s %s: %s"
 
     def get_bucket(self, name):
         return self.buckets.setdefault(name, [])
