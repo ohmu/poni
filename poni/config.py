@@ -251,7 +251,9 @@ class Manager:
                 try:
                     self.deploy_file(remote, entry, dest_path, output,
                                      active_text, verbose=verbose,
-                                     mode=entry.get("mode"))
+                                     mode=entry.get("mode"),
+                                     owner=entry.get("owner"),
+                                     group=entry.get("group"))
                 except errors.RemoteError, error:
                     stats["error_count"] += 1
                     self.log.error("%s: %s: %s", node_name, dest_path, error)
@@ -264,7 +266,7 @@ class Manager:
         return stats
 
     def deploy_file(self, remote, entry, dest_path, output, active_text,
-                    verbose=False, mode=None):
+                    verbose=False, mode=None, owner=None, group=None):
         if output == active_text:
             # nothing to do
             if verbose:
@@ -277,7 +279,8 @@ class Manager:
             except errors.RemoteError:
                 remote.makedirs(dest_dir)
 
-            remote.write_file(dest_path, output, mode=mode)
+            remote.write_file(dest_path, output, mode=mode, owner=owner,
+                              group=group)
             self.log.info(self.audit_format, "WROTE",
                           entry["node"].name, dest_path)
 
@@ -441,7 +444,7 @@ class PlugIn:
         parser.dispatch(argv=full_args, namespace=namespace)
 
     def add_file(self, source_path, dest_path=None, source_text=None,
-                 dest_bucket=None,
+                 dest_bucket=None, owner=None, group=None,
                  render=None, report=False, post_process=None, mode=None):
         render = render or self.render_cheetah
         return self.manager.add_file(node=self.node, config=self.config,
@@ -451,6 +454,7 @@ class PlugIn:
                                      render=render, report=report,
                                      post_process=post_process,
                                      dest_bucket=dest_bucket,
+                                     owner=owner, group=group,
                                      mode=mode)
 
     def add_dir(self, source_path, dest_path, render=None):

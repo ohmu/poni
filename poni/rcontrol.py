@@ -141,7 +141,8 @@ class RemoteControl:
     def put_file(self, source_path, dest_path, callback=None):
         assert 0, "must implement in sub-class"
 
-    def write_file(self, file_path, contents, mode=None):
+    def write_file(self, file_path, contents, mode=None, owner=None,
+                   group=None):
         assert 0, "must implement in sub-class"
 
     def execute_command(self, command):
@@ -193,10 +194,18 @@ class LocalControl(RemoteControl):
         return file(file_path, "rb").read()
 
     @convert_local_errors
-    def write_file(self, file_path, contents, mode=None):
+    def write_file(self, file_path, contents, mode=None, owner=None,
+                   group=None):
         f = file(file_path, "wb")
         if mode is not None:
             os.chmod(file_path, mode)
+
+        if (owner is not None) or (group is not None):
+            # set owner and group
+            file_stat = os.stat(file_path)
+            os.chown(file_path,
+                     owner if (owner is not None) else file_stat.st_uid,
+                     group if (group is not None) else file_stat.st_gid)
 
         f.write(contents)
         f.close()

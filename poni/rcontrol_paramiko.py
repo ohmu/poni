@@ -98,12 +98,20 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         return sftp.file(file_path, mode="rb").read()
 
     @convert_paramiko_errors
-    def write_file(self, file_path, contents, mode=None):
+    def write_file(self, file_path, contents, mode=None, owner=None,
+                   group=None):
         file_path = str(file_path)
         sftp = self.get_sftp()
         f = sftp.file(file_path, mode="wb")
         if mode is not None:
             sftp.chmod(file_path, mode)
+
+        if (owner is not None) or (group is not None):
+            # set owner and group
+            file_stat = sftp.stat(file_path)
+            sftp.chown(file_path,
+                       owner if (owner is not None) else file_stat.st_uid,
+                       group if (group is not None) else file_stat.st_gid)
 
         f.write(contents)
         f.close()
