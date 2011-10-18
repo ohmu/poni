@@ -464,6 +464,7 @@ class PoniLVPool(object):
 
 class PoniLVDom(object):
     def __init__(self, conn, dom):
+        self.log = logging.getLogger("poni.libvirt.dom")
         self.conn = conn
         self.dom = dom
         self.name = dom.name()
@@ -493,6 +494,12 @@ class PoniLVDom(object):
             except libvirt.libvirtError, ex:
                 if not "Storage volume not found" in str(ex):
                     raise LVPError("%r: deletion failed: %r" % (disk, ex))
+
+        # delete snapshots
+        for name in self.dom.snapshotListNames(0):
+            self.log.info("Deleting snapshot: %s" % (name,))
+            snapshot = self.dom.snapshotLookupByName(name, 0)
+            snapshot.delete(0)
 
         self.dom.undefine()
 
