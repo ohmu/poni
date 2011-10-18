@@ -78,10 +78,24 @@ def to_str(value):
 
 
 def from_env(value):
+    """This function supports MUST or OPTIONAL environment variables
+
+    If you wish to enforce that environment variable must exist use 'VAR'
+    If you wish to have that variable as optional use 'VAR|'
+    If you wish to supply default value in case enviromental variable is not set use 'VAR|default_value'
+    """
     try:
-        return unicode(os.environ[value], "ascii")
+        (env_key, default_value) = value.split("|",1)
+    except ValueError:
+        (env_key, default_value) = (value, None)
+
+    try:
+        return unicode(os.environ[env_key], "ascii")
     except KeyError:
-        raise ValueError("environment variable %r is not set" % value)
+        if (default_value != None):
+            return unicode(default_value)
+
+        raise ValueError("environment variable %r is not set" % env_key)
 
 
 def resolve_ip(name, family):
