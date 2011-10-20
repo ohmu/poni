@@ -20,9 +20,10 @@ class ListOutput(colors.Output):
                  pattern=False, full_match=False, show_node_prop=False,
                  show_cloud_prop=False, show_config_prop=False,
                  list_props=False, show_layers=False, color="auto",
-                 show_controls=False,
+                 show_controls=False, exclude=None,
                  query_status=False, show_settings=False, **kwargs):
         colors.Output.__init__(self, sys.stdout, color=color)
+        self.exclude = exclude or []
         self.show_nodes = show_nodes
         self.show_systems = show_systems
         self.show_config = show_config
@@ -190,7 +191,8 @@ class ListOutput(colors.Output):
         the output.
         """
         for item in self.confman.find(self.pattern, systems=self.show_systems,
-                                      full_match=self.full_match):
+                                      full_match=self.full_match,
+                                      exclude=self.exclude):
             if isinstance(item, core.Node):
                 if self.show_nodes:
                     yield dict(type="node", item=item)

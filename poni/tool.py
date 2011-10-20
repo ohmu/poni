@@ -52,9 +52,16 @@ arg_verbose = arg_flag("-v", "--verbose", help="verbose output")
 arg_quiet = arg_flag("-q", "--quiet", help="do not show remote command output")
 arg_path_prefix = argh.arg('--path-prefix', type=str, default="",
                            help='additional prefix for all deployed files')
-arg_target_nodes_0_to_n = argh.arg('nodes', type=str,
-                                   help='target nodes (regexp)', nargs="?")
-arg_target_nodes = argh.arg('nodes', type=str, help='target nodes (regexp)')
+arg_exclude_nodes = argh.arg('--exclude', type=str,
+                             metavar="PATTERN", help='exclude node pattern')
+def arg_target_nodes_0_to_n(method):
+    b = argh.arg('nodes', type=str, help='target nodes (regexp)', nargs="?")
+    return arg_exclude_nodes(b(method))
+
+def arg_target_nodes(method):
+    b = argh.arg('nodes', type=str, help='target nodes (regexp)')
+    return arg_exclude_nodes(b(method))
+
 arg_host_access_method = argh.arg("-m", "--method",
                                   choices=rcontrol_all.METHODS.keys(),
                                   help="override host access method")
@@ -334,11 +341,13 @@ class Tool:
             parent_config_name = None
 
         updates = []
-        nodes = list(confman.find(arg.nodes, full_match=arg.full_match))
+        nodes = list(confman.find(arg.nodes, full_match=arg.full_match,
+                                  exclude=arg.exclude))
         if arg.create_node and (not nodes):
             # node does not exist, create it as requested
             confman.create_node(arg.nodes)
-            nodes = confman.find(arg.nodes, full_match=True)
+            nodes = confman.find(arg.nodes, full_match=True,
+                                 exclude=arg.exclude)
 
         for node in nodes:
             existing = list(c for c in node.iter_configs()
@@ -575,11 +584,12 @@ class Tool:
             else:
                 output_file = None
 
-            return remote.execute(arg.cmd, verbose=arg.verbose, color=color, quiet=arg.quiet,
+            return remote.execute(arg.cmd, verbose=arg.verbose, color=color,
+                                  quiet=arg.quiet,
                                   output_file=output_file)
 
         rexec.doc = "exec: %r" % arg.cmd
-        result = self.remote_op(confman, arg, rexec)
+        result = self.remote_op(confman, arg, rexec, exclude=arg.exclude)
         if result:
             raise errors.RemoteError("remote exec failed with code: %r" % (
                     result,))
@@ -599,9 +609,10 @@ class Tool:
         rshell.doc = "shell"
         self.remote_op(confman, arg, rshell)
 
-    def remote_op(self, confman, arg, op):
+    def remote_op(self, confman, arg, op, exclude=None):
         ret = 0
-        nodes = list(confman.find(arg.nodes, full_match=arg.full_match))
+        nodes = list(confman.find(arg.nodes, full_match=arg.full_match,
+                                  exclude=exclude))
         if not nodes:
             raise errors.UserError("%r does not match any nodes" % (arg.nodes))
 
@@ -848,18 +859,25 @@ class Tool:
 
         return items
 
-    def verify_op(self, confman, target, full_match=False, **verify_options):
+    def verify_op(self, confman, target, full_match=False, exclude=None,
+                  **verify_options):
         manager = config.Manager(confman)
         self.collect_all(manager)
 
         if target:
+            if exclude:
+                exclude = re.compile(exclude).search
+            else:
+                exclude = lambda name: False
+
             if full_match:
                 search_op = re.compile(target + "$").match
             else:
                 search_op = re.compile(target).search
 
             def target_filter(item):
-                return search_op(item["node"].name)
+                return (search_op(item["node"].name)
+                        and not exclude(item["node"].name))
         else:
             target_filter = lambda item: True
 
@@ -881,7 +899,8 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=(not arg.show_buckets),
             full_match=arg.full_match, raw=arg.show_raw,
-            color_mode=arg.color_mode, show_diff=arg.show_diff)
+            color_mode=arg.color_mode, show_diff=arg.show_diff,
+            exclude=arg.exclude)
 
         if arg.show_buckets:
             for name, items in manager.buckets.iteritems():
@@ -909,7 +928,8 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, deploy=True, verbose=arg.verbose,
             full_match=arg.full_match, path_prefix=arg.path_prefix,
-            access_method=arg.method, color_mode=arg.color_mode)
+            access_method=arg.method, color_mode=arg.color_mode,
+            exclude=arg.exclude)
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
                            stats.error_count, stats.file_count))
@@ -932,7 +952,8 @@ class Tool:
             confman, arg.nodes, show=False, deploy=False, audit=True,
             show_diff=arg.show_diff, full_match=arg.full_match,
             path_prefix=arg.path_prefix, access_method=arg.method,
-            color_mode=arg.color_mode, verbose=arg.verbose)
+            color_mode=arg.color_mode, verbose=arg.verbose,
+            exclude=arg.exclude)
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -953,7 +974,7 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, full_match=arg.full_match,
             access_method=arg.method, verbose=arg.verbose,
-            color_mode=arg.color_mode)
+            color_mode=arg.color_mode, exclude=arg.exclude)
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -1016,6 +1037,7 @@ class Tool:
     @argh.alias("list")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @arg_exclude_nodes
     @arg_flag("-n", "--nodes", dest="show_nodes", help="show nodes")
     @arg_flag("-s", "--systems", dest="show_systems", help="show systems")
     @arg_flag("-c", "--config", dest="show_config", help="show node configs")

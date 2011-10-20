@@ -579,9 +579,15 @@ class ConfigMan:
 
     def find(self, pattern, current=None, system=None, nodes=True,
              systems=False, curr_depth=0, extra=None, depth=None,
-             full_match=False):
+             full_match=False, exclude=None):
         depth = depth or []
         extra = extra or {}
+        if not callable(exclude):
+            if exclude:
+                exclude = re.compile(exclude).search
+            else:
+                exclude = lambda name: False
+
         pattern = pattern or ""
 
         if isinstance(pattern, (str, unicode)):
@@ -598,7 +604,7 @@ class ConfigMan:
 
         if node_conf_file.exists():
             # this is a node dir
-            if nodes and match_op(name) and ok_depth:
+            if nodes and match_op(name) and ok_depth and not exclude(name):
                 yield self.get_node(current, system, extra=extra)
         else:
             # system dir
@@ -606,7 +612,7 @@ class ConfigMan:
             subdirs.sort()
             system = System(system, name, current, len(subdirs), extra=extra)
             if (systems and (current != self.system_root) and ok_depth
-                and match_op(name)):
+                and match_op(name)) and not exclude(name):
                 yield system
 
             for sub_index, subdir in enumerate(subdirs):
@@ -616,5 +622,6 @@ class ConfigMan:
                 for result in self.find(pattern, current=subdir, system=system,
                                         nodes=nodes, systems=systems,
                                         curr_depth=sub_depth, extra=extra,
+                                        exclude=exclude,
                                         depth=depth, full_match=full_match):
                     yield result
