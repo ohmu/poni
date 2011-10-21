@@ -54,7 +54,7 @@ class AwsProvider(cloudbase.Provider):
     def __init__(self, cloud_prop):
         assert boto, "boto is not installed, cannot access AWS"
         assert boto.Version >= BOTO_REQUIREMENT, "boto version is too old, cannot access AWS"
-        Provider.__init__(self, AWS_EC2)
+        cloudbase.Provider.__init__(self, AWS_EC2)
         self.log = logging.getLogger(AWS_EC2)
         self.region = cloud_prop["region"]
         self._conn = None
