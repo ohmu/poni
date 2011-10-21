@@ -224,7 +224,7 @@ class Tool:
         while i < len(lines):
             if lines[i][:1].isspace():
                 # needs to be catenated to previous line
-                lines[i - 1] += lines[i]
+                lines[i - 1] += "\n" + lines[i]
                 del lines[i]
             else:
                 i += 1
