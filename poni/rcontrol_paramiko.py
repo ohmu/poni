@@ -170,10 +170,14 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                 self.node.name, error.__class__.__name__, error))
 
     @convert_paramiko_errors
-    def execute_command(self, cmd):
+    def execute_command(self, cmd, pseudo_tty=False):
         ssh = self.get_ssh()
+
         transport = ssh.get_transport()
         channel = transport.open_session()
+        if pseudo_tty:
+            channel.get_pty()
+
         if not channel:
             raise errors.RemoteError("failed to open an SSH session to %s" % (
                     self.node.name))
