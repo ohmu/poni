@@ -152,7 +152,7 @@ class Manager:
                 if raw:
                     dest_path, output = dest_path, source_path.bytes()
                 else:
-                    dest_path, output = render(source_path, dest_path)
+                    dest_path, output = render(source_path, dest_path, source_text=entry["source_text"])
 
                 if dest_path:
                     dest_path = path(item_path_prefix + dest_path).normpath()
@@ -484,11 +484,12 @@ class PlugIn:
     def get_system(self, name):
         return self.get_one(name, nodes=False, systems=True)
 
-    def render_text(self, source_path, dest_path):
+    def render_text(self, source_path, dest_path, source_text=None):
         try:
             # paths are always rendered as templates
             dest_path = self.render_cheetah(None, dest_path)[0]
-            return dest_path, file(source_path, "rb").read()
+            text = source_text if (source_text is not None) else file(source_path, "rb").read()
+            return dest_path, text
         except (IOError, OSError), error:
             raise errors.VerifyError(source_path, error)
 
@@ -518,16 +519,17 @@ class PlugIn:
                      plugin=self)
         return names
 
-    def render_cheetah(self, source_path, dest_path):
+    def render_cheetah(self, source_path, dest_path, source_text=None):
         names = self.get_names()
         # TODO: template caching
         try:
             if source_path:
                 source_path = str(CheetahTemplate(source_path, searchList=[names]))
 
-            if source_path is not None:
-                text = str(CheetahTemplate(file=source_path,
-                                           searchList=[names]))
+            if source_text:
+                text = str(CheetahTemplate(source_text, searchList=[names]))
+            elif source_path is not None:
+                text = str(CheetahTemplate(file=source_path, searchList=[names]))
             else:
                 text = None
 
@@ -540,9 +542,9 @@ class PlugIn:
             raise errors.VerifyError("%s: %s: %s" % (
                 source_path, error.__class__.__name__, error))
 
-    def render_genshi_xml(self, source_path, dest_path):
+    def render_genshi_xml(self, source_path, dest_path, source_text=None):
         assert genshi, "Genshi is not installed"
-
+        assert not source_text, "genshi rendering from source_text not implemented yet"
         names = self.get_names()
         if dest_path:
             dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
