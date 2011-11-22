@@ -155,7 +155,7 @@ class Manager:
 
                 if (not audit and not deploy) and verbose:
                     # plain verify mode
-                    self.log.info("OK: %s: %s", node_name, dest_loc)
+                    self.log.info("OK: %s: %s", node_name, dest_path)
             except (IOError, errors.Error), error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
