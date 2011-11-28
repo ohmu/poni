@@ -36,8 +36,9 @@ class VSphereProvider(cloudbase.Provider):
         assert self.vi_username, "either the enviroment variable VI_USERNAME or vi_username property must be set for vSphere instances"
         self.vi_password = os.environ.get('VI_PASSWORD') or cloud_prop.get("vi_password")
         assert self.vi_password, "either the enviroment variable VI_PASSWORD or vi_password property must be set for vSphere instances"
+        self.vi_version = os.environ.get('VI_VERSION') or cloud_prop.get("vi_version")
         assert pyvsphere_available, "pyvsphere must be installed for vSphere instances to work"
-        self.vim = Vim(self.vi_url)
+        self.vim = Vim(self.vi_url, version=self.vi_version)
         self.vim.login(self.vi_username, self.vi_password)
         self.instances = {}
         self.vms = None
