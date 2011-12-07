@@ -19,10 +19,10 @@ import time
 import uuid
 from xml.dom.minidom import parseString as xmlparse
 
+import DNS
 import libvirt
 from poni.cloudbase import Provider
 from poni.errors import CloudError
-
 
 if getattr(paramiko.SSHClient, "connect_socket", None):
     SshClientLVP = paramiko.SSHClient
@@ -36,6 +36,27 @@ else:
             paramiko.resource.ResourceManager.register(self, self._transport) # pylint: disable=E1120
             self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
 
+def _lv_dns_lookup(name, qtype):
+    """DNS lookup using PyDNS, handles retry over TCP in case of truncation
+    and returns a list of results."""
+    req = DNS.Request(name=name, qtype=qtype)
+    response = req.req()
+    if response and response.header["tc"]:
+        # truncated, try with tcp
+        req = DNS.Request(name=name, qtype=qtype, protocol="tcp")
+        response = req.req()
+    if not response or not response.answers:
+        return []
+    result = []
+    for a in response.answers:
+        if a["typename"].lower() != qtype.lower():
+            continue
+        if isinstance(a["data"], list):
+            result.extend(a["data"])
+        else:
+            result.append(a["data"])
+    return result
+
 class LVPError(CloudError):
     """LibvirtProvider error"""
 
@@ -43,15 +64,30 @@ class LibvirtProvider(Provider):
     def __init__(self, cloud_prop):
         Provider.__init__(self, self.get_provider_key(cloud_prop), cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
-        self.hosts = []
-        self.hosts_online = None
         self.instances = {}
         self.ssh_key = None
         profile = json.load(open(cloud_prop["profile"], "rb"))
         if "ssh_key" in profile:
             self.ssh_key = os.path.expandvars(os.path.expanduser(profile["ssh_key"]))
-        for host in profile["nodes"]:
-            self.hosts.append(PoniLVConn(host, keyfile = self.ssh_key))
+
+        # Look up all hypervisor hosts, they can be defined one-by-one
+        # ("nodes" property) in which case we use the highest priorities
+        # with them.  They can also be defined in SRV records in "services"
+        # property as well as an older style "nodesets" property without
+        # service information in which case we use _libvirt._tcp.
+        if not DNS.defaults["server"]:
+            DNS.DiscoverNameServers()
+        hosts = {}
+        for entry in profile.get("nodes", []):
+            host, _, port = entry.partition(":")
+            hosts["{0}:{1}".format(host, port or 22)] = (0, 100)
+        services = set(profile.get("services", []))
+        services.update("_libvirt._tcp.{0}".format(host) for host in profile.get("nodesets", []))
+        for entry in services:
+            for priority, weight, port, host in _lv_dns_lookup(entry, "SRV"):
+                hosts["{0}:{1}".format(host, port)] = (priority, weight)
+        self.hosts = hosts
+        self.hosts_online = None
 
     @classmethod
     def get_provider_key(cls, cloud_prop):
@@ -60,28 +96,29 @@ class LibvirtProvider(Provider):
         """
         return "PONILV"
 
-    @property
     def conns(self):
-        if not self.hosts_online:
+        if self.hosts_online is None:
             if libvirt.getVersion() < 9004:
                 # libvirt support for no_verify was introduced in 0.9.4
                 procs = []
-                for conn in self.hosts:
+                for host in self.hosts.iterkeys():
                     args = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no",
-                            "root@%s" % (conn.host, ), "uptime"]
+                            "root@{0}".format(host), "uptime"]
                     procs.append(subprocess.Popen(args))
                 [proc.wait() for proc in procs]
 
             self.hosts_online = []
-            for conn in self.hosts:
+            for host, (priority, weight) in self.hosts.iteritems():
                 try:
+                    conn = PoniLVConn(host, keyfile=self.ssh_key, priority=priority, weight=weight)
                     conn.connect()
                     self.hosts_online.append(conn)
                 except libvirt.libvirtError, ex:
                     self.log.warn("Connection to %r failed: %r", conn.uri, ex)
-            if not self.hosts_online:
-                raise LVPError("Could not connect to any libvirt host")
-        return self.hosts_online
+
+        if not self.hosts_online:
+            raise LVPError("No VM hosts available")
+        return list(self.hosts_online)
 
     def __get_instance(self, prop):
         vm_name = instance_id = prop.get('vm_name', None)
@@ -92,7 +129,7 @@ class LibvirtProvider(Provider):
         if not instance:
             vm_conns = []
             vm_state = 'VM_NON_EXISTENT'
-            for conn in self.conns:
+            for conn in self.conns():
                 if vm_name in conn.vms:
                     vm_state = 'VM_DIRTY'
                     vm_conns.append(conn)
@@ -122,39 +159,57 @@ class LibvirtProvider(Provider):
         Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert wait_state == "running", "libvirt only handles running stuff"
-        result = {}
-        home = os.environ.get("HOME")
-        self.log.info("cloning VM instances")
+        home = os.getenv("HOME")
+        proplist = list(props)
         cloning_start = time.time()
-        for prop in props:
-            instance_id = prop['instance']
+
+        self.log.info("deleting existing VM instances")
+        for prop in proplist:
             instance = self.__get_instance(prop)
-            vm_state = instance['vm_state']
-            pool = prop.get("storage_pool", "default")
+            if instance["vm_state"] == "VM_DIRTY":
+                # Delete any existing instances
+                for conn in instance["vm_conns"]:
+                    self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
+                    conn.delete_vm(instance["vm_name"])
+                instance["vm_state"] = "VM_NON_EXISTENT"
+                instance["vm_conns"] = []
+
+        self.log.info("cloning VM instances")
+        conns = [conn for conn in self.conns() if conn.srv_weight > 0]
+        for prop in proplist:
+            instance = self.__get_instance(prop)
             ipv6pre = prop.get("ipv6_prefix")
 
-            if vm_state in ("VM_DIRTY", "VM_NON_EXISTENT"):
-                # Delete any existing instances
-                [conn.delete_vm(instance["vm_name"]) for conn in instance["vm_conns"]]
-                # Select the best place for this host
-                nodes = sorted((conn.weight, conn) for conn in self.conns)
-                conn = nodes[-1][1]
-            elif vm_state == "VM_RUNNING":
-                continue
-            else:
+            if instance["vm_state"] == "VM_RUNNING":
+                continue # done
+            if instance["vm_state"] != "VM_NON_EXISTENT":
                 continue # XXX: throw an error?
-            instance["vm_conns"] = [conn]
-            vm = conn.clone_vm(instance["vm_name"], pool, prop, overwrite = True)
-            self.log.info("cloned VM successfully: %s", instance["vm_name"])
-            ipv6_addr = vm.ipv6_addr(ipv6pre)[0]
-            self.instances[instance_id]['ipproto'] = prop.get("ipproto", "ipv4")
-            self.instances[instance_id]['ipv6'] = ipv6_addr
-            self.instances[instance_id]["vm_state"] = "VM_RUNNING"
-            ssh_key_path = "%s/.ssh/%s" % (home, prop["ssh_key"])
-            self.instances[instance_id]["ssh_key"] = ssh_key_path
 
+            # Select the best place for this host first filtering out nodes
+            # with zero-weight and ones included in the exclude list or
+            # missing from the include list.
+            cands = list(conns)
+            if prop.get("hosts", {}).get("exclude"):
+                cands = (conn for conn in cands if prop["hosts"]["exclude"] not in conn.host)
+            if prop.get("hosts", {}).get("include"):
+                cands = (conn for conn in cands if prop["hosts"]["include"] in conn.host)
+            # Only consider the entries with the highest priority (lowest service priority value)
+            result = sorted((-conn.srv_priority, conn.weight, conn) for conn in cands)
+            if not result:
+                raise LVPError("No connection available for cloning {0}".format(instance["vm_name"]))
+            conn = result[-1][-1]
+
+            self.log.info("cloning %r on %r", instance["vm_name"], conn.host)
+            vm = conn.clone_vm(instance["vm_name"], prop, overwrite = True)
+            instance["vm_state"] = "VM_RUNNING"
+            instance["vm_conns"] = [conn]
+            instance["ipproto"] = prop.get("ipproto", "ipv4")
+            instance["ipv6"] = vm.ipv6_addr(ipv6pre)[0]
+            instance["ssh_key"] = "{0}/.ssh/{1}".format(home, prop["ssh_key"])
         self.log.info("cloning done: took %.2fs" % (time.time() - cloning_start))
+
         # get ipv4 addresses for the hosts (XXX: come up with something better)
+        result = {}
         tunnels = {}
         failed = []
         tries = 0
@@ -183,7 +238,7 @@ class LibvirtProvider(Provider):
                 if conn not in tunnels:
                     client = SSHClientLVP()
                     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    client.connect(conn.host, username = conn.username, key_filename = conn.keyfile)
+                    client.connect(conn.host, port=conn.port, username=conn.username, key_filename=conn.keyfile)
                     tunnels[conn] = client
                 trans = tunnels[conn].get_transport()
 
@@ -209,7 +264,7 @@ class LibvirtProvider(Provider):
                     data = cmdchan.recv(1024)
                     objs.extend((tunchan, cmdchan, client))
                 except (socket.error, socket.gaierror, paramiko.SSHException), ex:
-                    self.log.warning("connecting to %r failed: %r", instance, ex)
+                    self.log.warning("connecting to %r [%s] failed: %r", instance, instance["ipv6"], ex)
                 else:
                     if data:
                         ipv4 = data.partition(" inet ")[2].partition("/")[0]
@@ -229,30 +284,43 @@ class LibvirtProvider(Provider):
 
 
 class PoniLVConn(object):
-    def __init__(self, host, uri=None, keyfile=None):
+    def __init__(self, host, port=None, uri=None, keyfile=None, priority=None, weight=None):
+        if ":" in host:
+            host, _, port = host.rpartition(":")
+        port = int(port or 22)
         if not uri:
-            uri = "qemu+ssh://root@{0}/system?no_tty=1&no_verify=1&keyfile={1}".\
-                  format(host, keyfile or "")
+            uri = "qemu+ssh://root@{0}:{1}/system?no_tty=1&no_verify=1&keyfile={2}".\
+                  format(host, port, keyfile or "")
         m = re.search("://(.+?)@", uri)
         self.username = m and m.group(1)
         self.keyfile = keyfile
         self.host = host
+        self.port = port
         self.uri = uri
+        self.srv_priority = 1 if priority is None else priority
+        self.srv_weight = 1 if weight is None else weight
         self.conn = None
         self.vms = None
         self.vms_online = 0
         self.vms_offline = 0
         self.cpus_online = 0
+        self.ram_online = 0
         self.pools = None
         self.node = None
+        self.info = None
 
     def __repr__(self):
         return "PoniLVConn(%r)" % (self.host)
 
     @property
     def weight(self):
-        online = float((self.vms_online + self.cpus_online / 4) or 1)
-        return self.node["total_mhz"] / online
+        """calculate a weight for this node based on its cpus and ram"""
+        counters = {
+            "total_mhz": self.vms_online + self.cpus_online/4.0,
+            "memory": self.vms_online + self.ram_online/4096.0,
+        }
+        load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters.iteritems())
+        return load_w * self.srv_weight
 
     def connect(self, uri = None):
         self.conn = libvirt.open(uri or self.uri)
@@ -266,6 +334,7 @@ class PoniLVConn(object):
         node = dict(zip(keys, info))
         node["total_mhz"] = node["sockets"] * node["cores"] * node["mhz"]
         self.node = node
+        self.info = node
 
     def refresh_list(self):
         try:
@@ -293,7 +362,9 @@ class PoniLVConn(object):
         for name in self.conn.listStoragePools():
             pool = PoniLVPool(self.conn.storagePoolLookupByName(name))
             self.pools[name] = pool
-        self.cpus_online = sum(dom.info["cpus"] for dom in self.vms.itervalues() if dom.info["cputime"] > 0)
+        doms = [dom for dom in self.vms.itervalues() if dom.info["cputime"] > 0]
+        self.cpus_online = sum(dom.info["cpus"] for dom in doms)
+        self.ram_online = sum(dom.info["maxmem"]/1024 for dom in doms)
 
     def delete_vm(self, vm_name):
         if vm_name not in self.vms:
@@ -431,7 +502,18 @@ class PoniLVPool(object):
     def __init__(self, pool):
         self.pool = pool
         self.path = None
+        self.type = None
+        self.info = None
         self.__read_desc()
+        self.__pool_info()
+
+    def __pool_info(self):
+        vals = self.pool.info()
+        self.info = {
+            "capacity": vals[1]/(1024*1024),
+            "used": vals[2]/(1024*1024),
+            "free": vals[3]/(1024*1024),
+        }
 
     def clone_volume(self, source, target, megabytes):
         desc = """
