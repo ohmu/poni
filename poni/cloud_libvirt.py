@@ -123,8 +123,6 @@ class LibvirtProvider(Provider):
     def __get_instance(self, prop):
         vm_name = instance_id = prop.get('vm_name', None)
         assert vm_name, "vm_name must be specified for libvirt instances"
-        source_image = prop.get('source_image', None)
-        assert source_image, "source_image must be specified for libvirt instances"
         instance = self.instances.get(instance_id)
         if not instance:
             vm_conns = []
@@ -372,13 +370,13 @@ class PoniLVConn(object):
         self.vms[vm_name].delete()
         self.refresh_list()
 
-    def clone_vm(self, name, pool, spec, overwrite = False):
+    def clone_vm(self, name, spec, overwrite = False):
         desc = """
             <domain type='kvm'>
               <name>%(name)s</name>
               <description>%(desc)s</description>
               <uuid>%(uuid)s</uuid>
-              <memory>%(hardware.ram)s</memory>
+              <memory>%(hardware.ram_kb)s</memory>
               <vcpu>%(hardware.cpus)s</vcpu>
               <os>
                 <type arch='%(hardware.arch)s' machine='pc'>hvm</type>
@@ -394,12 +392,7 @@ class PoniLVConn(object):
               <on_reboot>restart</on_reboot>
               <on_crash>restart</on_crash>
               <devices>
-                <disk type='file' device='disk'>
-                  <driver name='qemu' type='qcow2' cache='%(hardware.diskcache)s'/>
-                  <source file='%(disk_path)s'/>
-                  <target dev='vda' bus='virtio'/>
-                  <alias name='virtio-disk0'/>
-                </disk>
+                %(disks)s
                 %(interfaces)s
                 <serial type='pty'>
                   <target port='0'/>
@@ -431,22 +424,29 @@ class PoniLVConn(object):
                   <source %(type)s='%(network)s'/>
                 </interface>
                 """
+        disk_desc = """
+                <disk type='%(disk_type)s' device='disk'>
+                  <driver name='qemu' type='%(driver_type)s' cache='%(cache)s'/>
+                  <source %(source)s='%(path)s'/>
+                  <target dev='%(target_dev)s'/>
+                </disk>
+                """
         spec = copy.deepcopy(spec)
-        default_network = spec.get("default_network", "default")
         def macaddr(index):
-            # NOTE: mac address is based on name to have predictable DHCP addresses
+            """create a mac address based on the VM name for DHCP predictability"""
             mac_ext = hashlib.md5(name).hexdigest()
             return "52:54:00:%s:%s:%02x" % (mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16)^index)
+        def gethw(prefix):
+            """grab all relevant hardware entries from spec"""
+            fp = "hardware."+prefix
+            rel = sorted((int(k[len(fp):]), k) for k in spec.iterkeys() if k.startswith(fp))
+            return [spec[k] for i, k in rel]
 
         if name in self.vms:
             if not overwrite:
                 raise LVPError("%r vm already exists" % (name, ))
             self.delete_vm(name)
-        if pool not in self.pools:
-            raise LVPError("%r storage does not exist" % (pool, ))
         spec["name"] = name
-        if "source_image" not in spec:
-            raise LVPError("source_image must be specified")
         if "desc" not in spec:
             spec["desc"] = "created by poni.cloud_libvirt by {0}@{1} on {2}+00:00".format(
                 os.getenv("USER"), socket.gethostname(), datetime.datetime.utcnow().isoformat()[0:19])
@@ -455,42 +455,67 @@ class PoniLVConn(object):
         if isinstance(spec.get("hardware"), dict):
             for k, v in spec["hardware"].iteritems():
                 spec["hardware.%s" % (k, )] = v
+
+        # default to x86_64 system with 1 CPU and 1G RAM
         if "hardware.arch" not in spec:
             spec["hardware.arch"] = "x86_64"
-        if "hardware.ram" not in spec:
-            spec["hardware.ram"] = 1024 * 1024
-        else:
-            spec["hardware.ram"] *= 1024 # convert MB to kB
         if "hardware.cpus" not in spec:
             spec["hardware.cpus"] = 1
-        if "hardware.disk" not in spec:
-            spec["hardware.disk"] = 8192
-        if "hardware.diskcache" not in spec:
-            spec["hardware.diskcache"] = "default"
-        # Set up interfaces - any hardware.nicX entries in spec,
-        # failing that create one interface by default.
-        spec["interfaces"] = ""
-        nspecs = []
-        for i in xrange(100):
-            nspec = spec.get("hardware.nic%d" % i)
-            if not isinstance(nspec, dict):
-                break
-            nspecs.append(nspec)
-        if not nspecs:
-            nspecs.append({})
-        for i, nspec in enumerate(nspecs):
-            ispec = {
-                "mac": nspec.get("mac", macaddr(i)),
-                "type": nspec.get("type", "network"),
-                "network": nspec.get("network", default_network),
+        ram_mb = spec.get("hardware.ram_mb", spec.get("hardware.ram", 1024))
+        ram_kb = spec.get("hardware.ram_kb", 1024 * ram_mb)
+        spec["hardware.ram_kb"] = ram_kb
+        spec["hardware.ram_mb"] = ram_kb // 1024
+
+        # Set up disks - find all hardware.diskX entries in spec
+        spec["disks"] = ""
+        for i, item in enumerate(gethw("disk")):
+            dev_name = "vd" + chr(ord("a") + i)
+            if "clone" in item or "create" in item:
+                pool = item["pool"]
+                vol_name = "%s-%s" % (name, dev_name)
+                if "clone" in item:
+                    vol = self.pools[pool].clone_volume(item["clone"], vol_name, item.get("size"))
+                if "create" in item:
+                    vol = self.pools[pool].create_volume(vol_name, item["size"])
+                disk_path = vol.path()
+                disk_type = "file"
+                driver_type = "qcow2"
+            elif "file" in item:
+                disk_path = item["file"]
+                disk_type = "file"
+                driver_type = item.get("driver", "qcow2")
+            elif "dev" in item:
+                disk_path = item["dev"]
+                disk_type = "block"
+                driver_type = "raw"
+            else:
+                raise LVPError("Unrecognized disk specification %r" % (item, ))
+
+            dspec = {
+                "path": disk_path,
+                "disk_type": disk_type,
+                "driver_type": driver_type,
+                "cache": item.get("cache", "writeback"),
+                "source": "dev" if disk_type == "block" else "file",
+                "target_dev": dev_name,
             }
-            if "bridge" in nspec: # support for old style bridge-only defs
+            spec["disks"] += disk_desc % dspec
+
+        # Set up interfaces - any hardware.nicX entries in spec,
+        default_network = spec.get("default_network", "default")
+        spec["interfaces"] = ""
+        items = gethw("nic") or [{}]
+        for i, item in enumerate(items):
+            ispec = {
+                "mac": item.get("mac", macaddr(i)),
+                "type": item.get("type", "network"),
+                "network": item.get("network", default_network),
+            }
+            if "bridge" in item: # support for old style bridge-only defs
                 ispec["type"] = "bridge"
-                ispec["network"] = nspec["bridge"]
+                ispec["network"] = item["bridge"]
             spec["interfaces"] += interface_desc % ispec
-        vol = self.pools[pool].clone_volume(spec["source_image"], name, spec["hardware.disk"])
-        vol_path = vol.path()
-        spec["disk_path"] = vol_path
+
         new_desc = desc % spec
         vm = self.conn.defineXML(new_desc)
         vm.create()
@@ -515,22 +540,39 @@ class PoniLVPool(object):
             "free": vals[3]/(1024*1024),
         }
 
-    def clone_volume(self, source, target, megabytes):
+    def _define_volume(self, target, megabytes, source):
+        spec = {
+            "name": "auto.%s.qcow2" % target,
+            "backing": "",
+            "size": (megabytes or 0) * 1024 * 1024,
+        }
+        if source:
+            orig = self.pool.storageVolLookupByName(source)
+            spec["backing"] = """
+                <backingStore>
+                    <format type='qcow2'/>
+                    <path>%s</path>
+                </backingStore>
+                """ % orig.path()
+            if not megabytes:
+                spec["size"] = orig.info()[1]
         desc = """
             <volume>
-                <name>auto.%(name)s.qcow2</name>
-                <capacity unit="M">%(megabytes)s</capacity>
+                <name>%(name)s</name>
+                <capacity>%(size)s</capacity>
                 <target>
                     <format type='qcow2'/>
                 </target>
-                <backingStore>
-                    <format type='qcow2'/>
-                    <path>%(poolpath)s/%(source)s</path>
-                </backingStore>
+                %(backing)s
             </volume>
-            """
-        new_desc = desc % dict(name = target, megabytes = megabytes, source = source, poolpath = self.path)
-        return self.pool.createXML(new_desc, 0)
+            """ % spec
+        return self.pool.createXML(desc, 0)
+
+    def create_volume(self, target, megabytes):
+        return self._define_volume(target, megabytes, None)
+
+    def clone_volume(self, source, target, megabytes = None):
+        return self._define_volume(target, megabytes, source)
 
     def __read_desc(self):
         xml = self.pool.XMLDesc(0)
