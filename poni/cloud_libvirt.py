@@ -1,6 +1,6 @@
 """
 LibVirt provider for Poni.
-Copyright (C) 2011 F-Secure Corporation, Helsinki, Finland.
+Copyright (C) 2011-2012 F-Secure Corporation, Helsinki, Finland.
 Author: Oskari Saarenmaa <ext-oskari.saarenmaa@f-secure.com>
 """
 
@@ -281,6 +281,44 @@ class LibvirtProvider(Provider):
         return result
 
 
+class PoniLVXmlOb(object):
+    """Libvirt XML tree reader"""
+    def __init__(self, xml=None, tree=None, path=None):
+        self.__path = path or []
+        self.__tree = tree
+        if xml is not None:
+            self.__tree = xmlparse(xml)
+
+    def __len__(self):
+        return self.__tree and 1 or 0
+
+    def __repr__(self):
+        return "PoniLVXmlOb(%s)" % (".".join(self.__path))
+
+    def __str__(self):
+        return self.__tree and self.__tree.firstChild.wholeText.strip()
+
+    def __getitem__(self, name):
+        attr = self.__tree and self.__tree.getAttribute(name)
+        if attr is None:
+            raise KeyError("%s attribute not found" % name)
+        return attr
+
+    def get(self, name):
+        return self.__tree and self.__tree.getAttribute(name)
+
+    def __getattr__(self, name):
+        if not self.__tree:
+            return PoniLVXmlOb()
+        elem = self.__tree.getElementsByTagName(name)
+        if elem:
+            return PoniLVXmlOb(tree=elem[0], path=self.__path+[name])
+        if name.endswith("_list"):
+            name = name[:-5]
+            elems = self.__tree.getElementsByTagName(name)
+            return [PoniLVXmlOb(tree=elem, path=self.__path+[name]) for elem in elems]
+        return PoniLVXmlOb()
+
 class PoniLVConn(object):
     def __init__(self, host, port=None, uri=None, keyfile=None, priority=None, weight=None):
         if ":" in host:
@@ -471,15 +509,15 @@ class PoniLVConn(object):
         for i, item in enumerate(gethw("disk")):
             dev_name = "vd" + chr(ord("a") + i)
             if "clone" in item or "create" in item:
-                pool = item["pool"]
+                pool = self.pools[item["pool"]]
                 vol_name = "%s-%s" % (name, dev_name)
                 if "clone" in item:
-                    vol = self.pools[pool].clone_volume(item["clone"], vol_name, item.get("size"))
+                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"))
                 if "create" in item:
-                    vol = self.pools[pool].create_volume(vol_name, item["size"])
-                disk_path = vol.path()
-                disk_type = "file"
-                driver_type = "qcow2"
+                    vol = pool.create_volume(vol_name, item["size"])
+                disk_path = vol.path
+                disk_type = vol.device
+                driver_type = vol.format
             elif "file" in item:
                 disk_path = item["file"]
                 disk_type = "file"
@@ -522,6 +560,20 @@ class PoniLVConn(object):
         self.refresh_list()
         return self.vms[name]
 
+class PoniLVVol(object):
+    def __init__(self, vol, pool):
+        self.vol = vol
+        self.pool = pool
+        self.path = vol.path()
+        self.format = None
+        self.device = None
+        self.__read_desc()
+
+    def __read_desc(self):
+        xml = PoniLVXmlOb(self.vol.XMLDesc(0))
+        tformat = xml.volume.target.format.get("type")
+        self.format = tformat or "raw"
+        self.device = "block" if xml.volume.source.device else "file"
 
 class PoniLVPool(object):
     def __init__(self, pool):
@@ -542,10 +594,15 @@ class PoniLVPool(object):
 
     def _define_volume(self, target, megabytes, source):
         spec = {
-            "name": "auto.%s.qcow2" % target,
+            "name": "auto.%s" % target,
             "backing": "",
             "size": (megabytes or 0) * 1024 * 1024,
+            "format": "qcow2",
+            "ext": ".qcow2",
         }
+        if self.type == "logical":
+            spec["ext"] = ""
+            spec["format"] = "raw"
         if source:
             orig = self.pool.storageVolLookupByName(source)
             spec["backing"] = """
@@ -558,15 +615,16 @@ class PoniLVPool(object):
                 spec["size"] = orig.info()[1]
         desc = """
             <volume>
-                <name>%(name)s</name>
+                <name>%(name)s%(ext)s</name>
                 <capacity>%(size)s</capacity>
                 <target>
-                    <format type='qcow2'/>
+                    <format type='%(format)s'/>
                 </target>
                 %(backing)s
             </volume>
             """ % spec
-        return self.pool.createXML(desc, 0)
+        vol = self.pool.createXML(desc, 0)
+        return PoniLVVol(vol, self)
 
     def create_volume(self, target, megabytes):
         return self._define_volume(target, megabytes, None)
@@ -575,15 +633,9 @@ class PoniLVPool(object):
         return self._define_volume(target, megabytes, source)
 
     def __read_desc(self):
-        xml = self.pool.XMLDesc(0)
-        tree = xmlparse(xml)
-        pools = tree.getElementsByTagName("pool")
-        if pools:
-            targets = pools[0].getElementsByTagName("target")
-            if targets:
-                paths = targets[0].getElementsByTagName("path")
-                if paths:
-                    self.path = str(paths[0].firstChild.wholeText)
+        xml = PoniLVXmlOb(self.pool.XMLDesc(0))
+        self.type = xml.pool["type"]
+        self.path = str(xml.pool.target.path)
 
 
 class PoniLVDom(object):
@@ -633,24 +685,11 @@ class PoniLVDom(object):
         self.info = dict(zip(keys, vals))
 
     def __read_desc(self):
-        xml = self.dom.XMLDesc(0)
-        tree = xmlparse(xml)
-        doms = tree.getElementsByTagName("domain")
-        if not doms:
-            return
-        devs = doms[0].getElementsByTagName("devices")
-        if not devs:
-            return
-        ifaces = devs[0].getElementsByTagName("interface")
-        if ifaces:
-            macs = [iface.getElementsByTagName("mac") for iface in ifaces]
-            addrs = [mac[0].getAttribute("address") for mac in macs if mac]
-            self.macs = [str(addr) for addr in addrs]
-        disks = devs[0].getElementsByTagName("disk")
-        if disks:
-            sources = [disk.getElementsByTagName("source") for disk in disks]
-            files = [source[0].getAttribute("file") for source in sources if source]
-            self.disks = [str(f) for f in files]
+        xml = PoniLVXmlOb(self.dom.XMLDesc(0))
+        devs = xml.domain.devices
+        if devs:
+            self.macs = [str(iface.mac["address"]) for iface in devs.interface_list]
+            self.disks = [str(disk.source.get("file") or disk.source.get("dev")) for disk in devs.disk_list]
 
 
 def mac_to_ipv6(prefix, mac):
