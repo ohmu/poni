@@ -512,9 +512,9 @@ class PoniLVConn(object):
                 pool = self.pools[item["pool"]]
                 vol_name = "%s-%s" % (name, dev_name)
                 if "clone" in item:
-                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"))
+                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite = overwrite)
                 if "create" in item:
-                    vol = pool.create_volume(vol_name, item["size"])
+                    vol = pool.create_volume(vol_name, item["size"], overwrite = overwrite)
                 disk_path = vol.path
                 disk_type = vol.device
                 driver_type = vol.format
@@ -592,7 +592,7 @@ class PoniLVPool(object):
             "free": vals[3]/(1024*1024),
         }
 
-    def _define_volume(self, target, megabytes, source):
+    def _define_volume(self, target, megabytes, source, overwrite):
         spec = {
             "name": "auto.%s" % target,
             "backing": "",
@@ -613,9 +613,10 @@ class PoniLVPool(object):
                 """ % orig.path()
             if not megabytes:
                 spec["size"] = orig.info()[1]
+        spec["fullname"] = "%(name)s%(ext)s" % spec
         desc = """
             <volume>
-                <name>%(name)s%(ext)s</name>
+                <name>%(fullname)s</name>
                 <capacity>%(size)s</capacity>
                 <target>
                     <format type='%(format)s'/>
@@ -623,14 +624,27 @@ class PoniLVPool(object):
                 %(backing)s
             </volume>
             """ % spec
-        vol = self.pool.createXML(desc, 0)
+
+        try:
+            vol = self.pool.createXML(desc, 0)
+        except libvirt.libvirtError, ex:
+            if "storage vol already exists" not in str(ex):
+                raise
+            if not overwrite:
+                raise LVPError("%r volume already exists" % (spec["fullname"], ))
+            self.delete_volume(spec["fullname"])
+            vol = self.pool.createXML(desc, 0)
+
         return PoniLVVol(vol, self)
 
-    def create_volume(self, target, megabytes):
-        return self._define_volume(target, megabytes, None)
+    def create_volume(self, target, megabytes, overwrite=False):
+        return self._define_volume(target, megabytes, None, overwrite)
 
-    def clone_volume(self, source, target, megabytes = None):
-        return self._define_volume(target, megabytes, source)
+    def clone_volume(self, source, target, megabytes=None, overwrite=False):
+        return self._define_volume(target, megabytes, source, overwrite)
+
+    def delete_volume(self, name):
+        self.pool.storageVolLookupByName(name).delete(0)
 
     def __read_desc(self):
         xml = PoniLVXmlOb(self.pool.XMLDesc(0))
