@@ -143,9 +143,10 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         if self.key_filename:
-            # TODO: other dirs than ~/.ssh/
-            key_file = "%s/.ssh/%s" % (os.environ.get("HOME"),
-                                       self.key_filename)
+            key_file = self.key_filename
+            if not os.path.isabs(key_file):
+                key_file = "%s/.ssh/%s" % (os.environ.get("HOME"),
+                                           key_file)
         else:
             key_file = None
 
