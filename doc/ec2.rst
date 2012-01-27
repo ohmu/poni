@@ -146,6 +146,16 @@ If the instance properties need to be updated later, the ``cloud update`` comman
 used. This can be done for example if instances have been initialized without the
 ``--wait`` -option, which does not update node address properties.
 
+
+Assigning an elastic ip to an instance
+---------------------------------------
+
+You can assign elastic ip's to a running instance using  the ``cloud ip`` command. This command
+uses the ``cloud.eip`` property value and assigns it to the instance.
+
+  $ poni set drumbo1 cloud.eip=xxx.xxx.xxx.xxx
+  $ poni cloud ip drumbo1
+
 Checking Instance Status
 ------------------------
 The ``list -q`` queries each cloud instances' status and shows it in the output::
