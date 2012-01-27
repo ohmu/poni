@@ -107,7 +107,58 @@ class AwsProvider(cloudbase.Provider):
         instance = reservation.instances[0]
         out_prop = copy.deepcopy(cloud_prop)
         out_prop["instance"] = instance.id
+
         return dict(cloud=out_prop)
+
+    @convert_boto_errors
+    def assign_ip(self, props):
+        conn = self._get_conn()
+
+        # Assign ip's to all the running instances first
+        for p in props:
+            self._assign_ip(conn, p)
+
+        # wait for pending instances
+        self.wait_instances(props)
+
+        # Try again
+        for p in props:
+            self._assign_ip(conn, p)
+
+    def _assign_ip(self, conn, prop):
+        if not "eip" in prop or not "instance" in prop: return
+        instances = self._get_instances([prop])
+        if not len(instances) or not instances[0].state == "running": return
+        instance = instances[0]
+        eip = prop["eip"]
+        address = None
+        try:
+            address = conn.get_all_addresses([eip])
+        except boto.exception.BotoServerError, error:
+            self.log.error(
+                "The given elastic ip [%r] was invalid"
+                " or not found in region %r" % (
+                    eip, self.region)
+            )
+            self.log.error(repr(err))
+            return
+
+        if len(address) == 1:
+            address = address[0];
+        else:
+            self.log.error(
+                "The given elastic ip [%r] was not found in region %r" % (
+                    eip, self.region))
+        if address.instance_id and not address.instance_id == instance.id:
+            self.log.error(
+                "The given elastic ip [%r] has already"
+                " beeen assigned to instance %r" % (
+                    eip, address.instance_id))
+
+        if address and not address.instance_id:
+            self.log.info("Assigning ip address[%r] to instance[%r]" % (eip, instance.id))
+            instance.use_ip(address)
+            instance.update()
 
     def _get_instances(self, props):
         conn = self._get_conn()

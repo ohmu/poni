@@ -9,6 +9,7 @@ See LICENSE for details.
 import os
 import re
 import sys
+import itertools
 import logging
 import shlex
 import argh
@@ -730,6 +731,20 @@ class Tool:
         confman = core.ConfigMan(arg.root_dir)
         return self.cloud_op(confman, arg, True)
 
+    @argh.alias("ip")
+    @arg_full_match
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    def handle_cloud_ip(self, arg):
+        """assign ips to instances based on properties"""
+        confman = core.ConfigMan(arg.root_dir)
+        props = [node["cloud"]
+                    for node in confman.find(arg.target,
+                                    full_match=arg.full_match)
+                    if node.get("cloud", None)]
+        for provider, props in itertools.groupby(props,
+                                lambda prop: self.sky.get_provider(prop)):
+            provider.assign_ip(props)
+
     def cloud_op(self, confman, arg, start):
         nodes = []
 
@@ -1178,6 +1193,7 @@ class Tool:
         parser.add_commands([
                 self.handle_cloud_init, self.handle_cloud_terminate,
                 self.handle_cloud_update, self.handle_cloud_wait,
+                self.handle_cloud_ip,
                 ],
                             namespace="cloud", title="cloud operations",
                             help="command to execute")
