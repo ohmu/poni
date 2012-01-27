@@ -51,6 +51,10 @@ class AwsProvider(cloudbase.Provider):
         # ("aws-ec2", region_key) uniquely identifies the DC we are talking to
         return (AWS_EC2, region)
 
+    @property
+    def provider_key(self):
+        return (AWS_EC2, self.region)
+
     def __init__(self, cloud_prop):
         assert boto, "boto is not installed, cannot access AWS"
         assert boto.Version >= BOTO_REQUIREMENT, "boto version is too old, cannot access AWS"
@@ -113,15 +117,6 @@ class AwsProvider(cloudbase.Provider):
     @convert_boto_errors
     def assign_ip(self, props):
         conn = self._get_conn()
-
-        # Assign ip's to all the running instances first
-        for p in props:
-            self._assign_ip(conn, p)
-
-        # wait for pending instances
-        self.wait_instances(props)
-
-        # Try again
         for p in props:
             self._assign_ip(conn, p)
 
