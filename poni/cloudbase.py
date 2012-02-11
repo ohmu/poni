@@ -14,6 +14,28 @@ class Provider:
     def __init__(self, provider_id):
         self.provider_id = provider_id
 
+    @property
+    def provider_key(self):
+        """
+        Return this object's provider key.
+
+        See the `classmethod` `get_provider_key` for more information.
+        """
+        assert 0, "implement in sub-class"
+
+    def __eq__(self, other):
+        if not other or not isinstance(other, Provider):
+            return False
+        return self.provider_key == other.provider_key
+
+    def __ne__(self, other):
+        if not other or not isinstance(other, Provider):
+            return True
+        return not self.provider_key == other.provider_key
+
+    def __hash__(self):
+        return self.provider_key.__hash__()
+
     @classmethod
     def get_provider_key(cls, cloud_prop):
         """
@@ -33,6 +55,12 @@ class Provider:
         Create a new instance with the given properties.
 
         Returns node properties that are changed.
+        """
+        assert 0, "implement in sub-class"
+
+    def assign_ip(self, props):
+        """
+        Assign the ip's to the instances based on the given properties.
         """
         assert 0, "implement in sub-class"
 

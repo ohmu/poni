@@ -51,6 +51,10 @@ class AwsProvider(cloudbase.Provider):
         # ("aws-ec2", region_key) uniquely identifies the DC we are talking to
         return (AWS_EC2, region)
 
+    @property
+    def provider_key(self):
+        return (AWS_EC2, self.region)
+
     def __init__(self, cloud_prop):
         assert boto, "boto is not installed, cannot access AWS"
         assert boto.Version >= BOTO_REQUIREMENT, "boto version is too old, cannot access AWS"
@@ -107,7 +111,49 @@ class AwsProvider(cloudbase.Provider):
         instance = reservation.instances[0]
         out_prop = copy.deepcopy(cloud_prop)
         out_prop["instance"] = instance.id
+
         return dict(cloud=out_prop)
+
+    @convert_boto_errors
+    def assign_ip(self, props):
+        conn = self._get_conn()
+        for p in props:
+            self._assign_ip(conn, p)
+
+    def _assign_ip(self, conn, prop):
+        if not "eip" in prop or not "instance" in prop: return
+        instances = self._get_instances([prop])
+        if not len(instances) or not instances[0].state == "running": return
+        instance = instances[0]
+        eip = prop["eip"]
+        address = None
+        try:
+            address = conn.get_all_addresses([eip])
+        except boto.exception.BotoServerError, error:
+            self.log.error(
+                "The given elastic ip [%r] was invalid"
+                " or not found in region %r" % (
+                    eip, self.region)
+            )
+            self.log.error(repr(err))
+            return
+
+        if len(address) == 1:
+            address = address[0];
+        else:
+            self.log.error(
+                "The given elastic ip [%r] was not found in region %r" % (
+                    eip, self.region))
+        if address.instance_id and not address.instance_id == instance.id:
+            self.log.error(
+                "The given elastic ip [%r] has already"
+                " beeen assigned to instance %r" % (
+                    eip, address.instance_id))
+
+        if address and not address.instance_id:
+            self.log.info("Assigning ip address[%r] to instance[%r]" % (eip, instance.id))
+            instance.use_ip(address)
+            instance.update()
 
     def _get_instances(self, props):
         conn = self._get_conn()
