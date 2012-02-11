@@ -100,11 +100,11 @@ The following functions are accessible from templates:
 
 .. function:: get_config(pattern)
 
-   Return exactly one config that matches the pattern. An error is raise if
-   zero or more than one configs match the pattern.
+   Return exactly one node and one config that matches the pattern. An error
+   is raise if zero or more than one configs match the pattern.
 
    :param pattern: Regular expression system/node/config path pattern.
-   :rtype: Config object
+   :rtype: a single tuple of (Node, Config)
 
 .. function:: edge(bucket_name, dest_node, dest_config, **kwargs)
 
