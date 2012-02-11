@@ -96,11 +96,19 @@ Please refer to the documentation under the ``doc/`` directory
 (published at http://melor.github.com/poni/) and to the example systems under the
 ``examples/`` directory.
 
+Credits
+=======
+Thanks for the contributions!
+
+* Oskari Saarenmaa (features)
+* Santeri Paavolainen (fixes)
+* Lakshmi Vyas (new features for AWS-EC2 support)
+
 License (MIT)
 =============
 ::
 
-  Copyright (c) 2010 Mika Eloranta
+  Copyright (c) 2010-2012 Mika Eloranta
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
