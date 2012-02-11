@@ -100,10 +100,15 @@ class AwsProvider(cloudbase.Provider):
         except KeyError:
             raise errors.CloudError("'key-pair' cloud property not set")
 
+        security_groups = cloud_prop.get("security_groups")
+        if security_groups and isinstance(security_groups, (basestring, unicode)):
+            security_groups = [security_groups]
+
         reservation = image.run(key_name=key_name,
                                 kernel_id=cloud_prop.get("kernel"),
                                 ramdisk_id=cloud_prop.get("ramdisk"),
-                                instance_type=cloud_prop.get("type"))
+                                instance_type=cloud_prop.get("type"),
+                                security_groups=security_groups)
         instance = reservation.instances[0]
         out_prop = copy.deepcopy(cloud_prop)
         out_prop["instance"] = instance.id
