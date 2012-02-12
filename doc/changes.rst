@@ -2,14 +2,96 @@
 Poni Changelog
 ==============
 
-Version 0.4.4
+Version 0.7.0
 =============
 :release date: TBD
 
-* operations can be timed (``poni --clock`` or ``control --clock-tasks``) and 
+* added ``--exclude PATTERN`` support for many commands: allows skipping nodes
+  that match a pattern when e.g. running a remote command over multiple nodes
+* optimization: internal cache for loaded plugin modules
+* ``add_file()`` supports ``owner=uid`` and ``group=gid`` optional args
+* AWS security groups can be set via ``cloud.security_group``
+  **(thanks, Lakshmi!)**
+* ``cloud ip`` command for assigning an AWS Elastic IP for a node
+  **(thanks, Lakshmi!)**
+* remote operations support ``pseudo_tty=True`` for allocating a ptty for
+  the operation **(thanks, Lauri!)**
+* control command node logs include the ``BEGIN`` and ``END`` tags
+* render also ``source_path`` as a template
+* bugfix: ``poni script`` handles files with multi-line commands with comments
+  in the middle
+* bugfix: fixed listing settings from a root-level node
+* bugfix: fixed "poni control" dependency ops being added multiple times (fixes
+  huge memory usage when running complex operations over tens of servers)
+
+Version 0.5.0
+=============
+:release date: 2011-07-12
+
+* added ``add_file()`` support for ``dest_bucket`` argument: allows rendering
+  templates into buckets instead of deploying them to target file paths
+* bugfix: add extra lib paths to sys.path only once
+* bugfix: full stdout/stderr is now read from remote ssh commands
+* bugfix: hierarchical settings overrides
+
+Version 0.4.9
+=============
+:release date: 2011-04-05
+
+* minor fixes
+
+Version 0.4.8
+=============
+:release date: 2011-04-03
+
+* made "control" operation errors stand out better by color highlighting
+* print remote operation tag lines in one piece to make output cleaner in
+  multi-threaded ops
+* bugfix: load plugins to separate modules
+* added explicit deployment handling for ENOENT files
+* ``deploy`` command reports status at the end
+* added ``$record()`` method for templates
+* added configrable ssh connect timeout property: ``ssh-timeout:int=N``
+* bugfix: skip trying file deployment if checking existing file fails
+* tuned down unnecessary paramiko ERROR level logging
+* added full_path property to ``Item``; renamed ``Config.full_name`` to
+  ``full_path``
+* bugfix: verify/audit final file count
+
+Version 0.4.7
+=============
+:release date: 2011-03-20
+
+* bugfix: audit reports number of errors properly
+* added Node.addr(network) method for getting the node address for a given
+  network
+* added ``--quiet`` and ``--output-dir`` args for remote ops
+* bugfix: logging bug in update-config when used with --verbose flag
+
+Version 0.4.6
+=============
+:release date: 2011-03-09
+
+* added summary output line for ``audit`` command
+* prefix remote command output lines with [nodename]
+* added ``Config.full_name`` property
+* hashable Node, System and Config
+* bugfix: paramiko no output warning timeout fix
+
+Version 0.4.5
+=============
+:release date: 2011-02-22
+
+* bugfix: added set_combine_stderr(True) for paramiko, tuned rx loop
+
+Version 0.4.4
+=============
+:release date: 2011-02-20
+
+* operations can be timed (``poni --clock`` or ``control --clock-tasks``) and
   results stored in a log file (``--time-log FILE``), reports printed out with
   ``poni --time-log FILE report``
-* added warning messages for ``control`` tasks that do not send output in a 
+* added warning messages for ``control`` tasks that do not send output in a
   long while, kill jobs after five minutes of inactivity
 * added support for ``optional_requires`` task dependencies, such tasks are not
   required to exist but are guaranteed to be run before the dependent task
@@ -22,7 +104,7 @@ Version 0.4.3
 :release date: 2011-01-25
 
 * control tasks can be run without dependent tasks with ``--no-deps``
-* bugfix: control tasks with in ``script`` files 
+* bugfix: control tasks with in ``script`` files
 * bugfix: Tool.execute() exit code check
 
 Version 0.4.2
