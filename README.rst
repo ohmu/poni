@@ -103,6 +103,7 @@ Thanks for the contributions!
 * Oskari Saarenmaa (features)
 * Santeri Paavolainen (fixes)
 * Lakshmi Vyas (new features for AWS-EC2 support)
+* Lauri Heiskanen (enabling pseudo-tty)
 
 License (MIT)
 =============
