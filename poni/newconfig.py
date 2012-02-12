@@ -1,7 +1,7 @@
 """
 Multi-layer settings management
 
-Copyright (c) 2010-2011 Mika Eloranta
+Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 TODO: this simple draft is VERY likely to change a lot
