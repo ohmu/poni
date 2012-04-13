@@ -339,6 +339,7 @@ class Tool:
     @argh.arg("-d", "--copy-dir", metavar="DIR", type=str, default="",
               dest="copy_dir", help="copy config files from DIR")
     @arg_flag("-c", "--create-node", help="create node if it does not exist")
+    @arg_flag("-e", "--skip-existing", help="do nothing if the config already exists")
     def handle_add_config(self, arg):
         """add a config to node(s)"""
         confman = self.get_confman(arg.root_dir)
@@ -362,16 +363,21 @@ class Tool:
         for node in nodes:
             existing = list(c for c in node.iter_configs()
                             if c.name == arg.config)
+            updates.append("%s/%s" % (node.name, arg.config))
             if existing:
-                raise errors.UserError("config '%s/%s' already exists" % (
-                        node.name, arg.config))
+                if arg.skip_existing:
+                    self.log.info("config '%s/%s' already exists, skipped",
+                                  node.name, arg.config)
+                    continue
+                else:
+                    raise errors.UserError("config '%s/%s' already exists" % (
+                            node.name, arg.config))
 
             node.add_config(arg.config, parent=parent_config_name,
                             copy_dir=arg.copy_dir)
             # TODO: verbose output
             self.log.debug("added config %r to %s, parent=%r", arg.config,
                            node.path, parent_config_name)
-            updates.append("%s/%s" % (node.name, arg.config))
 
         if not updates:
             raise errors.UserError("no matching nodes found")
