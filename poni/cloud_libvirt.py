@@ -120,6 +120,9 @@ class LibvirtProvider(Provider):
             raise LVPError("No VM hosts available")
         return list(self.hosts_online)
 
+    def disconnect(self):
+        self.hosts_online = None
+
     def __get_instance(self, prop):
         vm_name = instance_id = prop.get('vm_name', None)
         assert vm_name, "vm_name must be specified for libvirt instances"
@@ -210,19 +213,18 @@ class LibvirtProvider(Provider):
         result = {}
         tunnels = {}
         failed = []
-        tries = 0
         objs = []
+        timeout = 120
         start = time.time()
 
-        while (tries == 0) or failed:
-            tries += 1
-            if tries > 10:
+        for attempt in xrange(1, 1000):
+            elapsed = time.time() - start
+            if elapsed > timeout:
                 raise LVPError("Connecting to %r failed" % (failed, ))
-
-            self.log.info("getting ip addresses: round #%r, time spent=%.02fs", tries, (time.time() - start))
-            if failed:
+            if attempt > 1:
                 time.sleep(2)
-                failed = []
+            self.log.info("getting ip addresses: round #%r, time spent=%.02fs", attempt, elapsed)
+            failed = []
 
             for instance_id, instance in self.instances.iteritems():
                 if instance["ipproto"] in instance:
@@ -277,7 +279,11 @@ class LibvirtProvider(Provider):
                     addr = instance[instance['ipproto']]
                     result[instance_id] = dict(host=addr, private=dict(ip=addr, dns=addr))
 
+            if not failed:
+                break
+
         [client.close() for client in tunnels.itervalues()]
+        self.disconnect()
         return result
 
 
