@@ -29,6 +29,7 @@ except ImportError:
 
 class VSphereProvider(cloudbase.Provider):
     def __init__(self, cloud_prop):
+        cloudbase.Provider.__init__(self, 'vsphere', cloud_prop)
         self.log = logging.getLogger('poni.vsphere')
         self.vi_url = os.environ.get('VI_URL') or cloud_prop.get("vi_url")
         assert self.vi_url, "either the enviroment variable VI_URL or vcenter_url property must be set for vSphere instances"
