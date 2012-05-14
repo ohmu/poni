@@ -136,7 +136,7 @@ class AwsProvider(cloudbase.Provider):
                 " or not found in region %r" % (
                     eip, self.region)
             )
-            self.log.error(repr(err))
+            self.log.error(repr(error))
             return
 
         if len(address) == 1:
