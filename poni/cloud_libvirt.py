@@ -62,7 +62,7 @@ class LVPError(CloudError):
 
 class LibvirtProvider(Provider):
     def __init__(self, cloud_prop):
-        Provider.__init__(self, self.get_provider_key(cloud_prop), cloud_prop)
+        Provider.__init__(self, 'libvirt', cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
         self.instances = {}
         self.ssh_key = None
