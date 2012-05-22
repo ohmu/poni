@@ -11,18 +11,29 @@ import hashlib
 import json
 import logging
 import os
-import paramiko
 import re
 import socket
 import subprocess
 import time
 import uuid
 from xml.dom.minidom import parseString as xmlparse
-
-import DNS
-import libvirt
 from poni.cloudbase import Provider
 from poni.errors import CloudError
+import paramiko
+
+MISSING_LIBS = []
+try:
+    import DNS
+except ImportError:
+    DNS = None
+    MISSING_LIBS.append("DNS")
+
+try:
+    import libvirt
+except ImportError:
+    libvirt = None
+    MISSING_LIBS.append("libvirt")
+
 
 if getattr(paramiko.SSHClient, "connect_socket", None):
     SshClientLVP = paramiko.SSHClient
@@ -35,6 +46,7 @@ else:
             self._transport.start_client()
             paramiko.resource.ResourceManager.register(self, self._transport) # pylint: disable=E1120
             self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
+
 
 def _lv_dns_lookup(name, qtype):
     """DNS lookup using PyDNS, handles retry over TCP in case of truncation
@@ -62,6 +74,9 @@ class LVPError(CloudError):
 
 class LibvirtProvider(Provider):
     def __init__(self, cloud_prop):
+        if MISSING_LIBS:
+            raise CloudError("missing libraries required by libvirt deployment: %s" % (", ".join(MISSING_LIBS)))
+
         Provider.__init__(self, 'libvirt', cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
         self.instances = {}
