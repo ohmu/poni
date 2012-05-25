@@ -83,7 +83,12 @@ class AwsProvider(cloudbase.Provider):
         image_id = cloud_prop.get("image")
         if not image_id:
             raise errors.CloudError(
-                "cloud 'image' property required by EC2 not defined")
+                "'cloud.image' property required by EC2 not defined")
+
+        vm_name = cloud_prop.get("vm_name")
+        if not vm_name:
+            raise errors.CloudError(
+                "'cloud.vm_name' property required by EC2 not defined")
 
         images = conn.get_all_images(image_ids=[image_id])
         if not images:
@@ -96,20 +101,27 @@ class AwsProvider(cloudbase.Provider):
 
         image = images[0]
         try:
-            key_name = cloud_prop["key-pair"]
+            # renamed setting: backward-compatibility
+            key_name = cloud_prop.get("key_pair", cloud_prop.get("key-pair"))
+            if not key_name:
+                raise KeyError
         except KeyError:
-            raise errors.CloudError("'key-pair' cloud property not set")
+            raise errors.CloudError("'cloud.key_pair' cloud property not set")
 
         security_groups = cloud_prop.get("security_groups")
         if security_groups and isinstance(security_groups, (basestring, unicode)):
             security_groups = [security_groups]
 
         reservation = image.run(key_name=key_name,
+                                # client_token=vm_name, # guarantees VM creation idempotency, disabled: run() doesn't support this arg
                                 kernel_id=cloud_prop.get("kernel"),
                                 ramdisk_id=cloud_prop.get("ramdisk"),
                                 instance_type=cloud_prop.get("type"),
+                                placement=cloud_prop.get("placement"),
+                                placement_group=cloud_prop.get("placement_group"),
                                 security_groups=security_groups)
         instance = reservation.instances[0]
+        instance.add_tag("Name", vm_name) # add a user-frienly name visible in the AWS EC2 console
         out_prop = copy.deepcopy(cloud_prop)
         out_prop["instance"] = instance.id
 
