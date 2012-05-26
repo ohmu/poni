@@ -44,7 +44,7 @@ At minimum, the following node properties need to be set:
     Key-pair name **without** the ``.pem`` -suffix. **NOTE:** key-pairs are
     region-specific and will not work cross the data-centers.
 
-  ``cloud.vm_name`` (optional)
+  ``cloud.vm_name``
     Unique name for the VM. Provides the VM with a friendly name visible in
     the EC2 console.
 

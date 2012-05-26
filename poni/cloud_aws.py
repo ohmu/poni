@@ -13,7 +13,7 @@ from . import errors
 from . import cloudbase
 
 
-BOTO_REQUIREMENT = "2.0"
+BOTO_REQUIREMENT = "2.4.1"
 AWS_EC2 = "aws-ec2"
 
 
@@ -77,6 +77,24 @@ class AwsProvider(cloudbase.Provider):
         self._conn = region.connect()
         return self._conn
 
+    def _find_instance_by_tag(self, tag, value):
+        """Find first instance that has been tagged with the specific value"""
+        reservations = self.get_all_instances()
+        for instance in (r.instances[0] for r in reservations):
+            if instance.state in ["pending", "running"] and instance.tags.get(tag) == value:
+                return instance
+
+        return None
+
+    def _find_spot_req_by_tag(self, tag, value):
+        """Find first active spot request that is tied to this vm_name"""
+        conn = self._get_conn()
+        for spot_req in conn.get_all_spot_instance_requests():
+            if spot_req.state in ["open", "active"] and spot_req.tags.get(tag) == value:
+                return spot_req
+
+        return None
+
     @convert_boto_errors
     def init_instance(self, cloud_prop):
         conn = self._get_conn()
@@ -90,16 +108,6 @@ class AwsProvider(cloudbase.Provider):
             raise errors.CloudError(
                 "'cloud.vm_name' property required by EC2 not defined")
 
-        images = conn.get_all_images(image_ids=[image_id])
-        if not images:
-            raise errors.CloudError(
-                "AMI with id %r not found in region %r AWS images" % (
-                    image_id, self.region))
-        elif len(images) > 1:
-            raise errors.CloudError(
-                "AMI %r seems to match multiple images" % (image_id))
-
-        image = images[0]
         try:
             # renamed setting: backward-compatibility
             key_name = cloud_prop.get("key_pair", cloud_prop.get("key-pair"))
@@ -112,18 +120,52 @@ class AwsProvider(cloudbase.Provider):
         if security_groups and isinstance(security_groups, (basestring, unicode)):
             security_groups = [security_groups]
 
-        reservation = image.run(key_name=key_name,
-                                # client_token=vm_name, # guarantees VM creation idempotency, disabled: run() doesn't support this arg
-                                kernel_id=cloud_prop.get("kernel"),
-                                ramdisk_id=cloud_prop.get("ramdisk"),
-                                instance_type=cloud_prop.get("type"),
-                                placement=cloud_prop.get("placement"),
-                                placement_group=cloud_prop.get("placement_group"),
-                                security_groups=security_groups)
-        instance = reservation.instances[0]
-        instance.add_tag("Name", vm_name) # add a user-frienly name visible in the AWS EC2 console
         out_prop = copy.deepcopy(cloud_prop)
-        out_prop["instance"] = instance.id
+
+        instance = self._find_instance_by_tag("Name", vm_name)
+        if instance:
+            # the instance already exists
+            out_prop["instance"] = instance.id
+            return dict(cloud=out_prop)
+
+        spot_req = self._find_spot_req_by_tag("Name", vm_name)
+        if spot_req:
+            # there's already a spot request about this vm_name, return it
+            out_prop["instance"] = spot_req.id
+            return dict(cloud=out_prop)
+
+        launch_kwargs = dict(
+            image_id=image_id,
+            key_name=key_name,
+            kernel_id=cloud_prop.get("kernel"),
+            ramdisk_id=cloud_prop.get("ramdisk"),
+            instance_type=cloud_prop.get("type"),
+            placement=cloud_prop.get("placement"),
+            placement_group=cloud_prop.get("placement_group"),
+            security_groups=security_groups
+            )
+        billing_type = cloud_prop.get("billing", "on-demand")
+        if billing_type == "on-demand":
+            reservation = conn.run_instances(
+                #client_token=vm_name, # guarantees VM creation idempotency
+                **launch_kwargs
+                )
+            instance = reservation.instances[0]
+            # add a user-friendly name visible in the AWS EC2 console
+            instance.add_tag("Name", vm_name)
+            out_prop["instance"] = instance.id
+        elif billing_type == "spot":
+            max_price = cloud_prop.get("spot", {}).get("max_price")
+            if not isinstance(max_price, float):
+                raise errors.CloudError("expected float value for cloud.spot.max_price, got '%s'" % type(max_price))
+            if not max_price:
+                raise errors.CloudError("cloud.spot.max_price required but not defined")
+
+            spot_reqs = conn.request_spot_instances(max_price, **launch_kwargs)
+            spot_reqs[0].add_tag("Name", vm_name)
+            out_prop["instance"] = spot_reqs[0].id
+        else:
+            raise errors.CloudError("unsupported cloud.billing: %r" % billing_type)
 
         return dict(cloud=out_prop)
 
@@ -169,10 +211,11 @@ class AwsProvider(cloudbase.Provider):
             instance.update()
 
     def _get_instances(self, props):
-        conn = self._get_conn()
-        reservations = conn.get_all_instances(instance_ids=[p["instance"]
-                                                            for p in props])
-        return [r.instances[0] for r in reservations]
+        instance_ids = [p["instance"] for p in props if p["instance"].startswith("i-")]
+        reservations = self.get_all_instances(
+            instance_ids=instance_ids) if instance_ids else []
+        spot_req_ids = [p["instance"] for p in props if p["instance"].startswith("sir-")]
+        return [r.instances[0] for r in reservations] + spot_req_ids
 
     @convert_boto_errors
     def get_instance_status(self, prop):
@@ -187,19 +230,74 @@ class AwsProvider(cloudbase.Provider):
         for instance in self._get_instances(props):
             instance.terminate()
 
+    def get_all_instances(self, instance_ids=None):
+        """wrapper to workaround the EC2 bogus 'instance ID ... does not exist' errors"""
+        conn = self._get_conn()
+        start = time.time()
+        while True:
+            try:
+                return conn.get_all_instances(instance_ids=instance_ids)
+            except boto.exception.EC2ResponseError as error:
+                if not "does not exist" is str(error):
+                    raise
+
+            if (time.time() - start) > 15.0:
+                raise errors.CloudError("instances %r did not appear in time" %
+                                        instance_ids)
+
     @convert_boto_errors
     def wait_instances(self, props, wait_state="running"):
         pending = self._get_instances(props)
+        props_by_id = dict((p["instance"], p) for p in props)
+        convert_id_map = {}
         output = {}
+        conn = self._get_conn()
         while pending:
-            for instance in pending[:]:
+            for op in pending[:]:
+                if isinstance(op, basestring):
+                    # this is a spot request id
+                    spot_req = conn.get_all_spot_instance_requests(request_ids=[op])[0]
+                    if spot_req.fault:
+                        raise errors.CloudError("AWS spot request failed: %s" %
+                                                spot_req.fault)
+                    if spot_req.state == "active":
+                        # instance has been created!
+                        reservations = self.get_all_instances(
+                            instance_ids=[spot_req.instance_id])
+                        # cancel the spot request, TODO: should it be done?
+                        #conn.cancel_spot_instance_requests([op])
+                        pending.remove(op)
+                        # start waiting for the instance to boot up
+                        instance = reservations[0].instances[0]
+                        pending.append(instance)
+                        props_by_id[instance.id] = props_by_id[op]
+                        vm_name = props_by_id[op].get("vm_name")
+                        if vm_name:
+                            instance.add_tag("Name", vm_name)
+                        convert_id_map[instance.id] = op
+                    elif spot_req.state == "open":
+                        # spot request not handled yet, wait some more
+                        pass
+                    else:
+                        # cancelled or something else
+                        raise errors.CloudError(
+                            "Unexpected AWS spot request %s state: '%s'" % (
+                                op, spot_req.state))
+
+                    continue
+
+                instance = op
                 instance.update()
                 if (wait_state is None) or (instance.state == wait_state):
                     pending.remove(instance)
                     if wait_state:
                         self.log.debug("%s entered state: %s", instance.id,
                                        wait_state)
-                    output[instance.id] = dict(
+                    cloud_prop = props_by_id[instance.id].copy()
+                    cloud_prop["instance"] = instance.id # changed for spot instances
+                    old_instance_id = convert_id_map.get(instance.id, instance.id)
+                    output[old_instance_id] = dict(
+                        cloud=cloud_prop,
                         host=instance.dns_name,
                         private=dict(ip=instance.private_ip_address,
                                      dns=instance.private_dns_name))

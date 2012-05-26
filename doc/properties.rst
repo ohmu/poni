@@ -126,7 +126,7 @@ Amazon EC2 Properties
      - ``i-4692cd2b``
    * - ``cloud.vm_name``
      - User-friendly name for the VM, visible in the EC2 console.
-     - NO
+     - **YES**
      - string
      - ``cloud-server-01``
    * - ``cloud.placement``
@@ -139,8 +139,17 @@ Amazon EC2 Properties
      - NO
      - string
      - ``my-group``
+   * - ``cloud.billing``
+     - Instance billing type
+     - NO
+     - string
+     - ``on-demand`` (default) or ``spot``
+   * - ``cloud.spot.max_price``
+     - Spot instance maximum price, required if ``cloud.billing`` is set to ``spot``.
+     - NO
+     - float
+     - ``0.123``
 
 .. note::
-  Many EC2 instance properties cannot be controlled yet, for example: security
-  groups, user data, addressing types, placement groups, monitoring, subnets
-  or block devices.
+  Many EC2 instance properties cannot be controlled yet, for example: user data,
+  addressing types, monitoring, subnets or block devices.
