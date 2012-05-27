@@ -58,6 +58,7 @@ class AwsProvider(cloudbase.Provider):
         self.log = logging.getLogger(AWS_EC2)
         self.region = cloud_prop["region"]
         self._conn = None
+        self._spot_req_cache = []
 
     def _get_conn(self):
         if self._conn:
@@ -88,12 +89,25 @@ class AwsProvider(cloudbase.Provider):
 
     def _find_spot_req_by_tag(self, tag, value):
         """Find first active spot request that is tied to this vm_name"""
-        conn = self._get_conn()
-        for spot_req in conn.get_all_spot_instance_requests():
+        for spot_req in self.get_all_spot_requests_plus_cached():
             if spot_req.state in ["open", "active"] and spot_req.tags.get(tag) == value:
+                self.log.info("found existing spot req %r for %s=%s: state=%r, tags=%r",
+                              spot_req.id, tag, value, spot_req.state, spot_req.tags)
                 return spot_req
 
         return None
+
+    def get_all_spot_requests_plus_cached(self):
+        """
+        Query all spot requests plus add internally cached ones that don't necessarily
+        yet show up in the full listing. This speeds up spot instance creation
+        considerably. Typically spot instance seems to show up in the full listing
+        60 seconds after it has been created.
+        """
+        conn = self._get_conn()
+        spot_reqs = conn.get_all_spot_instance_requests()
+        spot_reqs.extend(self._spot_req_cache)
+        return spot_reqs
 
     @convert_boto_errors
     def init_instance(self, cloud_prop):
@@ -158,12 +172,16 @@ class AwsProvider(cloudbase.Provider):
             max_price = cloud_prop.get("spot", {}).get("max_price")
             if not isinstance(max_price, float):
                 raise errors.CloudError("expected float value for cloud.spot.max_price, got '%s'" % type(max_price))
+
             if not max_price:
                 raise errors.CloudError("cloud.spot.max_price required but not defined")
 
             spot_reqs = conn.request_spot_instances(max_price, **launch_kwargs)
             spot_reqs[0].add_tag("Name", vm_name)
             out_prop["instance"] = spot_reqs[0].id
+            # Workaround the problem that spot request are not immediately visible in
+            # full listing...
+            self._spot_req_cache.append(spot_reqs[0])
         else:
             raise errors.CloudError("unsupported cloud.billing: %r" % billing_type)
 
@@ -227,8 +245,14 @@ class AwsProvider(cloudbase.Provider):
 
     @convert_boto_errors
     def terminate_instances(self, props):
+        conn = self._get_conn()
         for instance in self._get_instances(props):
-            instance.terminate()
+            if isinstance(instance, basestring):
+                # spot request
+                conn.cancel_spot_instance_requests([instance])
+            else:
+                # VM instance
+                instance.terminate()
 
     def get_all_instances(self, instance_ids=None):
         """wrapper to workaround the EC2 bogus 'instance ID ... does not exist' errors"""
@@ -244,6 +268,8 @@ class AwsProvider(cloudbase.Provider):
             if (time.time() - start) > 15.0:
                 raise errors.CloudError("instances %r did not appear in time" %
                                         instance_ids)
+
+            time.sleep(2.0)
 
     @convert_boto_errors
     def wait_instances(self, props, wait_state="running"):
@@ -264,8 +290,6 @@ class AwsProvider(cloudbase.Provider):
                         # instance has been created!
                         reservations = self.get_all_instances(
                             instance_ids=[spot_req.instance_id])
-                        # cancel the spot request, TODO: should it be done?
-                        #conn.cancel_spot_instance_requests([op])
                         pending.remove(op)
                         # start waiting for the instance to boot up
                         instance = reservations[0].instances[0]
@@ -276,7 +300,7 @@ class AwsProvider(cloudbase.Provider):
                             instance.add_tag("Name", vm_name)
                         convert_id_map[instance.id] = op
                     elif spot_req.state == "open":
-                        # spot request not handled yet, wait some more
+                        # spot request not handled yet, wait some more...
                         pass
                     else:
                         # cancelled or something else
