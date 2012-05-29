@@ -20,6 +20,7 @@ AWS_EC2 = "aws-ec2"
 try:
     import boto
     import boto.ec2
+    import boto.ec2.blockdevicemapping
     import boto.exception
 except ImportError:
     boto = None
@@ -156,7 +157,8 @@ class AwsProvider(cloudbase.Provider):
             instance_type=cloud_prop.get("type"),
             placement=cloud_prop.get("placement"),
             placement_group=cloud_prop.get("placement_group"),
-            security_groups=security_groups
+            security_groups=security_groups,
+            block_device_map=self.create_disk_map(cloud_prop),
             )
         billing_type = cloud_prop.get("billing", "on-demand")
         if billing_type == "on-demand":
@@ -165,16 +167,17 @@ class AwsProvider(cloudbase.Provider):
                 **launch_kwargs
                 )
             instance = reservation.instances[0]
-            # add a user-friendly name visible in the AWS EC2 console
-            instance.add_tag("Name", vm_name)
+            self.configure_new_instance(instance, cloud_prop)
             out_prop["instance"] = instance.id
         elif billing_type == "spot":
             max_price = cloud_prop.get("spot", {}).get("max_price")
             if not isinstance(max_price, float):
-                raise errors.CloudError("expected float value for cloud.spot.max_price, got '%s'" % type(max_price))
+                raise errors.CloudError(
+                    "expected float value for cloud.spot.max_price, got '%s'" % (
+                        type(max_price)))
 
             if not max_price:
-                raise errors.CloudError("cloud.spot.max_price required but not defined")
+                raise errors.CloudError("'cloud.spot.max_price' required but not defined")
 
             spot_reqs = conn.request_spot_instances(max_price, **launch_kwargs)
             spot_reqs[0].add_tag("Name", vm_name)
@@ -186,6 +189,45 @@ class AwsProvider(cloudbase.Provider):
             raise errors.CloudError("unsupported cloud.billing: %r" % billing_type)
 
         return dict(cloud=out_prop)
+
+    def configure_new_instance(self, instance, cloud_prop):
+        """configure the properties, disks, etc. after the instance is running"""
+        # add a user-friendly name visible in the AWS EC2 console
+        # TODO: retry until this works, EC2 may return The instance ID 'i-x' does not exist
+        instance.add_tag("Name", cloud_prop["vm_name"])
+
+    def create_disk_map(self, cloud_prop):
+        """return a boto block_device_map created form the cloud properties"""
+        hardware = cloud_prop.get("hardware", {})
+        disk_map = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+        vm_name = cloud_prop["vm_name"]
+        for disk_num in xrange(10):
+            disk = hardware.get("disk%d" % disk_num)
+            if not disk:
+                continue
+
+            size_gb = int(disk["size"] / 1024) # disk size property definitions are in MB
+            if size_gb <= 0:
+                raise errors.CloudError(
+                    "%s: invalid AWS EBS disk size %r, must be 1024 MB or greater" % (
+                        vm_name, disk["size"]))
+
+            try:
+                device = disk["device"]
+            except KeyError:
+                raise errors.CloudError(
+                    "%s: required AWS disk key 'device' (e.g. '/dev/sdh') required"
+                    " but not found" % vm_name)
+
+            dev = boto.ec2.blockdevicemapping.BlockDeviceType()
+            dev.size = size_gb
+            dev.delete_on_termination = disk.get("delete_on_termination", True)
+            if disk.get("snapshot"):
+                dev.snapshot_id = disk.get("snapshot")
+
+            disk_map[device] = dev
+
+        return disk_map
 
     @convert_boto_errors
     def assign_ip(self, props):
@@ -269,7 +311,7 @@ class AwsProvider(cloudbase.Provider):
                 raise errors.CloudError("instances %r did not appear in time" %
                                         instance_ids)
 
-            time.sleep(2.0)
+            time.sleep(1.0)
 
     @convert_boto_errors
     def wait_instances(self, props, wait_state="running"):
@@ -295,9 +337,7 @@ class AwsProvider(cloudbase.Provider):
                         instance = reservations[0].instances[0]
                         pending.append(instance)
                         props_by_id[instance.id] = props_by_id[op]
-                        vm_name = props_by_id[op].get("vm_name")
-                        if vm_name:
-                            instance.add_tag("Name", vm_name)
+                        self.configure_new_instance(instance, props_by_id[op])
                         convert_id_map[instance.id] = op
                     elif spot_req.state == "open":
                         # spot request not handled yet, wait some more...

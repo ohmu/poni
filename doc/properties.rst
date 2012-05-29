@@ -149,7 +149,53 @@ Amazon EC2 Properties
      - NO
      - float
      - ``0.123``
+   * - ``cloud.hardware``
+     - Extra "hardware" to attach to the instance. (See description below)
+     - NO
+     - dict
+     - ``{"disk0": {"size": 2048, "device": "/dev/sdh"}``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,
   addressing types, monitoring, subnets or block devices.
+
+
+Extra Hardware
+~~~~~~~~~~~~~~
+The ``cloud.hardware`` property can be used to define additional EBS volumes to
+be created and automatically attached to the instance. The value needs to be a
+``dict`` and can be set as follows::
+
+  poni set some/server 'cloud.hardware:-json={"disk0": {"size": 2048, "device": "/dev/sdh"}'
+
+The keys in the dict (or JSON object...) define the type of the hardware
+resource, currently ``disk0..disk9`` are supported. Each disk definition
+corresponds to one EBS volume and one device path within the instance.
+
+The value of each ``diskN`` is another dict/JSON object, definiting the
+properties of the disk:
+
+.. list-table::
+   :widths: 15 30 3 8 30
+   :header-rows: 1
+
+   * - Property
+     - Description
+     - Required
+     - Data Type
+     - Example
+   * - ``size``
+     - Size in megabytes, must be at least 1024 MB.
+     - **YES**
+     - int
+     - ``8192`` (8 GB)
+   * - ``device``
+     - Device path within the instance where the volume will be available.
+     - **YES**
+     - string
+     - ``/dev/sdh``
+   * - ``delete_on_termination``
+     - If set to false, the EBS volume will remain after the instance gets terminated.
+     - NO
+     - bool
+     - ``true`` (default), ``false``
