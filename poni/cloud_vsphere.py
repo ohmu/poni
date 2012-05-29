@@ -68,6 +68,7 @@ class VSphereProvider(cloudbase.Provider):
         datastore = prop.get('datastore', None)
         datastore_filter = prop.get('datastore_filter', '')
         hardware = prop.get('hardware', None)
+        folder = prop.get('folder', None)
         instance = self.instances.get(instance_id)
         if not instance:
             vm = None
@@ -92,7 +93,8 @@ class VSphereProvider(cloudbase.Provider):
             instance = dict(id=instance_id, vm=vm, vm_name=vm_name,
                             base_vm_name=base_vm_name, vm_state=vm_state,
                             placement=placement, resource_pool=resource_pool, cluster=cluster,
-                            datastore=datastore, datastore_filter=datastore_filter, hardware=hardware)
+                            datastore=datastore, datastore_filter=datastore_filter, hardware=hardware,
+                            folder=folder)
             self.instances[instance_id] = instance
         return instance
 
