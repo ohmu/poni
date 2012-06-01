@@ -47,16 +47,27 @@ else:
             paramiko.resource.ResourceManager.register(self, self._transport) # pylint: disable=E1120
             self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
 
+def _do_dns_lookup(req, max_retries=3):
+    "Make a DNS lookup and retry on DNS timeouts"
+    tri = 0
+    while tri < max_retries:
+        try:
+            return req.req()
+        except DNS.Base.DNSError:
+            # probably should be some logging here
+            time.sleep(1)
+            tri += 1
+    raise
 
 def _lv_dns_lookup(name, qtype):
     """DNS lookup using PyDNS, handles retry over TCP in case of truncation
     and returns a list of results."""
     req = DNS.Request(name=name, qtype=qtype)
-    response = req.req()
+    response = _do_dns_lookup(req)
     if response and response.header["tc"]:
         # truncated, try with tcp
         req = DNS.Request(name=name, qtype=qtype, protocol="tcp")
-        response = req.req()
+        response = _do_dns_lookup(req)
     if not response or not response.answers:
         return []
     result = []
