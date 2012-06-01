@@ -7,7 +7,7 @@ from poni import config
 
 class PlugIn(config.PlugIn):
     def add_actions(self):
-        self.add_file("%(source)s", dest_path="%(dest)s")
+        self.add_file("%(source)s", dest_path="%(dest)s", auto_override=%(override)s)
 """
 
 class TestCommands(Helper):
@@ -111,42 +111,54 @@ class TestCommands(Helper):
         assert not poni.run(["deploy"])
         assert not poni.run(["audit"])
 
-    def test_config_inherit(self):
-        poni, repo = self.init_repo()
-
+    def _make_inherited_config(self, template_node, template_conf,
+                               instance_node, instance_conf,
+                               source_file, file_contents, output_file,
+                               auto_override=False):
         # add template config
-        template_node = "tnode"
-        template_conf = "tconf"
-        assert not poni.run(["add-node", template_node])
-        assert not poni.run(["set", template_node, "verify:bool=off"])
-        assert not poni.run(["add-config", template_node, template_conf])
-
-        # write template config plugin.py
         tconf_path = "%s/%s" % (template_node, template_conf)
-        conf_dir = repo / "system" / template_node / "config" / template_conf
-        tplugin_path = conf_dir / "plugin.py"
-        output_file = self.temp_file()
-        tfile = "test.txt"
-        args = dict(source=tfile, dest=output_file)
-        tplugin_path.open("w").write(single_file_plugin_text % args)
+        source_file = "test.txt"
+        args = dict(source=source_file, dest=output_file, override=auto_override)
+        plugin_text = single_file_plugin_text % args
+
+        poni = self.repo_and_config(template_node, template_conf, plugin_text)
+        assert not poni.run(["set", template_node, "verify:bool=off"])
 
         # write template config template file
-        tfile_path = conf_dir / tfile
-        template_text = "hello"
-        tfile_path.open("w").write(template_text)
+        tfile_path = poni.default_repo_path / "system" / template_node / "config" / template_conf / source_file
+        tfile_path.open("w").write(file_contents)
 
         # add inherited config
-        instance_node = "inode"
-        instance_conf = "iconf"
         assert not poni.run(["add-node", instance_node])
         assert not poni.run(["set", instance_node, "deploy=local"])
         assert not poni.run(["add-config", instance_node, instance_conf,
                              "--inherit", tconf_path])
-
         # deploy and verify
         assert not poni.run(["deploy"])
-        output = output_file.bytes()
-        assert output == template_text
+        return poni
+
+    def test_config_inherit(self):
+        template_text = "hello"
+        output_file = self.temp_file()
+        poni = self._make_inherited_config("tnode", "tconf", "inode", "iconf",
+                                           "test.txt", template_text, output_file)
+        assert output_file.bytes() == template_text
+
+    def test_auto_override_config(self):
+        template_text = "hello"
+        output_file = self.temp_file()
+        poni = self._make_inherited_config("tnode", "tconf", "inode", "iconf",
+                                           "test.txt", template_text, output_file,
+                                           auto_override=True)
+        assert output_file.bytes() == template_text
+        # update inherited node with new content in "test.txt"
+        new_template_text = "world"
+        tmpfile = self.temp_dir() / "test.txt"
+        tmpfile.write_bytes(new_template_text)
+        poni.run(["update-config", "-v", "inode/iconf", tmpfile])
+        # see if the file is deployed with changed content
+        poni.run(["deploy"])
+        assert output_file.bytes() == new_template_text
 
     def test_require(self):
         poni, repo = self.init_repo()

@@ -447,10 +447,21 @@ class PlugIn:
 
         parser.dispatch(argv=full_args, namespace=namespace)
 
+    def get_override_config_path(self, filename):
+        for search_path in (self.top_config.path, self.config.path):
+            file_path = search_path / filename
+            if file_path.exists():
+                return file_path.abspath()
+        raise errors.VerifyError("no %r found for config %r" % (
+                filename, self.top_config.name))
+
     def add_file(self, source_path, dest_path=None, source_text=None,
                  dest_bucket=None, owner=None, group=None,
-                 render=None, report=False, post_process=None, mode=None):
+                 render=None, report=False, post_process=None, mode=None,
+                 auto_override=False):
         render = render or self.render_cheetah
+        if auto_override:
+            source_path = self.get_override_config_path(source_path)
         return self.manager.add_file(node=self.node, config=self.config,
                                      type="file", dest_path=dest_path,
                                      source_path=source_path,
