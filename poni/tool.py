@@ -819,6 +819,45 @@ class Tool:
                         self.log.info("%s: updated: %s", node.name, change_str)
                         node.save()
 
+    def _get_cloud_hosts_from_args(self, arg):
+        confman = core.ConfigMan(arg.root_dir)
+        props = [node["cloud"] for node in confman.find(arg.target, full_match=arg.full_match)
+                 if node.get("cloud", None)]
+        for provider, props in itertools.groupby(props, lambda prop: self.sky.get_provider(prop)):
+            yield provider, props
+
+    @argh.alias("create-snapshot")
+    @arg_full_match
+    @argh.arg("name", type=str, help="snapshot name")
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    @argh.arg("--description", type=str, dest="description", default="", help="optional description of the snapshot")
+    @arg_flag("--memory", dest="memory", help="include memory in the snapshot")
+    def handle_cloud_create_snapshot(self, arg):
+        """create a named snapshot for nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            assert hasattr(provider, 'create_snapshot'), 'provider does not support snapshots'
+            provider.create_snapshot(props, name=arg.name, description=arg.description, memory=arg.memory)
+
+    @argh.alias("revert-to-snapshot")
+    @arg_full_match
+    @argh.arg("name", type=str, help="snapshot name")
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    def handle_cloud_revert_to_snapshot(self, arg):
+        """revert the nodes to a named snapshot"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            assert hasattr(provider, 'revert_to_snapshot'), 'provider does not support snapshots'
+            provider.revert_to_snapshot(props, name=arg.name)
+
+    @argh.alias("remove-snapshot")
+    @arg_full_match
+    @argh.arg("name", type=str, help="snapshot name")
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    def handle_cloud_remove_snapshot(self, arg):
+        """remove a named snapshot from nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            assert hasattr(provider, 'remove_snapshot'), 'provider does not support snapshots'
+            provider.remove_snapshot(props, name=arg.name)
+
     @argh.alias("set")
     @arg_verbose
     @arg_full_match
@@ -1234,6 +1273,9 @@ class Tool:
                 self.handle_cloud_init, self.handle_cloud_terminate,
                 self.handle_cloud_update, self.handle_cloud_wait,
                 self.handle_cloud_ip,
+                self.handle_cloud_create_snapshot,
+                self.handle_cloud_revert_to_snapshot,
+                self.handle_cloud_remove_snapshot,
                 ],
                             namespace="cloud", title="cloud operations",
                             help="command to execute")

@@ -243,3 +243,18 @@ class VSphereProvider(cloudbase.Provider):
             raise errors.CloudError("%d jobs failed" % error_count)
 
         return updated_props
+
+    def create_snapshot(self, props, name=None, description=None, memory=False):
+        instances = dict((x['instance'], self._get_instance(x)) for x in props)
+        args = dict(name=name, description=description, memory=memory)
+        self.vmops.run_on_instances(instances, self.vmops.create_snapshot, args)
+
+    def revert_to_snapshot(self, props, name=None):
+        instances = dict((x['instance'], self._get_instance(x)) for x in props)
+        args = dict(name=name, wait_for_ip=False)
+        self.vmops.run_on_instances(instances, self.vmops.revert_to_snapshot, args)
+
+    def remove_snapshot(self, props, name):
+        instances = dict((x['instance'], self._get_instance(x)) for x in props)
+        args = dict(name=name)
+        self.vmops.run_on_instances(instances, self.vmops.remove_snapshot, args)
