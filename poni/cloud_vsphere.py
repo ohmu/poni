@@ -202,7 +202,7 @@ class VSphereProvider(cloudbase.Provider):
                 else:
                     # Handle the update
                     if vm_state == 'VM_RUNNING':
-                        job = self._update_vm(instance)
+                        job = self.vmops.update_vm(instance)
                 if job:
                     jobs[instance_id] = job
                     tasks[instance_id] = None
@@ -243,32 +243,3 @@ class VSphereProvider(cloudbase.Provider):
             raise errors.CloudError("%d jobs failed" % error_count)
 
         return updated_props
-
-    def _update_vm(self, instance):
-        """
-        Get updated info from the VM instance
-
-        This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
-
-        @param instance: dict of the VM instance to update
-
-        @return: generator function
-        """
-        def got_ip(task):
-            return (hasattr(task, 'summary') and
-                    getattr(task.summary.guest, 'ipAddress', None))
-
-        vm_name = instance['vm_name']
-        vm = instance['vm']
-        if not vm:
-            vm = self.vim.find_vm_by_name(vm_name)
-        assert vm, "VM %s not found in vSphere, something is terribly wrong here" % vm_name
-
-        self.log.debug("UPDATE(%s) WAITING FOR IP" % (vm_name))
-        task = vm
-        while not got_ip(task):
-            task = (yield task)
-        self.log.debug("UPDATE(%s) GOT IP: %s" % (vm_name, task.summary.guest.ipAddress))
-        instance['ipv4'] = task.summary.guest.ipAddress
