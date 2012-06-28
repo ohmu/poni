@@ -360,6 +360,7 @@ class PoniLVConn(object):
             uri = "qemu+ssh://root@{0}:{1}/system?no_tty=1&no_verify=1&keyfile={2}".\
                   format(host, port, keyfile or "")
         m = re.search("://(.+?)@", uri)
+        self.log = logging.getLogger("ponilvconn")
         self.username = m and m.group(1)
         self.keyfile = keyfile
         self.host = host
@@ -588,9 +589,32 @@ class PoniLVConn(object):
 
         new_desc = desc % spec
         vm = self.conn.defineXML(new_desc)
-        vm.create()
+        self.libvirt_retry(vm.create)
         self.refresh_list()
         return self.vms[name]
+
+    def libvirt_retry(self, op):
+        """
+        Workaround "libvirt.libvirtError: Unable to read from monitor: Connection reset by peer"
+        random, recoverable errors produced by libvirt.
+        """
+        end_time = time.time() + 30.0
+        while True:
+            try:
+                return op()
+            except libvirt.libvirtError as error:
+                if "Unable to read from monitor: Connection reset by peer" not in str(error):
+                    # some other error, raise immediately
+                    raise
+
+                time_left = max(end_time - time.time(), 0)
+                if not time_left:
+                    # timeout
+                    raise
+
+                self.log.warning("got possibly transient error '%s' from libvirt, retrying for %.1fs..." % (error, time_left))
+                time.sleep(1.0)
+
 
 class PoniLVVol(object):
     def __init__(self, vol, pool):
