@@ -133,7 +133,7 @@ class VSphereProvider(cloudbase.Provider):
             assert instance, "instance %s not found. Very bad. Should not happen. Ever." % instance_id
             vm_state = instance['vm_state']
             if vm_state != 'VM_NON_EXISTENT':
-                jobs[instance_id] = self._delete_vm(instance)
+                jobs[instance_id] = self.vmops.delete_vm(instance)
                 tasks[instance_id] = None
         while jobs:
             if [tasks[x] for x in tasks if tasks[x]]:
