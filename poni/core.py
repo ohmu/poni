@@ -450,6 +450,8 @@ class ConfigMan:
         self.system_root = self.root_dir / "system"
         self.config_path = self.root_dir / REPO_CONF_FILE
         self.node_cache = {}
+        self.find_cache = {}
+        self.find_config_cache = {}
         if must_exist:
             conf = self.load_config()
             self.apply_library_paths(conf.get("libpath", {}))
@@ -458,6 +460,8 @@ class ConfigMan:
 
     def reset_cache(self):
         self.node_cache = {}
+        self.find_cache = {}
+        self.find_config_cache = {}
 
     def apply_library_paths(self, path_dict):
         """add repo's custom library include paths to sys.path"""
@@ -585,6 +589,15 @@ class ConfigMan:
         return configs[0]
 
     def find_config(self, pattern, all_configs=False, full_match=False):
+        key = (pattern, all_configs, full_match)
+        results = self.find_config_cache.get(key)
+        if not results:
+            results = list(self._find_config(pattern, all_configs=all_configs, full_match=full_match))
+            self.find_config_cache[key] = results
+
+        return results
+
+    def _find_config(self, pattern, all_configs=False, full_match=False):
         comparison = ConfigMatch(pattern, full_match=full_match)
         for node in self.find("."):
             if not comparison.match_node(node.name):
@@ -599,7 +612,17 @@ class ConfigMan:
                 if comparison.match_config(conf.name):
                     yield node, conf
 
-    def find(self, pattern, current=None, system=None, nodes=True,
+    def find(self, pattern, nodes=True,
+             systems=False, depth=None, full_match=False, exclude=None):
+        key = (pattern, nodes, systems, tuple(depth or []), full_match, tuple(exclude or []))
+        results = self.find_cache.get(key)
+        if not results:
+            results = list(self._find(pattern, nodes=nodes, systems=systems, depth=depth, full_match=full_match, exclude=exclude))
+            self.find_cache[key] = results
+
+        return results
+
+    def _find(self, pattern, current=None, system=None, nodes=True,
              systems=False, curr_depth=0, extra=None, depth=None,
              full_match=False, exclude=None):
         depth = depth or []
@@ -641,9 +664,9 @@ class ConfigMan:
                 sub_depth = curr_depth + 1
                 extra = dict(index=sub_index, depth=sub_depth)
 
-                for result in self.find(pattern, current=subdir, system=system,
-                                        nodes=nodes, systems=systems,
-                                        curr_depth=sub_depth, extra=extra,
-                                        exclude=exclude,
-                                        depth=depth, full_match=full_match):
+                for result in self._find(pattern, current=subdir, system=system,
+                                         nodes=nodes, systems=systems,
+                                         curr_depth=sub_depth, extra=extra,
+                                         exclude=exclude,
+                                         depth=depth, full_match=full_match):
                     yield result

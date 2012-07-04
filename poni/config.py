@@ -365,9 +365,7 @@ class PlugIn:
         if isinstance(script_path, (list, tuple)):
             script_path = " ".join(script_path)
 
-        rendered_path = str(CheetahTemplate(script_path,
-                                            searchList=[self.get_names()]))
-
+        rendered_path = self._render_cheetah(script_path)
         remote = arg.node.get_remote(override=arg.method)
         lines = [] if yield_stdout else None
         color = colors.Output(sys.stdout, color=arg.color_mode).color
@@ -530,26 +528,29 @@ class PlugIn:
                      plugin=self)
         return names
 
-    def render_cheetah(self, source_path, dest_path, source_text=None):
+    def _render_cheetah(self, source=None, file=None):
+        """helper to render a text or a file with Cheetah into a str"""
         names = self.get_names()
-        # TODO: template caching
+        return str(CheetahTemplate(source=source, file=file, searchList=[names]))
+
+    def render_cheetah(self, source_path, dest_path, source_text=None):
         try:
             if source_path:
-                source_path = str(CheetahTemplate(source_path, searchList=[names]))
+                source_path = self._render_cheetah(source_path)
 
             if source_text:
-                text = str(CheetahTemplate(source_text, searchList=[names]))
+                text = self._render_cheetah(source_text)
             elif source_path is not None:
-                text = str(CheetahTemplate(file=source_path, searchList=[names]))
+                text = self._render_cheetah(file=source_path)
             else:
                 text = None
 
             if dest_path:
-                dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
+                dest_path = self._render_cheetah(dest_path)
 
             return dest_path, text
         except (Cheetah.Template.Error, SyntaxError,
-                Cheetah.NameMapper.NotFound), error:
+                Cheetah.NameMapper.NotFound) as error:
             raise errors.VerifyError("%s: %s: %s" % (
                 source_path, error.__class__.__name__, error))
 
@@ -558,7 +559,7 @@ class PlugIn:
         assert not source_text, "genshi rendering from source_text not implemented yet"
         names = self.get_names()
         if dest_path:
-            dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
+            dest_path = self._render_cheetah(dest_path)
 
         try:
             tmpl = genshi.template.MarkupTemplate(file(source_path),
