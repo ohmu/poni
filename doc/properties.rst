@@ -183,6 +183,11 @@ Amazon EC2 Properties
      - NO
      - str
      - ``default``, ``dedicated``
+   * - ``instance_profile_name``
+     - IAM instance profile name.
+     - NO
+     - str
+     - ``<profile name>``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,

@@ -167,6 +167,7 @@ class AwsProvider(cloudbase.Provider):
             "subnet_id": ("subnet", str),
             "private_ip_address": ("private_ip_address", str),
             "tenancy": ("tenancy", str),
+            "instance_profile_name": ("instance_profile_name", str),
             }
         for arg_name, (key_name, arg_type) in optional_args.iteritems():
             arg_value = cloud_prop.get(key_name)
