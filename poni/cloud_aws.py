@@ -152,14 +152,27 @@ class AwsProvider(cloudbase.Provider):
         launch_kwargs = dict(
             image_id=image_id,
             key_name=key_name,
-            kernel_id=cloud_prop.get("kernel"),
-            ramdisk_id=cloud_prop.get("ramdisk"),
             instance_type=cloud_prop.get("type"),
-            placement=cloud_prop.get("placement"),
-            placement_group=cloud_prop.get("placement_group"),
             security_groups=security_groups,
             block_device_map=self.create_disk_map(cloud_prop),
             )
+
+        optional_args = {
+            "kernel_id": ("kernel", str),
+            "ramdisk_id": ("ramdisk_id", str),
+            "placement": ("placement", str),
+            "placement_group": ("placement_group", str),
+            "disable_api_termination": ("disable_api_termination", bool),
+            }
+        for arg_name, (key_name, arg_type) in optional_args.iteritems():
+            arg_value = cloud_prop.get(key_name)
+            if arg_value is not None:
+                try:
+                    launch_kwargs[arg_name] = arg_type(arg_value)
+                except Exception as error:
+                    raise errors.CloudError("invalid AWS cloud property '%s' value %r, expected value of type '%s'" % (
+                            arg_name, arg_value, arg_type))
+
         billing_type = cloud_prop.get("billing", "on-demand")
         if billing_type == "on-demand":
             reservation = conn.run_instances(

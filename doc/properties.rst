@@ -154,6 +154,11 @@ Amazon EC2 Properties
      - NO
      - dict
      - ``{"disk0": {"size": 2048, "device": "/dev/sdh"}``
+   * - ``disable_api_termination``
+     - If True, the instances will be locked and will not be able to be terminated via the API.
+     - NO
+     - bool
+     - ``False`` (default) or ``True``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,
