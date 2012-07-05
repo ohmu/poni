@@ -164,6 +164,9 @@ class AwsProvider(cloudbase.Provider):
             "placement_group": ("placement_group", str),
             "disable_api_termination": ("disable_api_termination", bool),
             "monitoring_enabled": ("monitoring_enabled", bool),
+            "subnet_id": ("subnet", str),
+            "private_ip_address": ("private_ip_address", str),
+            "tenancy": ("tenancy", str),
             }
         for arg_name, (key_name, arg_type) in optional_args.iteritems():
             arg_value = cloud_prop.get(key_name)

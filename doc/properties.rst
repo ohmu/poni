@@ -164,6 +164,25 @@ Amazon EC2 Properties
      - NO
      - bool
      - ``False`` (default) or ``True``
+   * - ``subnet``
+     - The subnet ID within which to launch the instances for VPC.
+     - NO
+     - str
+     - ``<subnet id>``
+   * - ``private_ip_address``
+     - If you’re using VPC, you can optionally use this parameter to assign the
+       instance a specific available IP address from the subnet.
+     - NO
+     - str
+     - ``10.0.0.25``
+   * - ``tenancy``
+     - The tenancy of the instance you want to launch. An instance with a
+       tenancy of ‘dedicated’ runs on single-tenant hardware and can only be
+       launched into a VPC. Valid values are: “default” or “dedicated”.
+       NOTE: To use dedicated tenancy you MUST specify a VPC subnet-ID as well.
+     - NO
+     - str
+     - ``default``, ``dedicated``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,
