@@ -187,69 +187,50 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         channel.set_combine_stderr(True) # TODO: separate stdout/stderr?
         BS = 2**16
         rx_time = time.time()
-        log_name = "%s: %r" % (self.node.name, cmd)
+        log_name = "%s (%s): %r" % (self.node.name, self.node.get("host"), cmd)
         next_warn = time.time() + self.warn_timeout
-        waiting = [True, True, True] # process, stdout, stderr
-        try:
-            channel.exec_command(cmd)
-            channel.shutdown_write()
-            while any(waiting):
-                if waiting[0] and channel.exit_status_ready():
-                    # process has finished executing, but there still may be
-                    # output to read from stdout or stderr
-                    waiting[0] = False
 
-                r, w, e = select.select([channel], [], [], 1.0)
+        def available_output():
+            """read all the output that is immediately available"""
+            while channel.recv_ready():
+                chunk = channel.recv(BS)
+                if chunk:
+                    yield rcontrol.STDOUT, chunk
 
-                while waiting[2] and channel.recv_stderr_ready():
-                    x = channel.recv_stderr(BS)
-                    if not x:
-                        waiting[2] = False # finished reading from stdout
-                        break;
+        channel.exec_command(cmd)
+        channel.shutdown_write()
 
-                    rx_time = time.time()
-                    next_warn = time.time() + self.warn_timeout
-                    if x:
-                        yield rcontrol.STDERR, x
+        exit_code = None
+        while True:
+            if (exit_code is None) and channel.exit_status_ready():
+                # process has finished executing, but there still may be
+                # output to read from stdout or stderr
+                exit_code = channel.recv_exit_status()
 
-                while (not waiting[0]) or (waiting[1] and channel.recv_ready()):
-                    # read all the remaining output until stdout is closed OR
-                    # read just everything that is available
-                    x = channel.recv(BS)
-                    if not x:
-                        waiting[1] = False
-                        waiting[2] = False # don't wait for stderr either
-                        break;
+            # wait for input, note that the results are not used for anything
+            select.select([channel], [], [], 1.0)
 
-                    rx_time = time.time()
-                    next_warn = time.time() + self.warn_timeout
-                    if x:
-                        yield rcontrol.STDOUT, x
+            for output in available_output():
+                rx_time = time.time()
+                next_warn = time.time() + self.warn_timeout
+                yield output
 
-                now = time.time()
-                if now > (rx_time + self.terminate_timeout):
-                    # no output in a long time, terminate connection
-                    raise errors.RemoteError(
-                        "%s: no output in %.1f seconds, terminating" % (
-                            log_name, self.terminate_timeout))
+            if (exit_code is not None):
+                yield rcontrol.DONE, exit_code
+                break # everything done!
 
-                if now > next_warn:
-                    self.log.warning("%s: no output in %.1fs", log_name,
-                                     self.warn_timeout)
-                    next_warn = time.time() + self.warn_timeout
+            now = time.time()
+            if now > (rx_time + self.terminate_timeout):
+                # no output in a long time, terminate connection
+                raise errors.RemoteError(
+                    "%s: no output in %.1f seconds, terminating" % (
+                        log_name, self.terminate_timeout))
 
-            exit_code = channel.recv_exit_status()
-        finally:
-            if channel:
-                pass
-                # experimental: channel.close() disabled temporarily due to the following resulting problem:
-#paramiko.transport      ERROR     File "/usr/lib/pymodules/python2.6/paramiko/pipe.py", line 66, in set
-#paramiko.transport      ERROR       os.write(self._wfd, '*')
-#paramiko.transport      ERROR   OSError: [Errno 32] Broken pipe
-
-                #channel.close()
-
-        yield rcontrol.DONE, exit_code
+            if now > next_warn:
+                elapsed_since = time.time() - rx_time
+                self.log.warning("%s: no output in %.1fs", log_name,
+                                 elapsed_since)
+                next_warn = time.time() + self.warn_timeout
 
     @convert_paramiko_errors
     def execute_shell(self):
