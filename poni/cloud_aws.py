@@ -163,6 +163,7 @@ class AwsProvider(cloudbase.Provider):
             "placement": ("placement", str),
             "placement_group": ("placement_group", str),
             "disable_api_termination": ("disable_api_termination", bool),
+            "monitoring_enabled": ("monitoring_enabled", bool),
             }
         for arg_name, (key_name, arg_type) in optional_args.iteritems():
             arg_value = cloud_prop.get(key_name)

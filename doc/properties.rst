@@ -159,6 +159,11 @@ Amazon EC2 Properties
      - NO
      - bool
      - ``False`` (default) or ``True``
+   * - ``monitoring_enabled``
+     - Enable CloudWatch monitoring on the instance.
+     - NO
+     - bool
+     - ``False`` (default) or ``True``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,
