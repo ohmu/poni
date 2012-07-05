@@ -8,13 +8,14 @@ See LICENSE for details.
 
 from __future__ import with_statement
 
-import os
-import subprocess
-import logging
-import shutil
-import sys
-import select
 import errno
+import logging
+import os
+import select
+import shutil
+import subprocess
+import sys
+import time
 from . import errors
 from . import colors
 
@@ -80,6 +81,7 @@ class RemoteControl:
         self.tag_line(color("BEGIN", "header"), command, verbose=verbose,
                       color=color, out_file=stdout_file)
 
+        start = time.time()
         try:
             while True:
                 for code, output in self.execute_command(command,
@@ -120,7 +122,8 @@ class RemoteControl:
                            "op_error")
             raise
         finally:
-            self.tag_line(color("END", "header"), command, result=result,
+            elapsed = time.time() - start
+            self.tag_line(color("END %.1fs" % elapsed, "header"), command, result=result,
                           verbose=verbose, color=color, out_file=stdout_file)
 
     def shell(self, verbose=False, color=None):
