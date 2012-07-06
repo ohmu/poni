@@ -195,7 +195,7 @@ class VSphereProvider(cloudbase.Provider):
                 if wait_state == 'running':
                     # Get the VM running from whatever state it's in
                     if vm_state == 'VM_CLEAN':
-                        job = self.vmops.revert_vm(instance)
+                        job = self.vmops.revert_to_snapshot(instance)
                     elif vm_state == 'VM_NON_EXISTENT':
                         job = self.vmops.clone_vm(instance, nuke_old=True)
                     elif vm_state == 'VM_DIRTY':
