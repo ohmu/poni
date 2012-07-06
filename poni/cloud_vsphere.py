@@ -16,13 +16,12 @@ limitations under the License.
 import copy
 import logging
 import os
-import random
 import time
 from . import errors
 from . import cloudbase
 
 try:
-    from pyvsphere.vim25 import Vim, ManagedObject
+    from pyvsphere.vim25 import Vim
     from pyvsphere.vmops import VmOperations
     pyvsphere_available = True
 except ImportError:
