@@ -211,8 +211,16 @@ class AwsProvider(cloudbase.Provider):
     def configure_new_instance(self, instance, cloud_prop):
         """configure the properties, disks, etc. after the instance is running"""
         # add a user-friendly name visible in the AWS EC2 console
-        # TODO: retry until this works, EC2 may return The instance ID 'i-x' does not exist
-        instance.add_tag("Name", cloud_prop["vm_name"])
+        start_time = time.time()
+        while True:
+            try:
+                return instance.add_tag("Name", cloud_prop["vm_name"])
+            except boto.exception.EC2ResponseError as error:
+                if not "does not exist" in str(error):
+                    raise
+            if (time.time() - start_time) > 60.0:
+                raise errors.CloudError("instance id: %r that we were setting a Name: %r did not appear in time" % (instance.id, cloud_prop["vm_name"]))
+            time.sleep(1.0)
 
     def create_disk_map(self, cloud_prop):
         """return a boto block_device_map created form the cloud properties"""
@@ -322,7 +330,7 @@ class AwsProvider(cloudbase.Provider):
             try:
                 return conn.get_all_instances(instance_ids=instance_ids)
             except boto.exception.EC2ResponseError as error:
-                if not "does not exist" is str(error):
+                if not "does not exist" in str(error):
                     raise
 
             if (time.time() - start) > 15.0:
