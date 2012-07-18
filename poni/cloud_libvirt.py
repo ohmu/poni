@@ -448,6 +448,7 @@ class PoniLVConn(object):
               <description>%(desc)s</description>
               <uuid>%(uuid)s</uuid>
               <memory>%(hardware.ram_kb)s</memory>
+              <cpu mode='%(hardware.cpumode)s'></cpu>
               <vcpu>%(hardware.cpus)s</vcpu>
               <os>
                 <type arch='%(hardware.arch)s' machine='pc'>hvm</type>
@@ -532,6 +533,8 @@ class PoniLVConn(object):
             spec["hardware.arch"] = "x86_64"
         if "hardware.cpus" not in spec:
             spec["hardware.cpus"] = 1
+        if "hardware.cpumode" not in spec:
+            spec["hardware.cpumode"] = "host-model"
         ram_mb = spec.get("hardware.ram_mb", spec.get("hardware.ram", 1024))
         ram_kb = spec.get("hardware.ram_kb", 1024 * ram_mb)
         spec["hardware.ram_kb"] = ram_kb
