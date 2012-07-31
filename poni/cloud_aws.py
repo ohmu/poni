@@ -83,6 +83,7 @@ class AwsProvider(cloudbase.Provider):
         """Find first instance that has been tagged with the specific value"""
         reservations = self.get_all_instances()
         for instance in (r.instances[0] for r in reservations):
+            # TODO: also accepted "stopped" + start stopped boxes
             if instance.state in ["pending", "running"] and instance.tags.get(tag) == value:
                 return instance
 
@@ -110,6 +111,16 @@ class AwsProvider(cloudbase.Provider):
         spot_reqs.extend(self._spot_req_cache)
         return spot_reqs
 
+    def get_security_group_id(self, group_name):
+        conn = self._get_conn()
+        # NOTE: VPC security groups cannot be filtered with the 'groupnames' arg, therefore we
+        # list them all
+        groups = [g for g in conn.get_all_security_groups() if g.name == group_name]
+        if not groups:
+            raise errors.CloudError("security group '%s' does not exist" % group_name)
+
+        return groups[0].id
+
     @convert_boto_errors
     def init_instance(self, cloud_prop):
         conn = self._get_conn()
@@ -134,6 +145,8 @@ class AwsProvider(cloudbase.Provider):
         security_groups = cloud_prop.get("security_groups")
         if security_groups and isinstance(security_groups, (basestring, unicode)):
             security_groups = [security_groups]
+        security_group_ids = [self.get_security_group_id(sg_name)
+                              for sg_name in security_groups]
 
         out_prop = copy.deepcopy(cloud_prop)
 
@@ -153,7 +166,7 @@ class AwsProvider(cloudbase.Provider):
             image_id=image_id,
             key_name=key_name,
             instance_type=cloud_prop.get("type"),
-            security_groups=security_groups,
+            security_group_ids=security_group_ids,
             block_device_map=self.create_disk_map(cloud_prop),
             )
 
