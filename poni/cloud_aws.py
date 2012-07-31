@@ -399,11 +399,12 @@ class AwsProvider(cloudbase.Provider):
                     cloud_prop = props_by_id[instance.id].copy()
                     cloud_prop["instance"] = instance.id # changed for spot instances
                     old_instance_id = convert_id_map.get(instance.id, instance.id)
+                    dns_name = instance.dns_name or instance.private_ip_address
                     output[old_instance_id] = dict(
                         cloud=cloud_prop,
-                        host=instance.dns_name,
+                        host=dns_name,
                         private=dict(ip=instance.private_ip_address,
-                                     dns=instance.private_dns_name))
+                                     dns=dns_name))
 
             if pending:
                 self.log.info("[%s/%s] instances %r, waiting...",
