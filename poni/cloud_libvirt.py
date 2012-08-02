@@ -771,5 +771,5 @@ def mac_to_ipv6(prefix, mac):
     addr = "%s%02x%02x:%02xff:fe%02x:%02x%02x" % \
         (prefix, inv_a, int(mp[1], 16), int(mp[2], 16),
          int(mp[3], 16), int(mp[4], 16), int(mp[5], 16))
-    name = socket.getnameinfo((addr, 22), socket.NI_NUMERICSERV)
+    name = socket.getnameinfo((addr, 22), socket.NI_NUMERICSERV|socket.NI_NUMERICHOST)
     return name[0]
