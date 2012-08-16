@@ -140,6 +140,36 @@ The ``list -q`` queries each cloud instances' status and shows it in the output:
   status      VM_RUNNING
 
 
+Snapshot Management
+-------------------
+
+The vSphere provider adds three cloud commands to manage VM snapshots through
+poni: ``create-snapshot``, ``revert-to-snapshot`` and ``remove-snapshot``. An example
+session could go as follows::
+
+  $ poni cloud create-snapshot foo drumbo
+  pyvsphere.vmops DEBUG   CREATE-SNAPSHOT(drumbo1) STARTING
+  pyvsphere.vmops DEBUG   CREATE-SNAPSHOT(drumbo2) STARTING
+  pyvsphere.vmops DEBUG   CREATE-SNAPSHOT(drumbo1) DONE
+  pyvsphere.vmops DEBUG   CREATE-SNAPSHOT(drumbo2) DONE
+
+  $ poni cloud revert-to-snapshot pristine drumbo
+  pyvsphere.vmops DEBUG   REVERT(drumbo1) STARTING
+  pyvsphere.vmops DEBUG   REVERT(drumbo2) STARTING
+  pyvsphere.vmops DEBUG   REVERT(drumbo2) DONE
+  pyvsphere.vmops DEBUG   REVERT(drumbo1) DONE
+
+  $ poni cloud remove-snapshot foo drumbo
+  pyvsphere.vmops DEBUG   REMOVE-SNAPSHOT(drumbo1) STARTING
+  pyvsphere.vmops DEBUG   REMOVE-SNAPSHOT(drumbo2) STARTING
+  pyvsphere.vmops DEBUG   REMOVE-SNAPSHOT(drumbo1) DONE
+  pyvsphere.vmops DEBUG   REMOVE-SNAPSHOT(drumbo2) DONE
+
+``create-snapshot`` takes two arguments, ``--description`` to attach a short text
+description to the snapshot and ``--memory`` to enable snapshotting of VM memory.
+The other two commands only take the snapshot name and poni targets as arguments.
+
+
 Terminating Instances
 ---------------------
 To get rid of instances use the ``cloud terminate`` command::
