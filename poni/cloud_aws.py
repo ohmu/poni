@@ -22,6 +22,7 @@ try:
     import boto.ec2
     import boto.ec2.blockdevicemapping
     import boto.exception
+    import boto.vpc
 except ImportError:
     boto = None
 
@@ -59,12 +60,10 @@ class AwsProvider(cloudbase.Provider):
         self.log = logging.getLogger(AWS_EC2)
         self.region = cloud_prop["region"]
         self._conn = None
+        self._vpc_conn = None
         self._spot_req_cache = []
 
-    def _get_conn(self):
-        if self._conn:
-            return self._conn
-
+    def _prepare_conn(self):
         required_env = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
         for env_key in required_env:
             if not os.environ.get(env_key):
@@ -76,8 +75,21 @@ class AwsProvider(cloudbase.Provider):
             raise errors.CloudError("AWS EC2 region %r unknown" % (
                     self.region,))
 
-        self._conn = region.connect()
+        return region
+
+    def _get_conn(self):
+        if not self._conn:
+            region = self._prepare_conn()
+            self._conn = region.connect()
+
         return self._conn
+
+    def _get_vpc_conn(self):
+        if not self._vpc_conn:
+            region = self._prepare_conn()
+            self._vpc_conn = boto.vpc.VPCConnection(region=region)
+
+        return self._vpc_conn
 
     def _find_instance_by_tag(self, tag, value):
         """Find first instance that has been tagged with the specific value"""
@@ -336,7 +348,7 @@ class AwsProvider(cloudbase.Provider):
                 instance.terminate()
 
     def get_all_instances(self, instance_ids=None):
-        """wrapper to workaround the EC2 bogus 'instance ID ... does not exist' errors"""
+        """Wrapper to workaround the EC2 bogus 'instance ID ... does not exist' errors"""
         conn = self._get_conn()
         start = time.time()
         while True:
@@ -351,6 +363,43 @@ class AwsProvider(cloudbase.Provider):
                                         instance_ids)
 
             time.sleep(1.0)
+
+    def get_instance_eip(self, instance):
+        """Get the attached EIP for the 'instance', if available"""
+        conn = self._get_conn()
+        for eip in conn.get_all_addresses():
+            if eip.instance_id == instance.id:
+                return eip
+
+        return None
+
+    def attach_eip(self, instance, cloud_prop):
+        """Create and attach an Elastic IP address to the instance"""
+        eip_mode = cloud_prop.get("eip")
+        if not eip_mode:
+            return None
+
+        host_eip = self.get_instance_eip(instance)
+        if host_eip:
+            return host_eip.public_ip
+
+        if eip_mode == "allocate":
+            if instance.subnet_id:
+                # an instance is inside a VPC if it has a subnet_id
+                conn = self._get_vpc_conn()
+                domain = "vpc"
+            else:
+                # regular EC2 inside (not in a VPC)
+                conn = self._get_conn()
+                domain = None
+        else:
+            # TODO: implement assigning a specific EIP (EIP address given)
+            assert False, "'eip' mode %r not supported" % (eip_mode,)
+
+        host_eip = conn.allocate_address(domain=domain)
+        conn.associate_address(instance_id=instance.id, allocation_id=host_eip.allocation_id)
+
+        return host_eip.public_ip
 
     @convert_boto_errors
     def wait_instances(self, props, wait_state="running"):
@@ -396,15 +445,25 @@ class AwsProvider(cloudbase.Provider):
                     if wait_state:
                         self.log.debug("%s entered state: %s", instance.id,
                                        wait_state)
+
                     cloud_prop = props_by_id[instance.id].copy()
                     cloud_prop["instance"] = instance.id # changed for spot instances
                     old_instance_id = convert_id_map.get(instance.id, instance.id)
                     dns_name = instance.dns_name or instance.private_ip_address
-                    output[old_instance_id] = dict(
+                    out_props = dict(
                         cloud=cloud_prop,
                         host=dns_name,
-                        private=dict(ip=instance.private_ip_address,
-                                     dns=dns_name))
+                        private=dict(
+                            ip=instance.private_ip_address,
+                            dns=dns_name),
+                        )
+                    host_eip = self.attach_eip(instance, cloud_prop)
+                    if host_eip:
+                        out_props["public"] = dict(ip=host_eip, dns=host_eip)
+                        if cloud_prop.get("deploy_via_eip"):
+                            out_props["host"] = host_eip
+
+                    output[old_instance_id] = out_props
 
             if pending:
                 self.log.info("[%s/%s] instances %r, waiting...",
