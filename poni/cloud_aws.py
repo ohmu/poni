@@ -95,8 +95,7 @@ class AwsProvider(cloudbase.Provider):
         """Find first instance that has been tagged with the specific value"""
         reservations = self.get_all_instances()
         for instance in (r.instances[0] for r in reservations):
-            # TODO: also accepted "stopped" + start stopped boxes
-            if instance.state in ["pending", "running"] and instance.tags.get(tag) == value:
+            if instance.state in ["pending", "running", "stopped"] and instance.tags.get(tag) == value:
                 return instance
 
         return None
@@ -175,6 +174,9 @@ class AwsProvider(cloudbase.Provider):
         instance = self._find_instance_by_tag("Name", vm_name)
         if instance:
             # the instance already exists
+            if instance.state == "stopped":
+                instance.start()
+
             out_prop["instance"] = instance.id
             return dict(cloud=out_prop)
 
