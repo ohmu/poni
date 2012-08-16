@@ -165,10 +165,11 @@ Amazon EC2 Properties
      - bool
      - ``False`` (default) or ``True``
    * - ``subnet``
-     - The subnet ID within which to launch the instances for VPC.
+     - The subnet ID or name within which to launch the instances for VPC. The name is in subnet
+       object's tags with the key 'Name'.
      - NO
      - str
-     - ``<subnet id>``
+     - ``<subnet id>``, ``My subnet X``
    * - ``private_ip_address``
      - If you’re using VPC, you can optionally use this parameter to assign the
        instance a specific available IP address from the subnet.

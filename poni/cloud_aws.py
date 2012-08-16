@@ -133,6 +133,16 @@ class AwsProvider(cloudbase.Provider):
 
         return groups[0].id
 
+    def resolve_subnet_id(self, id_or_name):
+        """Return the subnet_id for the given subnet ID or name"""
+        conn = self._get_vpc_conn()
+        for subnet in conn.get_all_subnets():
+            if id_or_name in [subnet.id, subnet.tags.get("Name")]:
+                return subnet.id
+
+        raise errors.CloudError(
+            "subnet with ID or name %r does not exist" % (id_or_name,))
+
     @convert_boto_errors
     def init_instance(self, cloud_prop):
         conn = self._get_conn()
@@ -189,7 +199,7 @@ class AwsProvider(cloudbase.Provider):
             "placement_group": ("placement_group", str),
             "disable_api_termination": ("disable_api_termination", bool),
             "monitoring_enabled": ("monitoring_enabled", bool),
-            "subnet_id": ("subnet", str),
+            "subnet_id": ("subnet", self.resolve_subnet_id),
             "private_ip_address": ("private_ip_address", str),
             "tenancy": ("tenancy", str),
             "instance_profile_name": ("instance_profile_name", str),
@@ -200,8 +210,8 @@ class AwsProvider(cloudbase.Provider):
                 try:
                     launch_kwargs[arg_name] = arg_type(arg_value)
                 except Exception as error:
-                    raise errors.CloudError("invalid AWS cloud property '%s' value %r, expected value of type '%s'" % (
-                            arg_name, arg_value, arg_type))
+                    raise errors.CloudError("invalid AWS cloud property '%s' value %r: %s: %s" % (
+                            arg_name, arg_value, error.__class__.__name__, error))
 
         billing_type = cloud_prop.get("billing", "on-demand")
         if billing_type == "on-demand":
