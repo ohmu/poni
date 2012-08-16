@@ -39,6 +39,7 @@ Contents
    template-variables
    plugins
    ec2
+   vsphere
    remote
    vc
    examples/puppet
