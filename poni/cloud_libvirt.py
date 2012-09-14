@@ -193,7 +193,8 @@ class LibvirtProvider(Provider):
         self.log.info("deleting existing VM instances")
         for prop in proplist:
             instance = self.__get_instance(prop)
-            if instance["vm_state"] == "VM_DIRTY":
+            if instance["vm_state"] == "VM_DIRTY" and \
+                (prop.get("reinit", True) or len(instance["vm_conns"]) != 1):
                 # Delete any existing instances
                 for conn in instance["vm_conns"]:
                     self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
@@ -209,30 +210,35 @@ class LibvirtProvider(Provider):
 
             if instance["vm_state"] == "VM_RUNNING":
                 continue # done
-            if instance["vm_state"] != "VM_NON_EXISTENT":
-                continue # XXX: throw an error?
+            elif instance["vm_state"] == "VM_DIRTY":
+                # turn this into an active instance
+                vm = instance["vm_conns"][0].vms[instance["vm_name"]]
+            elif instance["vm_state"] == "VM_NON_EXISTENT":
+                # Select the best place for this host first filtering out nodes
+                # with zero-weight and ones included in the exclude list or
+                # missing from the include list.
+                cands = list(conns)
+                if prop.get("hosts", {}).get("exclude"):
+                    cands = (conn for conn in cands if prop["hosts"]["exclude"] not in conn.host)
+                if prop.get("hosts", {}).get("include"):
+                    cands = (conn for conn in cands if prop["hosts"]["include"] in conn.host)
+                # Only consider the entries with the highest priority (lowest service priority value)
+                result = sorted((-conn.srv_priority, conn.weight, conn) for conn in cands)
+                if not result:
+                    raise LVPError("No connection available for cloning {0}".format(instance["vm_name"]))
+                conn = result[-1][-1]
 
-            # Select the best place for this host first filtering out nodes
-            # with zero-weight and ones included in the exclude list or
-            # missing from the include list.
-            cands = list(conns)
-            if prop.get("hosts", {}).get("exclude"):
-                cands = (conn for conn in cands if prop["hosts"]["exclude"] not in conn.host)
-            if prop.get("hosts", {}).get("include"):
-                cands = (conn for conn in cands if prop["hosts"]["include"] in conn.host)
-            # Only consider the entries with the highest priority (lowest service priority value)
-            result = sorted((-conn.srv_priority, conn.weight, conn) for conn in cands)
-            if not result:
-                raise LVPError("No connection available for cloning {0}".format(instance["vm_name"]))
-            conn = result[-1][-1]
+                self.log.info("cloning %r on %r", instance["vm_name"], conn.host)
+                vm = conn.clone_vm(instance["vm_name"], prop, overwrite=True)
+                instance["vm_conns"] = [conn]
+            else:
+                continue # XXX
 
-            self.log.info("cloning %r on %r", instance["vm_name"], conn.host)
-            vm = conn.clone_vm(instance["vm_name"], prop, overwrite = True)
             instance["vm_state"] = "VM_RUNNING"
-            instance["vm_conns"] = [conn]
             instance["ipproto"] = prop.get("ipproto", "ipv4")
             instance["ipv6"] = vm.ipv6_addr(ipv6pre)[0]
             instance["ssh_key"] = "{0}/.ssh/{1}".format(home, prop["ssh_key"])
+
         self.log.info("cloning done: took %.2fs" % (time.time() - cloning_start))
 
         # get ipv4 addresses for the hosts (XXX: come up with something better)
@@ -441,7 +447,7 @@ class PoniLVConn(object):
         self.vms[vm_name].delete()
         self.refresh_list()
 
-    def clone_vm(self, name, spec, overwrite = False):
+    def clone_vm(self, name, spec, overwrite=False):
         desc = """
             <domain type='kvm'>
               <name>%(name)s</name>
