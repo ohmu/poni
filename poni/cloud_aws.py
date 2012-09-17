@@ -142,6 +142,17 @@ class AwsProvider(cloudbase.Provider):
         raise errors.CloudError(
             "subnet with ID or name %r does not exist" % (id_or_name,))
 
+    def add_extra_tags(self, instance, cloud_prop):
+        """Add extra tag values specified by the user to an instance"""
+        extra_tags = cloud_prop.get("extra_tags", {})
+        if (not isinstance(extra_tags, dict) or
+            any((not isinstance(k, basestring) or not isinstance(v, basestring)) for k, v in extra_tags.iteritems())):
+            raise errors.CloudError(
+                "invalid 'extra_tags' value %r: dict containing str:str mapping required" % (extra_tags,))
+
+        for key, value in extra_tags.iteritems():
+            instance.add_tag(key, value)
+
     @convert_boto_errors
     def init_instance(self, cloud_prop):
         conn = self._get_conn()
@@ -251,13 +262,16 @@ class AwsProvider(cloudbase.Provider):
         start_time = time.time()
         while True:
             try:
-                return instance.add_tag("Name", cloud_prop["vm_name"])
+                instance.add_tag("Name", cloud_prop["vm_name"])
+                break
             except boto.exception.EC2ResponseError as error:
                 if not "does not exist" in str(error):
                     raise
             if (time.time() - start_time) > 60.0:
                 raise errors.CloudError("instance id: %r that we were setting a Name: %r did not appear in time" % (instance.id, cloud_prop["vm_name"]))
             time.sleep(1.0)
+
+        self.add_extra_tags(instance, cloud_prop)
 
     def create_disk_map(self, cloud_prop):
         """return a boto block_device_map created form the cloud properties"""

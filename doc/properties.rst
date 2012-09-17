@@ -189,10 +189,17 @@ Amazon EC2 Properties
      - NO
      - str
      - ``<profile name>``
+   * - ``extra_tags``
+     - Extra tag names and corresponding values used to tag the created VM instances.
+       Can be used to maintain extra book-keeping of e.g. owners of the VMs in a
+       shared environment. Note that each key and value are required to be strings.
+     - NO
+     - dict
+     - ``'cloud.extra_tags:-json={"cost_centre": "12345", "owner": "John Doe"}'``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,
-  addressing types, monitoring, subnets or block devices.
+  addressing types or monitoring.
 
 
 Extra Hardware
