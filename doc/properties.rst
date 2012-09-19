@@ -202,6 +202,23 @@ Amazon EC2 Properties
      - NO
      - dict
      - ``'cloud.extra_tags:-json={"cost_centre": "12345", "owner": "John Doe"}'``
+   * - ``init_timeout``
+     - Maximum time to wait until instance reaches healthy running status after
+       creation. If not specified the value from the environment variable
+       ``PONI_AWS_INIT_TIMEOUT`` is used. If the environment variable is not
+       defined, then a default of ``300.0`` seconds is used.
+     - NO
+     - float or int
+     - ``600.0``
+   * - ``check_health``
+     - Control usage of "instance" and "system" health checks during ``cloud init``.
+       If ``True`` (default), wait until both health checks return "ok". Otherwise
+       proceed immediately without checking instance health. Leaving this enabled
+       will result in a somewhat slower instance creation as the health check
+       results are not immediately available after the instance is "running".
+     - NO
+     - float
+     - ``True`` or ``False``
 
 .. note::
   Many EC2 instance properties cannot be controlled yet, for example: user data,

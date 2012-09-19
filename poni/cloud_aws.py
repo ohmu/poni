@@ -438,6 +438,7 @@ class AwsProvider(cloudbase.Provider):
     @convert_boto_errors
     def wait_instances(self, props, wait_state="running", check_health=False):
         pending = self._get_instances(props)
+        info_by_id = dict((instance.id, dict(start=time.time())) for instance in pending)
         props_by_id = dict((p["instance"], p) for p in props)
         convert_id_map = {}
         output = {}
@@ -472,12 +473,22 @@ class AwsProvider(cloudbase.Provider):
 
                     continue
 
+                # instance exists, check timeout and its state
                 instance = op
+                running_time = time.time() - info_by_id[instance.id]["start"]
+                default_timeout = float(os.environ.get("PONI_AWS_INIT_TIMEOUT", 300.0))
+                start_timeout_seconds = props_by_id[instance.id].get("init_timeout", default_timeout)
+                if running_time >= start_timeout_seconds:
+                    raise errors.CloudError(
+                        "Instance %s did not reach healthy running state in time (waited %.1f seconds)" % (
+                            instance.id, start_timeout_seconds))
+
                 instance.update()
                 if (wait_state is None) or (instance.state == wait_state):
-                    if check_health and not self._instance_status_ok(instance):
-                        # instance has not yet reported as healthy
-                        self.log.debug("%s system/instance status not yet ok", instance.id)
+                    check_node_health = check_health and props_by_id[instance.id].get("check_health", True)
+                    if check_node_health and not self._instance_status_ok(instance):
+                        # instance has not yet been reported as healthy
+                        self.log.debug("%s system/instance status not ok yet", instance.id)
                         continue
 
                     pending.remove(instance)
