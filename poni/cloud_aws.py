@@ -6,16 +6,16 @@ See LICENSE for details.
 
 """
 import copy
+import datetime
 import logging
 import os
-import copy
 import time
-import logging
+
 from . import errors
 from . import cloudbase
 
 
-BOTO_REQUIREMENT = "2.4.1"
+BOTO_REQUIREMENT = "2.5.2"
 AWS_EC2 = "aws-ec2"
 
 
@@ -429,8 +429,14 @@ class AwsProvider(cloudbase.Provider):
 
         return host_eip.public_ip
 
+    def _instance_status_ok(self, instance):
+        """Return True unless system or instance status check report non-ok"""
+        conn = self._get_conn()
+        results = conn.get_all_instance_status(instance_ids=[instance.id])
+        return (len(results) > 0) and (results[0].system_status.status == "ok") and (results[0].instance_status.status == "ok")
+
     @convert_boto_errors
-    def wait_instances(self, props, wait_state="running"):
+    def wait_instances(self, props, wait_state="running", check_health=False):
         pending = self._get_instances(props)
         props_by_id = dict((p["instance"], p) for p in props)
         convert_id_map = {}
@@ -469,6 +475,11 @@ class AwsProvider(cloudbase.Provider):
                 instance = op
                 instance.update()
                 if (wait_state is None) or (instance.state == wait_state):
+                    if check_health and not self._instance_status_ok(instance):
+                        # instance has not yet reported as healthy
+                        self.log.debug("%s system/instance status not yet ok", instance.id)
+                        continue
+
                     pending.remove(instance)
                     if wait_state:
                         self.log.debug("%s entered state: %s", instance.id,
