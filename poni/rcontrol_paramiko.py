@@ -132,6 +132,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         host = self.node.get("host")
         user = self.node.get("user")
         password = self.node.get("password")
+        port = int(self.node.get("ssh-port", os.environ.get("PONI_SSH_PORT", 22)))
 
         if not host:
             raise errors.RemoteError("%s: 'host' property not defined" % (
@@ -151,13 +152,13 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         else:
             key_file = None
 
-        self.log.debug("ssh connect: host=%s, user=%s, key=%s",
-                       host, user, key_file)
+        self.log.debug("ssh connect: host=%s, port=%r, user=%s, key=%s",
+                       host, port, user, key_file)
 
         end_time = time.time() + self.connect_timeout
         while time.time() < end_time:
             try:
-                ssh.connect(host, username=user, key_filename=key_file, password=password)
+                ssh.connect(host, port=port, username=user, key_filename=key_file, password=password)
                 self._ssh = ssh
                 return self._ssh
             except (socket.error, paramiko.SSHException), error:

@@ -48,6 +48,12 @@ Generic Properties
      - Filename of the SSH key used to access the host as ``user``
      - string
      - ``id_rsa``
+   * - ``ssh-port``
+     - SSH server port number. If not set, a default value from the
+       environment variable ``PONI_SSH_PORT`` is used. If that is not set,
+       then the standard port ``22`` is used.
+     - string
+     - ``8022``
    * - ``parent``
      - Full name of the parent node (if defined), set automatically when node
        is created with ``poni add-node CHILD -i PARENT``
