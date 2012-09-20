@@ -745,7 +745,7 @@ class Tool:
     def handle_cloud_init(self, arg):
         """reserve and start a cloud instance for nodes"""
         confman = self.get_confman(arg.root_dir)
-        return self.cloud_op(confman, arg, True, check_health=True)
+        return self.cloud_op(confman, arg, True)
 
     @argh.alias("ip")
     @arg_full_match
@@ -760,7 +760,7 @@ class Tool:
         for provider, props in itertools.groupby(props, self.sky.get_provider):
             provider.assign_ip(props)
 
-    def cloud_op(self, confman, arg, start, check_health=False):
+    def cloud_op(self, confman, arg, start):
         nodes = []
 
         def printable(dict_obj):
@@ -806,8 +806,7 @@ class Tool:
                 prop_list.append(cloud_prop)
 
             for provider, prop_list in providers.iteritems():
-                updates = provider.wait_instances(props, wait_state=wait_state,
-                                                  check_health=check_health)
+                updates = provider.wait_instances(props, wait_state=wait_state)
 
                 for node in nodes:
                     node_update = updates[node["cloud"]["instance"]]
