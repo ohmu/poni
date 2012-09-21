@@ -254,9 +254,11 @@ class SshRemoteControl(RemoteControl):
         self.log = logging.getLogger("ssh")
         RemoteControl.__init__(self, node)
         self.key_filename = None
-        cloud_key = node.get("cloud", {}).get("key-pair")
+        cloud_prop = node.get("cloud", {})
+        # renamed property name: backward-compatibility
+        cloud_key = cloud_prop.get("key_pair", cloud_prop.get("key-pair"))
         if cloud_key:
-            # cloud 'key-pair' overrides 'ssh-key' from host properties
+            # cloud 'key_pair' overrides 'ssh-key' from host properties
             self.key_filename = "%s.pem" % cloud_key
         else:
             self.key_filename = node.get_tree_property("ssh-key")
