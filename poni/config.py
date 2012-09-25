@@ -86,7 +86,7 @@ class Manager:
                 # copy if mtime or size differs
                 # TODO: optional full contents comparison
                 copy = ((lstat.st_size != rstat.st_size)
-                        or (lstat.st_mtime != rstat.st_mtime))
+                        or (int(lstat.st_mtime) != int(rstat.st_mtime)))
             except errors.RemoteError:
                 copy = True
 
