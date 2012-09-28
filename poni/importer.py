@@ -11,9 +11,9 @@ from path import path
 from . import errors
 
 try:
-    from debian import debfile
+    import apt_inst
 except ImportError:
-    debfile = None
+    apt_inst = None
 
 class Importer:
     def __init__(self, source, verbose=False):
@@ -28,9 +28,9 @@ class Importer:
 class DebImporter(Importer):
     def __init__(self, source, verbose=False):
         Importer.__init__(self, source, verbose=verbose)
-        if not debfile:
+        if not apt_inst:
             raise errors.MissingLibraryError(
-                "this feature requires the 'python-debian' library")
+                "this feature requires the 'python-apt' library")
 
     def import_to(self, confman):
         try:
@@ -40,21 +40,18 @@ class DebImporter(Importer):
                 self.source, error.__class__.__name__, error))
 
     def __import_to(self, confman):
-        data = debfile.DebFile(self.source).data.tgz()
+        prefix = "usr/lib/poni-config/"
+        def callback(member, contents):
+            if member.name.endswith("/") or not member.name.startswith(prefix):
+                # not a poni-config file, skip
+                return
 
-        prefix = "./usr/lib/poni-config/"
-        for item in data.getnames():
-            if (item.endswith("/") or (not item.startswith(prefix))
-                or (not data.getmember(item).isfile())):
-                continue
-
-            dest_sub = item[len(prefix):]
+            dest_sub = member.name[len(prefix):]
             dest_path = confman.system_root / dest_sub
             dest_dir = dest_path.dirname()
             if not dest_dir.exists():
                 dest_dir.makedirs()
 
-            contents = data.extractfile(item).read()
             write = not dest_path.exists()
             if (not write) and dest_path.exists():
                 old = dest_path.bytes()
@@ -68,6 +65,9 @@ class DebImporter(Importer):
             else:
                 logger("unchanged: %s", pretty_path)
 
+        data_tar = apt_inst.DebFile(file(self.source)).data
+        # reads each file into memory and calls the callback, but there's no file-object based option...
+        data_tar.go(callback)
 
 def get_importer(source_path, **kwargs):
     source_path = path(source_path)
