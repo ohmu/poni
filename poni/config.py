@@ -6,20 +6,39 @@ See LICENSE for details.
 
 """
 
-import sys
-import itertools
-import datetime
-import logging
-import difflib
 from path import path
 import argh
 import argparse
+import datetime
+import difflib
+import itertools
+import logging
+import random
+import sys
+
 from . import errors
 from . import util
 from . import colors
 
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
+
+def _patched_genUniqueModuleName(baseModuleName):
+    """
+    Workaround the problem that Cheetah creates conflicting module names due to
+    a poor module generator function. Monkey-patch the module with a workaround.
+
+    Fixes failures that look like this:
+
+      File "cheetah_DynamicallyCompiledCheetahTemplate_1336479589_95_84044.py", line 58, in _init_
+      TypeError: super() argument 1 must be type, not None
+    """
+    if baseModuleName not in sys.modules:
+        return baseModuleName
+    else:
+        return 'cheetah_%s_%x' % (baseModuleName, random.getrandbits(128))
+
+Cheetah.Template._genUniqueModuleName = _patched_genUniqueModuleName
 
 try:
     import genshi
