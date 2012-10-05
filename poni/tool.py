@@ -835,7 +835,6 @@ class Tool:
     def handle_cloud_create_snapshot(self, arg):
         """create a named snapshot for nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
-            assert hasattr(provider, 'create_snapshot'), 'provider does not support snapshots'
             provider.create_snapshot(props, name=arg.name, description=arg.description, memory=arg.memory)
 
     @argh.alias("revert-to-snapshot")
@@ -845,7 +844,6 @@ class Tool:
     def handle_cloud_revert_to_snapshot(self, arg):
         """revert the nodes to a named snapshot"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
-            assert hasattr(provider, 'revert_to_snapshot'), 'provider does not support snapshots'
             provider.revert_to_snapshot(props, name=arg.name)
 
     @argh.alias("remove-snapshot")
@@ -855,8 +853,23 @@ class Tool:
     def handle_cloud_remove_snapshot(self, arg):
         """remove a named snapshot from nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
-            assert hasattr(provider, 'remove_snapshot'), 'provider does not support snapshots'
             provider.remove_snapshot(props, name=arg.name)
+
+    @argh.alias("power-off")
+    @arg_full_match
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    def handle_cloud_power_off(self, arg):
+        """Power off nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.power_off_instances(props)
+
+    @argh.alias("power-on")
+    @arg_full_match
+    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    def handle_cloud_power_on(self, arg):
+        """Power on nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.power_on_instances(props)
 
     @argh.alias("set")
     @arg_verbose
@@ -1276,6 +1289,8 @@ class Tool:
                 self.handle_cloud_create_snapshot,
                 self.handle_cloud_revert_to_snapshot,
                 self.handle_cloud_remove_snapshot,
+                self.handle_cloud_power_off,
+                self.handle_cloud_power_on,
                 ],
                             namespace="cloud", title="cloud operations",
                             help="command to execute")

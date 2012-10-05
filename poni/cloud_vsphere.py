@@ -258,3 +258,12 @@ class VSphereProvider(cloudbase.Provider):
         instances = dict((x['instance'], self._get_instance(x)) for x in props)
         args = dict(name=name)
         self.vmops.run_on_instances(instances, self.vmops.remove_snapshot, args)
+
+    def power_off_instances(self, props):
+        instances = dict((x['instance'], self._get_instance(x)) for x in props)
+        args = dict(off=True)
+        self.vmops.run_on_instances(instances, self.vmops.power_on_off_vm, args)
+
+    def power_on_instances(self, props):
+        instances = dict((x['instance'], self._get_instance(x)) for x in props)
+        self.vmops.run_on_instances(instances, self.vmops.power_on_off_vm)
