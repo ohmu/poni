@@ -157,7 +157,8 @@ class Tool:
         self.parser = self.create_parser()
         self.task_times = times.Times()
         self.cached_confman = None
-        self.reset_cache()
+        self.cached_manager = None
+        self.collect_cache = {}
 
     def reset_cache(self):
         if self.cached_confman:
@@ -756,8 +757,7 @@ class Tool:
                     for node in confman.find(arg.target,
                                     full_match=arg.full_match)
                     if node.get("cloud", None)]
-        for provider, props in itertools.groupby(props,
-                                lambda prop: self.sky.get_provider(prop)):
+        for provider, props in itertools.groupby(props, self.sky.get_provider):
             provider.assign_ip(props)
 
     def cloud_op(self, confman, arg, start):

@@ -54,6 +54,9 @@ class Manager:
         self.confman = confman
         self.audit_format = "%8s %s: %s"
         self.frozen = False
+        self.files = []
+        self.error_count = 0
+        self.buckets = {}
 
     def reset(self):
         self.files = []

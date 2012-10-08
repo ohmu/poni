@@ -264,7 +264,6 @@ class Config(Item):
         if plugin:
             return plugin
 
-        global g_plugin_module_cache
         cache_key = (plugin_path, os.stat(plugin_path).st_mtime)
         module = g_plugin_module_cache.get(cache_key)
         if not module:

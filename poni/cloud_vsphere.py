@@ -136,7 +136,7 @@ class VSphereProvider(cloudbase.Provider):
                 tasks[instance_id] = None
         while jobs:
             if [tasks[x] for x in tasks if tasks[x]]:
-                _,tasks = self.vim.update_many_objects(tasks)
+                _, tasks = self.vim.update_many_objects(tasks)
             for instance_id in list(jobs):
                 try:
                     job = jobs[instance_id]
@@ -209,7 +209,7 @@ class VSphereProvider(cloudbase.Provider):
 
             if jobs:
                 if [tasks[x] for x in tasks if tasks[x]]:
-                    _,tasks = self.vim.update_many_objects(tasks)
+                    _, tasks = self.vim.update_many_objects(tasks)
                 for instance_id in list(jobs):
                     try:
                         job = jobs[instance_id]
@@ -223,9 +223,8 @@ class VSphereProvider(cloudbase.Provider):
                         del jobs[instance_id]
                         self.instances[instance_id]['vm_state'] = 'VM_RUNNING'
                         # Collect the IP address which should be in there by now
-                        ipv4=self.instances[instance_id]['ipv4']
-                        private=dict(ip=ipv4,
-                                     dns=ipv4)
+                        ipv4 = self.instances[instance_id]['ipv4']
+                        private = dict(ip=ipv4, dns=ipv4)
                         updated_props[instance_id] = dict(host=ipv4, private=private)
                     except Exception, err:
                         self.log.error("%s failed: %s", instance_id, err)

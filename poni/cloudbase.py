@@ -6,9 +6,6 @@ See LICENSE for details.
 
 """
 
-from . import errors
-
-
 class Provider:
     """Abstract base-class for cloud-specific cloud provider logic"""
     def __init__(self, provider_id, cloud_prop):

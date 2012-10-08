@@ -5,6 +5,8 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
+import copy
+import logging
 import os
 import copy
 import time
@@ -313,37 +315,37 @@ class AwsProvider(cloudbase.Provider):
             self._assign_ip(conn, p)
 
     def _assign_ip(self, conn, prop):
-        if not "eip" in prop or not "instance" in prop: return
+        if not "eip" in prop or not "instance" in prop:
+            return
+
         instances = self._get_instances([prop])
-        if not len(instances) or not instances[0].state == "running": return
+        if not len(instances) or not instances[0].state == "running":
+            return
+
         instance = instances[0]
         eip = prop["eip"]
         address = None
         try:
             address = conn.get_all_addresses([eip])
         except boto.exception.BotoServerError, error:
-            self.log.error(
-                "The given elastic ip [%r] was invalid"
-                " or not found in region %r" % (
-                    eip, self.region)
-            )
-            self.log.error(repr(error))
+            self.log.error("The given elastic ip [%s] was invalid"
+                           " or not found in region '%s': %s: %s",
+                           eip, self.region, error.__class__.__name__, error)
             return
 
         if len(address) == 1:
-            address = address[0];
+            address = address[0]
         else:
             self.log.error(
-                "The given elastic ip [%r] was not found in region %r" % (
-                    eip, self.region))
+            "The given elastic ip [%r] was not found in region %r",
+            eip, self.region)
         if address.instance_id and not address.instance_id == instance.id:
             self.log.error(
-                "The given elastic ip [%r] has already"
-                " beeen assigned to instance %r" % (
-                    eip, address.instance_id))
+                "The given elastic ip [%r] has already "
+                "been assigned to instance %r", eip, address.instance_id)
 
         if address and not address.instance_id:
-            self.log.info("Assigning ip address[%r] to instance[%r]" % (eip, instance.id))
+            self.log.info("Assigning ip address[%r] to instance[%r]", eip, instance.id)
             instance.use_ip(address)
             instance.update()
 

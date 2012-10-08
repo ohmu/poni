@@ -64,7 +64,8 @@ class RemoteControl:
             return colors.Output(out_file, color="no").color
 
     def execute(self, command, verbose=False, color=None, output_lines=None,
-        output_file=None, quiet=False, exec_options={}):
+        output_file=None, quiet=False, exec_options=None):
+        exec_options = exec_options or {}
         if output_file is not None:
             stdout_file = output_file
             stderr_file = output_file
@@ -150,7 +151,7 @@ class RemoteControl:
                    group=None):
         assert 0, "must implement in sub-class"
 
-    def execute_command(self, command):
+    def execute_command(self, command, pseudo_tty=False):
         assert 0, "must implement in sub-class"
 
     def execute_shell(self):
@@ -216,7 +217,7 @@ class LocalControl(RemoteControl):
         f.close()
 
     @convert_local_errors
-    def execute_command(self, cmd):
+    def execute_command(self, cmd, pseudo_tty=False):
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
         fds = [process.stdout, process.stderr]

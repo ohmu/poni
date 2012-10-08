@@ -6,7 +6,7 @@ See LICENSE for details.
 
 """
 
-# TODO: pg_size_pretty() style output formatting, e.g. 1024 -> 1k 
+# TODO: pg_size_pretty() style output formatting, e.g. 1024 -> 1k
 
 import os
 import re
@@ -20,7 +20,7 @@ class Error(Exception):
 
 class EncodeError(Error):
     """encode error"""
-    
+
 class InvalidCodecDefinition(Error):
     """invalid codec definition"""
 
@@ -85,7 +85,7 @@ def from_env(value):
     If you wish to supply default value in case enviromental variable is not set use 'VAR|default_value'
     """
     try:
-        (env_key, default_value) = value.split("|",1)
+        (env_key, default_value) = value.split("|", 1)
     except ValueError:
         (env_key, default_value) = (value, None)
 
@@ -113,7 +113,7 @@ def resolve_ip(name, family):
 def convert_num(cls, value):
     if value is None:
         return cls(value)
-    
+
     match = RE_MULT.match(value)
     if match:
         num_val = cls(match.group(1))
@@ -125,7 +125,7 @@ def convert_num(cls, value):
 def to_bool(value):
     if value is None:
         return False
-    
+
     try:
         return BOOL_MAP[value]
     except KeyError:
@@ -139,10 +139,10 @@ def to_uuid(value):
 
 def to_uuid4(value):
     return unicode(str(uuid.uuid4()), "ascii")
-        
+
 
 type_conversions = {
-    "str": (to_str, None), 
+    "str": (to_str, None),
     "int": (lambda x: convert_num(to_int, x), None),
     "float": (lambda x: convert_num(to_float, x), None),
     "bool": (to_bool, None),
@@ -179,7 +179,7 @@ class Codec:
         converters = self.converters.get(codec_name)
         if not converters:
             converters = type_conversions.get(codec_name)
-            
+
         if converters:
             if direction == DECODE:
                 converter = converters[1]
