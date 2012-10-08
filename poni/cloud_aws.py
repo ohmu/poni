@@ -298,7 +298,8 @@ class AwsProvider(cloudbase.Provider):
         self.region = cloud_prop["region"]
         self._conn = None
         self._vpc_conn = None
-        self._spot_req_cache = []
+        self._spot_req_cache = [] # spot requests created by us during this session
+        self._instance_cache = {} # instances created by us during this session
 
     def _prepare_conn(self):
         required_env = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
@@ -329,18 +330,34 @@ class AwsProvider(cloudbase.Provider):
         return self._vpc_conn
 
     def _find_instance_by_tag(self, tag, value, ok_states=None):
-        """Find first instance that has been tagged with the specific value"""
+        """
+        Find first instance that has been tagged with the specific value.
+
+        The local instance cache that is populated by this session's run_instance
+        calls is also looked up in case AWS server-side state is not yet reflecting
+        the very latest created instances.
+        """
         ok_states = ok_states or ["running", "pending", "stopping", "shutting-down", "stopped"]
         reservations = self.get_all_instances()
-        for instance in (r.instances[0] for r in reservations):
-            if (instance.tags.get(tag) == value) and (ok_states is None or instance.state in ok_states):
+        instances = [r.instances[0] for r in reservations]
+        def match(instance):
+            return (instance.tags.get(tag) == value) and (ok_states is None or instance.state in ok_states)
+
+        for instance in instances:
+            if match(instance):
+                return instance
+
+        # it might also be in the local cache if AWS does not yet return it...
+        for instance in self._instance_cache.itervalues():
+            instance.update()
+            if match(instance):
                 return instance
 
         return None
 
     def _find_spot_req_by_tag(self, tag, value):
         """Find first active spot request that is tied to this vm_name"""
-        for spot_req in self.get_all_spot_requests_plus_cached():
+        for spot_req in self._get_all_spot_requests_plus_cached():
             if spot_req.state in ["open", "active"] and spot_req.tags.get(tag) == value:
                 self.log.info("found existing spot req %r for %s=%s: state=%r, tags=%r",
                               spot_req.id, tag, value, spot_req.state, spot_req.tags)
@@ -348,7 +365,7 @@ class AwsProvider(cloudbase.Provider):
 
         return None
 
-    def get_all_spot_requests_plus_cached(self):
+    def _get_all_spot_requests_plus_cached(self):
         """
         Query all spot requests plus add internally cached ones that don't necessarily
         yet show up in the full listing. This speeds up spot instance creation
@@ -390,6 +407,14 @@ class AwsProvider(cloudbase.Provider):
 
         for key, value in extra_tags.iteritems():
             instance.add_tag(key, value)
+
+    def _run_instance(self, launch_kwargs):
+        """Launch a new instance and record it in the internal cache"""
+        conn = self._get_conn()
+        reservation = conn.run_instances(**launch_kwargs)
+        instance = reservation.instances[0]
+        self._instance_cache[instance.id] = instance
+        return instance
 
     @convert_boto_errors
     def init_instance(self, cloud_prop):
