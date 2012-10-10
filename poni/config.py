@@ -104,14 +104,14 @@ class Manager:
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
                verbose=False, callback=None, path_prefix="", raw=False,
-               access_method=None, color_mode="auto"):
+               access_method=None, color="auto"):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
         files = [f for f in self.files if not f.get("report")]
         reports = [f for f in self.files if f.get("report")]
 
-        color = colors.Output(sys.stdout, color=color_mode).color
+        color = colors.Output(sys.stdout, color=color).color
         stats = util.PropDict(dict(error_count=0, file_count=0))
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
@@ -266,7 +266,7 @@ class Manager:
             if active_text and audit:
                 audit_error = self.audit_output(
                     entry, dest_path, active_text, active_time, output,
-                    show_diff=show_diff, color_mode=color_mode,
+                    show_diff=show_diff, color=color,
                     verbose=verbose)
 
                 if audit_error:
@@ -317,7 +317,7 @@ class Manager:
             post_process(dest_path)
 
     def audit_output(self, entry, dest_path, active_text, active_time,
-                     output, show_diff=False, color_mode="auto",
+                     output, show_diff=False, color="auto",
                      verbose=False):
         error = False
         if (active_text is not None) and (active_text != output):
@@ -325,7 +325,7 @@ class Manager:
             self.log.warning(self.audit_format, "DIFFERS",
                              entry["node"].name, dest_path)
             if show_diff:
-                color = colors.Output(sys.stdout, color=color_mode).color
+                color = colors.Output(sys.stdout, color=color).color
                 diff = difflib.unified_diff(
                     output.splitlines(True),
                     active_text.splitlines(True),
@@ -390,7 +390,7 @@ class PlugIn:
         rendered_path = self._render_cheetah(script_path)
         remote = arg.node.get_remote(override=arg.method)
         lines = [] if yield_stdout else None
-        color = colors.Output(sys.stdout, color=arg.color_mode).color
+        color = colors.Output(sys.stdout, color=arg.color).color
         exit_code = remote.execute(rendered_path, verbose=arg.verbose,
                                    output_lines=lines, quiet=arg.quiet,
                                    output_file=arg.output_file,
@@ -446,7 +446,7 @@ class PlugIn:
             yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
-                            quiet=False, output_dir=None, color_mode="auto",
+                            quiet=False, output_dir=None, color="auto",
                             method=None, send_output=None, node=None):
         assert node
         parser = argh.ArghParser(prog="control")
@@ -458,7 +458,7 @@ class PlugIn:
         namespace.method = method
         namespace.send_output = send_output
         namespace.node = node
-        namespace.color_mode = color_mode
+        namespace.color = color
         if output_dir:
             output_file_path = output_dir / ("%s.log" % node.name.replace("/", "_"))
             namespace.output_file = file(output_file_path, "at")

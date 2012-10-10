@@ -72,7 +72,7 @@ arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
 
 class ControlTask(work.Task):
     def __init__(self, op, args, verbose=False, method=None, quiet=False,
-                 output_dir=None, color_mode="auto"):
+                 output_dir=None, color="auto"):
         work.Task.__init__(self)
         self.op = op
         self.args = args
@@ -80,7 +80,7 @@ class ControlTask(work.Task):
         self.method = method
         self.quiet = quiet
         self.output_dir = output_dir
-        self.color_mode = color_mode
+        self.color = color
 
     def __repr__(self):
         return "%s/%s [%s]" % (self.op["node"].name, self.op["config"].name,
@@ -127,7 +127,7 @@ class ControlTask(work.Task):
                                quiet=self.quiet,
                                output_dir=self.output_dir,
                                method=self.method,
-                               color_mode=self.color_mode,
+                               color=self.color,
                                send_output=self.send_output)
             self.log.debug("op %s returns: %r", self.op["name"], ret)
             self.op["result"] = ret
@@ -543,7 +543,7 @@ class Tool:
                    op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                quiet=arg.quiet, output_dir=arg.output_dir,
-                               method=arg.method, color_mode=arg.color_mode)
+                               method=arg.method, color=arg.color)
             runner.add_task(task)
 
         # execute tasks
@@ -594,7 +594,7 @@ class Tool:
         """run a shell-command"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         def rexec(arg, node, remote):
-            color = colors.Output(sys.stdout, color=arg.color_mode).color
+            color = colors.Output(sys.stdout, color=arg.color).color
             if arg.output_dir:
                 output_file_path = arg.output_dir / ("%s.log" % node.name.replace("/", "_"))
                 output_file = output_file_path.open("wt")
@@ -619,7 +619,7 @@ class Tool:
     def handle_remote_shell(self, arg):
         """start an interactive shell session"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
-        color = colors.Output(sys.stdout, color=arg.color_mode).color
+        color = colors.Output(sys.stdout, color=arg.color).color
         def rshell(arg, node, remote):
             remote.shell(verbose=arg.verbose, color=color)
 
@@ -987,7 +987,7 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=(not arg.show_buckets),
             full_match=arg.full_match, raw=arg.show_raw,
-            color_mode=arg.color_mode, show_diff=arg.show_diff,
+            color=arg.color, show_diff=arg.show_diff,
             exclude=arg.exclude)
 
         if arg.show_buckets:
@@ -1016,7 +1016,7 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, deploy=True, verbose=arg.verbose,
             full_match=arg.full_match, path_prefix=arg.path_prefix,
-            access_method=arg.method, color_mode=arg.color_mode,
+            access_method=arg.method, color=arg.color,
             exclude=arg.exclude)
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -1040,7 +1040,7 @@ class Tool:
             confman, arg.nodes, show=False, deploy=False, audit=True,
             show_diff=arg.show_diff, full_match=arg.full_match,
             path_prefix=arg.path_prefix, access_method=arg.method,
-            color_mode=arg.color_mode, verbose=arg.verbose,
+            color=arg.color, verbose=arg.verbose,
             exclude=arg.exclude)
 
         if stats.error_count:
@@ -1062,7 +1062,7 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, full_match=arg.full_match,
             access_method=arg.method, verbose=arg.verbose,
-            color_mode=arg.color_mode, exclude=arg.exclude)
+            color=arg.color, exclude=arg.exclude)
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -1267,7 +1267,7 @@ class Tool:
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
         parser.add_argument(
-            "-c", "--color", dest="color_mode", default="auto",
+            "-c", "--color", default="auto",
             choices=["on", "off", "auto"], help="use color highlighting")
 
         commands = [
