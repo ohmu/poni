@@ -87,8 +87,10 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
     def get_sftp(self):
         if not self._sftp:
-            self._sftp = self.get_ssh().open_sftp()
-
+            if self._ssh:
+                self._sftp = self._ssh.open_sftp()
+            if not self._sftp:
+                self._sftp = self.get_ssh().open_sftp()
         return self._sftp
 
     @convert_paramiko_errors
@@ -126,9 +128,6 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
             self._ssh = None
 
     def get_ssh(self):
-        if self._ssh:
-            return self._ssh
-
         host = self.node.get("host")
         user = self.node.get("user")
         password = self.node.get("password")
@@ -174,16 +173,19 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
     @convert_paramiko_errors
     def execute_command(self, cmd, pseudo_tty=False):
-        ssh = self.get_ssh()
-
-        transport = ssh.get_transport()
-        channel = transport.open_session()
-        if pseudo_tty:
-            channel.get_pty()
+        channel = None
+        if self._ssh:
+            transport = self._ssh.get_transport()
+            channel = transport.open_session()
+        if not channel:
+            transport = self.get_ssh().get_transport()
+            channel = transport.open_session()
 
         if not channel:
             raise errors.RemoteError("failed to open an SSH session to %s" % (
                     self.node.name))
+        if pseudo_tty:
+            channel.get_pty()
 
         channel.set_combine_stderr(True) # TODO: separate stdout/stderr?
         BS = 2**16
@@ -235,7 +237,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
     @convert_paramiko_errors
     def execute_shell(self):
-        ssh = self.get_ssh()
+        ssh = self._ssh if self._ssh else self.get_ssh()
         channel = None
         try:
             channel = ssh.invoke_shell(term='vt100',
