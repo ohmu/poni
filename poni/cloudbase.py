@@ -81,29 +81,39 @@ class Provider:
     def create_snapshot(self, props, name=None, description=None, memory=False):
         """
         Create a new snapshot for the given instances with the specified props.
+
+        Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert 0, "implement in sub-class"
 
     def revert_to_snapshot(self, props, name=None):
         """
         Revert the given instances to the specified snapshot.
+
+        Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert 0, "implement in sub-class"
 
     def remove_snapshot(self, props, name):
         """
         Remove the specified snapshot on the given instances.
+
+        Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert 0, "implement in sub-class"
 
     def power_off_instances(self, props):
         """
         Power off the given instances.
+
+        Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert 0, "implement in sub-class"
 
     def power_on_instances(self, props):
         """
         Power on the given instances.
+
+        Returns a dict {instance_id: dict(<updated properties>)}
         """
         assert 0, "implement in sub-class"
