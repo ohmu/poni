@@ -178,6 +178,20 @@ class LibvirtProvider(Provider):
         out_prop["instance"] = instance['id']
         return dict(cloud=out_prop)
 
+    def terminate_instances(self, props):
+        """
+        Terminate instances specified in the given sequence of cloud
+        properties dicts.
+        """
+        for prop in props:
+            instance_id = prop['instance']
+            instance = self.__get_instance(prop)
+            vm_state = instance['vm_state']
+            if vm_state != 'VM_NON_EXISTENT':
+                for conn in instance["vm_conns"]:
+                    self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
+                    conn.delete_vm(instance["vm_name"])
+
     def wait_instances(self, props, wait_state="running"):
         """
         Wait for all the given instances to reach status specified by
