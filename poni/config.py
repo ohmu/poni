@@ -15,6 +15,7 @@ import itertools
 import logging
 import random
 import sys
+import time
 
 from . import errors
 from . import util
@@ -22,6 +23,7 @@ from . import colors
 
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
+
 
 def _patched_genUniqueModuleName(baseModuleName):
     """
@@ -72,8 +74,11 @@ class Manager:
         self.error_count += 1
 
     def copy_tree(self, entry, remote, path_prefix="", verbose=False):
-        def progress(copied, total):
-            sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
+        def progress(copied, total, ctx={}):
+            ctx.setdefault("last", time.time())
+            if (copied == total) or (time.time() - ctx["last"]) > 1.0:
+                sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
+                ctx["last"] = time.time()
 
         dest_dir = path(path_prefix + entry["dest_path"])
         try:
@@ -148,7 +153,7 @@ class Manager:
                         dir_stats = util.dir_stats(entry["source_path"])
                     except (OSError, IOError), error:
                         raise errors.VerifyError(
-                            "cannot copy files from '%s': %s: %s"% (
+                            "cannot copy files from '%s': %s: %s" % (
                                 entry["source_path"], error.__class__.__name__, error))
 
                     if dir_stats["file_count"] == 0:
@@ -330,7 +335,7 @@ class Manager:
                     output.splitlines(True),
                     active_text.splitlines(True),
                     "config", "active",
-                    "", active_time, # TODO: mtime for config?
+                    "", active_time,  # TODO: mtime for config?
                     lineterm="\n")
 
                 diff_colors = {"+": "lgreen", "@": "white", "-": "lred"}
