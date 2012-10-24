@@ -80,6 +80,10 @@ def _lv_dns_lookup(name, qtype):
             result.append(a["data"])
     return result
 
+def _created_str():
+    return "created by poni.cloud_libvirt by {0}@{1} on {2}+00:00".format(
+        os.getenv("USER"), socket.gethostname(), datetime.datetime.utcnow().isoformat()[0:19])
+
 class LVPError(CloudError):
     """LibvirtProvider error"""
 
@@ -90,7 +94,6 @@ class LibvirtProvider(Provider):
 
         Provider.__init__(self, 'libvirt', cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
-        self.instances = {}
         self.ssh_key = None
         profile = json.load(open(cloud_prop["profile"], "rb"))
         if "ssh_key" in profile:
@@ -149,23 +152,18 @@ class LibvirtProvider(Provider):
     def disconnect(self):
         self.hosts_online = None
 
-    def __get_instance(self, prop):
-        vm_name = instance_id = prop.get('vm_name', None)
-        assert vm_name, "vm_name must be specified for libvirt instances"
-        instance = self.instances.get(instance_id)
-        if not instance:
-            vm_conns = []
-            vm_state = 'VM_NON_EXISTENT'
-            for conn in self.conns():
-                if vm_name in conn.vms:
-                    vm_state = 'VM_DIRTY'
-                    vm_conns.append(conn)
-            instance = dict(id=instance_id,
-                            vm_name=vm_name,
-                            vm_state=vm_state,
-                            vm_conns=vm_conns)
-            self.instances[instance_id] = instance
-        return instance
+    def __get_instances(self, props, non_existent=False):
+        vms = {}
+        for conn in self.conns():
+            conn.refresh()
+            for vm_name in conn.vms:
+                vms.setdefault(vm_name, []).append(conn)
+        props = dict((prop["vm_name"], prop) for prop in props)
+        for vm_name, prop in props.iteritems():
+            if vm_name in vms:
+                yield dict(vm_name=vm_name, vm_state="VM_DIRTY", vm_conns=vms[vm_name], prop=prop)
+            elif non_existent:
+                yield dict(vm_name=vm_name, vm_state="VM_NON_EXISTENT", vm_conns=[], prop=prop)
 
     def init_instance(self, prop):
         """
@@ -173,9 +171,8 @@ class LibvirtProvider(Provider):
 
         Returns node properties that are changed.
         """
-        instance = self.__get_instance(prop)
         out_prop = copy.deepcopy(prop)
-        out_prop["instance"] = instance['id']
+        out_prop["instance"] = prop["vm_name"]
         return dict(cloud=out_prop)
 
     def terminate_instances(self, props):
@@ -183,14 +180,10 @@ class LibvirtProvider(Provider):
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
-        for prop in props:
-            instance_id = prop['instance']
-            instance = self.__get_instance(prop)
-            vm_state = instance['vm_state']
-            if vm_state != 'VM_NON_EXISTENT':
-                for conn in instance["vm_conns"]:
-                    self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
-                    conn.delete_vm(instance["vm_name"])
+        for instance in self.__get_instances(props):
+            for conn in instance["vm_conns"]:
+                self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
+                conn.delete_vm(instance["vm_name"])
 
     def wait_instances(self, props, wait_state="running"):
         """
@@ -201,25 +194,24 @@ class LibvirtProvider(Provider):
         """
         assert wait_state == "running", "libvirt only handles running stuff"
         home = os.getenv("HOME")
-        proplist = list(props)
+        # collapse props to one entry per vm_name
+        props = dict((prop["vm_name"], prop) for prop in props).values()
         cloning_start = time.time()
 
         self.log.info("deleting existing VM instances")
-        for prop in proplist:
-            instance = self.__get_instance(prop)
-            if instance["vm_state"] == "VM_DIRTY" and \
-                (prop.get("reinit", True) or len(instance["vm_conns"]) != 1):
-                # Delete any existing instances
+        for instance in self.__get_instances(props):
+            # Delete any existing instances if required to reinit (the
+            # default) or if the same VM was found from multiple hosts.
+            if instance["prop"].get("reinit", True) or len(instance["vm_conns"]) > 1:
                 for conn in instance["vm_conns"]:
                     self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
                     conn.delete_vm(instance["vm_name"])
-                instance["vm_state"] = "VM_NON_EXISTENT"
-                instance["vm_conns"] = []
 
         self.log.info("cloning VM instances")
+        instances = []
         conns = [conn for conn in self.conns() if conn.srv_weight > 0]
-        for prop in proplist:
-            instance = self.__get_instance(prop)
+        for instance in self.__get_instances(props, non_existent=True):
+            prop = instance["prop"]
             ipv6pre = prop.get("ipv6_prefix")
 
             if instance["vm_state"] == "VM_RUNNING":
@@ -252,6 +244,7 @@ class LibvirtProvider(Provider):
             instance["ipproto"] = prop.get("ipproto", "ipv4")
             instance["ipv6"] = vm.ipv6_addr(ipv6pre)[0]
             instance["ssh_key"] = "{0}/.ssh/{1}".format(home, prop["ssh_key"])
+            instances.append(instance)
 
         self.log.info("cloning done: took %.2fs" % (time.time() - cloning_start))
 
@@ -272,7 +265,8 @@ class LibvirtProvider(Provider):
             self.log.info("getting ip addresses: round #%r, time spent=%.02fs", attempt, elapsed)
             failed = []
 
-            for instance_id, instance in self.instances.iteritems():
+            for instance in instances:
+                instance_id = instance["vm_name"]
                 if instance["ipproto"] in instance:
                     # address already exists (ie lookup done or we're using ipv6)
                     if instance_id not in result:
@@ -411,8 +405,11 @@ class PoniLVConn(object):
         load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters.iteritems())
         return load_w * self.srv_weight
 
-    def connect(self, uri = None):
-        self.conn = libvirt.open(uri or self.uri)
+    def connect(self):
+        self.conn = libvirt.open(self.uri)
+        self.refresh()
+
+    def refresh(self):
         self.refresh_list()
         self.refresh_node()
 
@@ -540,8 +537,7 @@ class PoniLVConn(object):
             self.delete_vm(name)
         spec["name"] = name
         if "desc" not in spec:
-            spec["desc"] = "created by poni.cloud_libvirt by {0}@{1} on {2}+00:00".format(
-                os.getenv("USER"), socket.gethostname(), datetime.datetime.utcnow().isoformat()[0:19])
+            spec["desc"] = _created_str()
         if "uuid" not in spec:
             spec["uuid"] = str(uuid.uuid4())
         if isinstance(spec.get("hardware"), dict):
