@@ -821,15 +821,17 @@ class Tool:
 
     def _get_cloud_hosts_from_args(self, arg):
         confman = core.ConfigMan(arg.root_dir)
-        props = [node["cloud"] for node in confman.find(arg.target, full_match=arg.full_match)
+        props = [node["cloud"] for node in confman.find(arg.nodes, full_match=arg.full_match)
                  if node.get("cloud", None)]
+        if not props:
+            raise errors.UserError("%r does not match any nodes" % (arg.nodes))
         for provider, props in itertools.groupby(props, lambda prop: self.sky.get_provider(prop)):
             yield provider, props
 
     @argh.alias("create-snapshot")
     @arg_full_match
+    @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
-    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
     @argh.arg("--description", type=str, dest="description", default="", help="optional description of the snapshot")
     @arg_flag("--memory", dest="memory", help="include memory in the snapshot")
     def handle_cloud_create_snapshot(self, arg):
@@ -839,8 +841,8 @@ class Tool:
 
     @argh.alias("revert-to-snapshot")
     @arg_full_match
+    @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
-    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
     def handle_cloud_revert_to_snapshot(self, arg):
         """revert the nodes to a named snapshot"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
@@ -848,8 +850,8 @@ class Tool:
 
     @argh.alias("remove-snapshot")
     @arg_full_match
+    @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
-    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
     def handle_cloud_remove_snapshot(self, arg):
         """remove a named snapshot from nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
@@ -857,7 +859,7 @@ class Tool:
 
     @argh.alias("power-off")
     @arg_full_match
-    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    @arg_target_nodes
     def handle_cloud_power_off(self, arg):
         """Power off nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
@@ -865,7 +867,7 @@ class Tool:
 
     @argh.alias("power-on")
     @arg_full_match
-    @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    @arg_target_nodes
     def handle_cloud_power_on(self, arg):
         """Power on nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
