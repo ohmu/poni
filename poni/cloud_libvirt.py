@@ -165,6 +165,12 @@ class LibvirtProvider(Provider):
             elif non_existent:
                 yield dict(vm_name=vm_name, vm_state="VM_NON_EXISTENT", vm_conns=[], prop=prop)
 
+    def __get_vms(self, props):
+        for instance in self.__get_instances(props):
+            for conn in instance['vm_conns']:
+                self.log.debug("found %r from %r", instance['vm_name'], conn)
+                yield conn.vms[instance['vm_name']]
+
     def init_instance(self, prop):
         """
         Create a new instance with the given properties.
@@ -325,6 +331,26 @@ class LibvirtProvider(Provider):
         [client.close() for client in tunnels.itervalues()]
         self.disconnect()
         return result
+
+    def power_on_instances(self, props):
+        for vm in self.__get_vms(props):
+            vm.power_on()
+
+    def power_off_instances(self, props):
+        for vm in self.__get_vms(props):
+            vm.power_off()
+
+    def create_snapshot(self, props, name, description=None, memory=False):
+        for vm in self.__get_vms(props):
+            vm.create_snapshot(name, description, memory)
+
+    def remove_snapshot(self, props, name):
+        for vm in self.__get_vms(props):
+            vm.remove_snapshot(name)
+
+    def revert_to_snapshot(self, props, name=None):
+        for vm in self.__get_vms(props):
+            vm.revert_to_snapshot(name)
 
 
 class PoniLVXmlOb(object):
@@ -727,6 +753,44 @@ class PoniLVPool(object):
         self.path = str(xml.pool.target.path)
 
 
+def convert_lvdom_errors(method):
+    """Convert libvirt domain errors to LVPError"""
+    def wrapper(self, *args, **kw):
+        try:
+            return method(self, *args, **kw)
+        except libvirt.libvirtError as ex:
+            if "domain is already running" in str(ex):
+                err = "vm_online"
+                msg = "vm {0!r} is already running".format(self.name)
+            elif "domain is not running" in str(ex):
+                err = "vm_offline"
+                msg = "vm {0!r} is not running".format(self.name)
+            elif "snapshot not found" in str(ex):
+                err = "snapshot_not_found"
+                msg = "snapshot {0!r} not found for {1!r}".format(args[0], self.name)
+            elif "no snapshot with matching name" in str(ex):
+                err = "snapshot_not_found"
+                msg = "snapshot {0!r} not found for {1!r}".format(args[0], self.name)
+            elif re.search("snapshot file for disk \S+ already exists", str(ex)) or \
+                 re.search("domain snapshot \S+ already exists", str(ex)):
+                err = "snapshot_exists"
+                msg = "snapshot {0!r} already exists for {1!r}".format(args[0], self.name)
+            else:
+                raise
+            if err not in getattr(method, "ignore_lvdom_errors", []):
+                raise LVPError(msg)
+
+    wrapper.__doc__ = method.__doc__
+    wrapper.__name__ = method.__name__
+    return wrapper
+
+def ignore_lvdom_errors(*errs):
+    """Mark various errors to be ignored"""
+    def decorate(method):
+        method.ignore_lvdom_errors = errs
+        return method
+    return decorate
+
 class PoniLVDom(object):
     def __init__(self, conn, dom):
         self.log = logging.getLogger("poni.libvirt.dom")
@@ -762,9 +826,7 @@ class PoniLVDom(object):
 
         # delete snapshots
         for name in self.dom.snapshotListNames(0):
-            self.log.info("Deleting snapshot: %s" % (name,))
-            snapshot = self.dom.snapshotLookupByName(name, 0)
-            snapshot.delete(0)
+            self.remove_snapshot(name)
 
         self.dom.undefine()
 
@@ -779,6 +841,45 @@ class PoniLVDom(object):
         if devs:
             self.macs = [str(iface.mac["address"]) for iface in devs.interface_list]
             self.disks = [str(disk.source.get("file") or disk.source.get("dev")) for disk in devs.disk_list]
+
+    @convert_lvdom_errors
+    @ignore_lvdom_errors("vm_online")
+    def power_on(self):
+        self.log.info("powering on %r", self.name)
+        self.dom.create()
+
+    @convert_lvdom_errors
+    @ignore_lvdom_errors("vm_offline")
+    def power_off(self):
+        self.log.info("powering off %r", self.name)
+        self.dom.destroy()
+
+    @convert_lvdom_errors
+    def create_snapshot(self, name, description=None, memory=False):
+        if not name or "/" in name:
+            raise LVPError("invalid snapshot name {0!r}".format(name))
+        # XXX: libvirt can't (at version 0.9.12) remove disk-only snapshots at all so let's not create them
+        if not memory:
+            raise LVPError("disk-only snapshots are not supported in libvirt vms at the moment")
+        self.log.info("creating %s snapshot %r for %r", "memory" if memory else "disk-only", name, self.name)
+        flags = 0 if memory else libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
+        self.dom.snapshotCreateXML("""<domainsnapshot>
+                <name>{name}</name>
+                <description>{description}</description>
+            </domainsnapshot>""".format(name=name, description=description or _created_str()), flags)
+
+    @convert_lvdom_errors
+    @ignore_lvdom_errors("snapshot_not_found")
+    def remove_snapshot(self, name):
+        self.log.info("removing snapshot %r from %r", name, self.name)
+        snap = self.dom.snapshotLookupByName(name, 0)
+        snap.delete(0)
+
+    @convert_lvdom_errors
+    def revert_to_snapshot(self, name):
+        self.log.info("reverting %r to %r", name, self.name)
+        snap = self.dom.snapshotLookupByName(name, 0)
+        self.dom.revertToSnapshot(snap, 0)
 
 
 def mac_to_ipv6(prefix, mac):
