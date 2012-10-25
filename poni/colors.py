@@ -28,6 +28,7 @@ CODES = {
     'lred' : '\033[0;31m',
     'lcyan' : '\033[0;36m',
     'lyellow' : '\033[0;33m',
+    'bold': '\033[1m',
 }
 
 CODES.update({
@@ -35,7 +36,7 @@ CODES.update({
     'cloudkey' : '\033[0;35m',
     'str' : '\033[0;32m',
     'bool' : CODES['yellow'],
-    'int' : CODES['white'],
+    'int' : CODES['bold'],
     'status': CODES['red'],
     'system': CODES['cyan'],
     'node': CODES['green'],
@@ -48,7 +49,7 @@ CODES.update({
     'header': CODES['cyan'],
     'path': CODES['lyellow'],
     'host': CODES['lyellow'],
-    'command': CODES['white'],
+    'command': CODES['bold'],
     'op_error': CODES['hred'],
     'op_ok': CODES['green'],
     'setting': CODES['reset'],
