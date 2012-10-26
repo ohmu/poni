@@ -333,24 +333,39 @@ class LibvirtProvider(Provider):
         return result
 
     def power_on_instances(self, props):
+        result = {}
         for vm in self.__get_vms(props):
             vm.power_on()
+            result[vm.name] = {'power': 'on'}
+        return result
 
     def power_off_instances(self, props):
+        result = {}
         for vm in self.__get_vms(props):
             vm.power_off()
+            result[vm.name] = {'power': 'off'}
+        return result
 
     def create_snapshot(self, props, name, description=None, memory=False):
+        result = {}
         for vm in self.__get_vms(props):
             vm.create_snapshot(name, description, memory)
+            result[vm.name] = {}
+        return result
 
     def remove_snapshot(self, props, name):
+        result = {}
         for vm in self.__get_vms(props):
             vm.remove_snapshot(name)
+            result[vm.name] = {}
+        return result
 
     def revert_to_snapshot(self, props, name=None):
+        result = {}
         for vm in self.__get_vms(props):
             vm.revert_to_snapshot(name)
+            result[vm.name] = {}
+        return result
 
 
 class PoniLVXmlOb(object):
