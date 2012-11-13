@@ -29,7 +29,7 @@ class RemoteControl:
     def __init__(self, node):
         self.node = node
         self.warn_timeout = 30.0 # seconds to wait before warning user after receiving any output
-        self.terminate_timeout = 300.0 # seconds to wait before disconnecting after receiving any output
+        self.terminate_timeout = node.get_tree_property("control_timeout", 300.0) # seconds to wait before disconnecting after receiving any output
 
     def get_out_line(self, color, tag, command, result):
         desc = "%s (%s): %s" % (color(self.node.name, "node"),
