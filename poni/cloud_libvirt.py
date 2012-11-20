@@ -478,11 +478,21 @@ class PoniLVConn(object):
         self.vms_online = 0
         self.vms_offline = 0
         for dom_id in self.conn.listDomainsID():
-            dom = PoniLVDom(self, self.conn.lookupByID(dom_id))
+            try:
+                dom = PoniLVDom(self, self.conn.lookupByID(dom_id))
+            except libvirt.libvirtError as e:
+                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+                    continue
+                raise
             self.vms[dom.name] = dom
             self.vms_online += 1
         for name in self.conn.listDefinedDomains():
-            dom = PoniLVDom(self, self.conn.lookupByName(name))
+            try:
+                dom = PoniLVDom(self, self.conn.lookupByName(name))
+            except libvirt.libvirtError as e:
+                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+                    continue
+                raise
             self.vms[dom.name] = dom
             self.vms_offline += 1
         self.pools = {}
