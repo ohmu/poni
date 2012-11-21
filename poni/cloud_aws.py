@@ -692,7 +692,11 @@ class AwsProvider(cloudbase.Provider):
             assert False, "'eip' mode %r not supported" % (eip_mode,)
 
         host_eip = conn.allocate_address(domain=domain)
-        conn.associate_address(instance_id=instance.id, allocation_id=host_eip.allocation_id)
+        if instance.subnet_id:
+            # This works for VPC only
+            conn.associate_address(instance_id=instance.id, allocation_id=host_eip.allocation_id)
+        else:
+            host_eip.associate(instance_id=instance.id)
 
         return host_eip.public_ip
 
