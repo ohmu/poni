@@ -69,13 +69,14 @@ class OpenSshRemoteControl(rcontrol.SshRemoteControl):
         return process.stdout.read()
 
 
-    def write_file(self, file_path, contents, mode=None):
+    def write_file(self, file_path, contents, mode=None, owner=None,
+                   group=None):
         self.open_shared_connection()
         process = subprocess.Popen(self.cmd(["cat", ">", file_path]),
                                    stdin=subprocess.PIPE)
         process.stdin.write(contents)
 
-    def execute_command(self, command):
+    def execute_command(self, command, pseudo_tty=False):
         self.open_shared_connection()
         return subprocess.call(self.cmd([command]))
 

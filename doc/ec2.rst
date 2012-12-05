@@ -44,6 +44,10 @@ At minimum, the following node properties need to be set:
     Key-pair name **without** the ``.pem`` -suffix. **NOTE:** key-pairs are
     region-specific and will not work cross the data-centers.
 
+  ``cloud.vm_name``
+    Unique name for the VM. Provides the VM with a friendly name visible in
+    the EC2 console.
+
   ``user``
     Username used to login to the system.
 
@@ -52,6 +56,10 @@ Creating a repository and a node from scratch::
   $ poni init
   $ poni add-node drumbo1
   $ poni set drumbo cloud.provider=aws-ec2 cloud.region=us-east-1 cloud.image=ami-daf615b3 cloud.key-pair=my-keypair user=root
+  $ poni set drumbo1 cloud.vm_name=drumbo1
+  $ poni set drumbo2 cloud.vm_name=drumbo2
+  $ poni set drumbo3 cloud.vm_name=drumbo3
+  $ poni set drumbo4 cloud.vm_name=drumbo4
 
 In order to see the cloud properties you can use ``list -o``::
 
@@ -64,13 +72,13 @@ While at it, why not create a few more instances::
   $ poni add-node "drumbo{id}" -n 2..4 -c -i drumbo1
   $ poni list -o
       node drumbo1
-     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo1'
       node drumbo2 <= drumbo1
-     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo2'
       node drumbo3 <= drumbo1
-     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo3'
       node drumbo4 <= drumbo1
-     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo4'
 
 Option ``-i drumbo1`` means that the new nodes should be inherited from ``drumbo1`` and
 ``-c`` copies all node properties from the parent node while at it.
@@ -85,10 +93,10 @@ Starting Nodes
 Creating node instances is done with the ``init`` -command::
 
   $ poni cloud init drumbo --wait
-  poni    INFO    drumbo1: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-4c92cd21', image=u'ami-daf615b3', provider=u'aws-ec2'
-  poni    INFO    drumbo2: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-4e92cd23', image=u'ami-daf615b3', provider=u'aws-ec2'
-  poni    INFO    drumbo3: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-4692cd2b', image=u'ami-daf615b3', provider=u'aws-ec2'
-  poni    INFO    drumbo4: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-5c92cd31', image=u'ami-daf615b3', provider=u'aws-ec2'
+  poni    INFO    drumbo1: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-4c92cd21', image=u'ami-daf615b3', provider=u'aws-ec2', vm_name=u'drumbo1'
+  poni    INFO    drumbo2: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-4e92cd23', image=u'ami-daf615b3', provider=u'aws-ec2', vm_name=u'drumbo2'
+  poni    INFO    drumbo3: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-4692cd2b', image=u'ami-daf615b3', provider=u'aws-ec2', vm_name=u'drumbo3'
+  poni    INFO    drumbo4: initialized: key-pair=u'my-keypair', region=u'us-east-1', instance=u'i-5c92cd31', image=u'ami-daf615b3', provider=u'aws-ec2', vm_name=u'drumbo4'
   aws-ec2 INFO    [0/4] instances 'running', waiting...
   aws-ec2 INFO    [0/4] instances 'running', waiting...
   aws-ec2 INFO    [0/4] instances 'running', waiting...
@@ -113,13 +121,13 @@ Now the cloud properties include the ``instance`` value::
 
   $ poni list -o
       node drumbo1
-     cloud     image:'ami-daf615b3' instance:'i-4c92cd21' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' instance:'i-4c92cd21' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo1'
       node drumbo2
-     cloud     image:'ami-daf615b3' instance:'i-4e92cd23' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' instance:'i-4e92cd23' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo2'
       node drumbo3
-     cloud     image:'ami-daf615b3' instance:'i-4692cd2b' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' instance:'i-4692cd2b' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo3'
       node drumbo4
-     cloud     image:'ami-daf615b3' instance:'i-5c92cd31' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1'
+     cloud     image:'ami-daf615b3' instance:'i-5c92cd31' key-pair:'my-keypair' provider:'aws-ec2' region:'us-east-1' vm_name:'drumbo4'
 
 Also the node address information is updated to the node properties::
 

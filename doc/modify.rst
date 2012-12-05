@@ -147,6 +147,14 @@ Enviroment variables can be stored as properties using the ``env`` conversion::
   root	INFO	webshop/frontend/server2: set term=u'xterm-color' (was None)
   root	INFO	webshop/frontend/server2: set shell=u'/bin/bash' (was None)
 
+Optionally you can use following syntax
+
+  $ poni set server2 -v must_be_set:env=MUST optional1:env=OPT1| optional2:env=OPT2|default_value
+
+In this case poni will complain if MUST environment variable is not set. For optional1 value will
+be either env value OPT1 or '' if OPT1 is unset. For OPT2 value optional2 is either
+environmental value or string 'default_value' if OPT2 is unset.
+
 Resolving IP Addresses
 ======================
 Resolving DNS names to IPv4 or IPv6 addresses::

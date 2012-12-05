@@ -31,6 +31,7 @@ DONT_SHOW = set(["cloud"])
 DONT_SAVE = set(["index", "sub_count", "depth"])
 
 g_plugin_module_cache = {}
+g_plugin_cache = {}
 
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
@@ -258,7 +259,11 @@ class Config(Item):
             # no plugin, nothing to verify
             return
 
-        global g_plugin_module_cache
+        plugin_key = (manager, self, node, top_config)
+        plugin = g_plugin_cache.get(plugin_key)
+        if plugin:
+            return plugin
+
         cache_key = (plugin_path, os.stat(plugin_path).st_mtime)
         module = g_plugin_module_cache.get(cache_key)
         if not module:
@@ -275,6 +280,7 @@ class Config(Item):
         plugin.add_actions()
         plugin.add_all_controls()
         top_config.plugin = plugin # TODO
+        g_plugin_cache[plugin_key] = plugin
 
     def collect_parents(self, manager, node, top_config=None):
         top_config = top_config or self
@@ -443,11 +449,18 @@ class ConfigMan:
         self.system_root = self.root_dir / "system"
         self.config_path = self.root_dir / REPO_CONF_FILE
         self.node_cache = {}
+        self.find_cache = {}
+        self.find_config_cache = {}
         if must_exist:
             conf = self.load_config()
             self.apply_library_paths(conf.get("libpath", {}))
 
         self.vc = vc.create_vc(self.root_dir)
+
+    def reset_cache(self):
+        self.node_cache = {}
+        self.find_cache = {}
+        self.find_config_cache = {}
 
     def apply_library_paths(self, path_dict):
         """add repo's custom library include paths to sys.path"""
@@ -479,8 +492,11 @@ class ConfigMan:
         lib_path = str(lib_path)
         libpath = conf.setdefault("libpath", {})
         libpath[name] = lib_path
-        if lib_path not in sys.path:
-            sys.path.append(lib_path)
+
+        # apply the path to sys.path
+        sys_lib_path = lib_path if path(lib_path).isabs() else (self.root_dir / lib_path)
+        if sys_lib_path not in sys.path:
+            sys.path.append(sys_lib_path)
 
         self.save_config(conf)
 
@@ -551,6 +567,15 @@ class ConfigMan:
 
         return node
 
+    def get_system(self, parent_system, name, current, level, extra):
+        key = ("system", parent_system, name, current, level, tuple(extra.items()))
+        system = self.node_cache.get(key)
+        if not system:
+            system = System(parent_system, name, current, level, extra=extra)
+            self.node_cache[key] = system
+
+        return system
+
     def get_config(self, pattern):
         configs = list(self.find_config(pattern, all_configs=True,
                                         full_match=True))
@@ -563,6 +588,15 @@ class ConfigMan:
         return configs[0]
 
     def find_config(self, pattern, all_configs=False, full_match=False):
+        key = (pattern, all_configs, full_match)
+        results = self.find_config_cache.get(key)
+        if not results:
+            results = list(self._find_config(pattern, all_configs=all_configs, full_match=full_match))
+            self.find_config_cache[key] = results
+
+        return results
+
+    def _find_config(self, pattern, all_configs=False, full_match=False):
         comparison = ConfigMatch(pattern, full_match=full_match)
         for node in self.find("."):
             if not comparison.match_node(node.name):
@@ -577,7 +611,17 @@ class ConfigMan:
                 if comparison.match_config(conf.name):
                     yield node, conf
 
-    def find(self, pattern, current=None, system=None, nodes=True,
+    def find(self, pattern, nodes=True,
+             systems=False, depth=None, full_match=False, exclude=None):
+        key = (pattern, nodes, systems, tuple(depth or []), full_match, tuple(exclude or []))
+        results = self.find_cache.get(key)
+        if not results:
+            results = list(self._find(pattern, nodes=nodes, systems=systems, depth=depth, full_match=full_match, exclude=exclude))
+            self.find_cache[key] = results
+
+        return results
+
+    def _find(self, pattern, current=None, system=None, nodes=True,
              systems=False, curr_depth=0, extra=None, depth=None,
              full_match=False, exclude=None):
         depth = depth or []
@@ -610,7 +654,7 @@ class ConfigMan:
             # system dir
             subdirs = current.dirs()
             subdirs.sort()
-            system = System(system, name, current, len(subdirs), extra=extra)
+            system = self.get_system(system, name, current, len(subdirs), extra)
             if (systems and (current != self.system_root) and ok_depth
                 and match_op(name)) and not exclude(name):
                 yield system
@@ -619,9 +663,9 @@ class ConfigMan:
                 sub_depth = curr_depth + 1
                 extra = dict(index=sub_index, depth=sub_depth)
 
-                for result in self.find(pattern, current=subdir, system=system,
-                                        nodes=nodes, systems=systems,
-                                        curr_depth=sub_depth, extra=extra,
-                                        exclude=exclude,
-                                        depth=depth, full_match=full_match):
+                for result in self._find(pattern, current=subdir, system=system,
+                                         nodes=nodes, systems=systems,
+                                         curr_depth=sub_depth, extra=extra,
+                                         exclude=exclude,
+                                         depth=depth, full_match=full_match):
                     yield result

@@ -10,7 +10,6 @@ import os
 from path import path
 from . import errors
 from . import recode
-import socket
 
 try:
     import json

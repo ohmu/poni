@@ -6,20 +6,41 @@ See LICENSE for details.
 
 """
 
-import sys
-import itertools
-import datetime
-import logging
-import difflib
 from path import path
 import argh
 import argparse
+import datetime
+import difflib
+import itertools
+import logging
+import random
+import sys
+import time
+
 from . import errors
 from . import util
 from . import colors
 
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
+
+
+def _patched_genUniqueModuleName(baseModuleName):
+    """
+    Workaround the problem that Cheetah creates conflicting module names due to
+    a poor module generator function. Monkey-patch the module with a workaround.
+
+    Fixes failures that look like this:
+
+      File "cheetah_DynamicallyCompiledCheetahTemplate_1336479589_95_84044.py", line 58, in _init_
+      TypeError: super() argument 1 must be type, not None
+    """
+    if baseModuleName not in sys.modules:
+        return baseModuleName
+    else:
+        return 'cheetah_%s_%x' % (baseModuleName, random.getrandbits(128))
+
+Cheetah.Template._genUniqueModuleName = _patched_genUniqueModuleName
 
 try:
     import genshi
@@ -31,11 +52,18 @@ except ImportError:
 class Manager:
     def __init__(self, confman):
         self.log = logging.getLogger("manager")
+        self.reset()
+        self.confman = confman
+        self.audit_format = "%8s %s: %s"
+        self.frozen = False
         self.files = []
         self.error_count = 0
-        self.confman = confman
         self.buckets = {}
-        self.audit_format = "%8s %s: %s"
+
+    def reset(self):
+        self.files = []
+        self.error_count = 0
+        self.buckets = {}
 
     def get_bucket(self, name):
         return self.buckets.setdefault(name, [])
@@ -46,8 +74,11 @@ class Manager:
         self.error_count += 1
 
     def copy_tree(self, entry, remote, path_prefix="", verbose=False):
-        def progress(copied, total):
-            sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
+        def progress(copied, total, ctx={}):
+            ctx.setdefault("last", time.time())
+            if (copied == total) or (time.time() - ctx["last"]) > 1.0:
+                sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
+                ctx["last"] = time.time()
 
         dest_dir = path(path_prefix + entry["dest_path"])
         try:
@@ -63,7 +94,7 @@ class Manager:
                 # copy if mtime or size differs
                 # TODO: optional full contents comparison
                 copy = ((lstat.st_size != rstat.st_size)
-                        or (lstat.st_mtime != rstat.st_mtime))
+                        or (int(lstat.st_mtime) != int(rstat.st_mtime)))
             except errors.RemoteError:
                 copy = True
 
@@ -78,14 +109,14 @@ class Manager:
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
                verbose=False, callback=None, path_prefix="", raw=False,
-               access_method=None, color_mode="auto"):
+               access_method=None, color="auto"):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
         files = [f for f in self.files if not f.get("report")]
         reports = [f for f in self.files if f.get("report")]
 
-        color = colors.Output(sys.stdout, color=color_mode).color
+        color = colors.Output(sys.stdout, color=color).color
         stats = util.PropDict(dict(error_count=0, file_count=0))
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
@@ -122,7 +153,7 @@ class Manager:
                         dir_stats = util.dir_stats(entry["source_path"])
                     except (OSError, IOError), error:
                         raise errors.VerifyError(
-                            "cannot copy files from '%s': %s: %s"% (
+                            "cannot copy files from '%s': %s: %s" % (
                                 entry["source_path"], error.__class__.__name__, error))
 
                     if dir_stats["file_count"] == 0:
@@ -148,7 +179,7 @@ class Manager:
                 if raw:
                     dest_path, output = dest_path, source_path.bytes()
                 else:
-                    dest_path, output = render(source_path, dest_path)
+                    dest_path, output = render(source_path, dest_path, source_text=entry["source_text"])
 
                 if dest_path:
                     dest_path = path(item_path_prefix + dest_path).normpath()
@@ -240,7 +271,7 @@ class Manager:
             if active_text and audit:
                 audit_error = self.audit_output(
                     entry, dest_path, active_text, active_time, output,
-                    show_diff=show_diff, color_mode=color_mode,
+                    show_diff=show_diff, color=color,
                     verbose=verbose)
 
                 if audit_error:
@@ -291,7 +322,7 @@ class Manager:
             post_process(dest_path)
 
     def audit_output(self, entry, dest_path, active_text, active_time,
-                     output, show_diff=False, color_mode="auto",
+                     output, show_diff=False, color="auto",
                      verbose=False):
         error = False
         if (active_text is not None) and (active_text != output):
@@ -299,12 +330,12 @@ class Manager:
             self.log.warning(self.audit_format, "DIFFERS",
                              entry["node"].name, dest_path)
             if show_diff:
-                color = colors.Output(sys.stdout, color=color_mode).color
+                color = colors.Output(sys.stdout, color=color).color
                 diff = difflib.unified_diff(
                     output.splitlines(True),
                     active_text.splitlines(True),
                     "config", "active",
-                    "", active_time, # TODO: mtime for config?
+                    "", active_time,  # TODO: mtime for config?
                     lineterm="\n")
 
                 diff_colors = {"+": "lgreen", "@": "white", "-": "lred"}
@@ -361,12 +392,10 @@ class PlugIn:
         if isinstance(script_path, (list, tuple)):
             script_path = " ".join(script_path)
 
-        rendered_path = str(CheetahTemplate(script_path,
-                                            searchList=[self.get_names()]))
-
+        rendered_path = self._render_cheetah(script_path)
         remote = arg.node.get_remote(override=arg.method)
         lines = [] if yield_stdout else None
-        color = colors.Output(sys.stdout, color=arg.color_mode).color
+        color = colors.Output(sys.stdout, color=arg.color).color
         exit_code = remote.execute(rendered_path, verbose=arg.verbose,
                                    output_lines=lines, quiet=arg.quiet,
                                    output_file=arg.output_file,
@@ -422,7 +451,7 @@ class PlugIn:
             yield out
 
     def handle_argh_control(self, handler, control_name, args, verbose=False,
-                            quiet=False, output_dir=None, color_mode="auto",
+                            quiet=False, output_dir=None, color="auto",
                             method=None, send_output=None, node=None):
         assert node
         parser = argh.ArghParser(prog="control")
@@ -434,7 +463,7 @@ class PlugIn:
         namespace.method = method
         namespace.send_output = send_output
         namespace.node = node
-        namespace.color_mode = color_mode
+        namespace.color = color
         if output_dir:
             output_file_path = output_dir / ("%s.log" % node.name.replace("/", "_"))
             namespace.output_file = file(output_file_path, "at")
@@ -443,10 +472,21 @@ class PlugIn:
 
         parser.dispatch(argv=full_args, namespace=namespace)
 
+    def get_override_config_path(self, filename):
+        for search_path in (self.top_config.path, self.config.path):
+            file_path = search_path / filename
+            if file_path.exists():
+                return file_path.abspath()
+        raise errors.VerifyError("no %r found for config %r" % (
+                filename, self.top_config.name))
+
     def add_file(self, source_path, dest_path=None, source_text=None,
                  dest_bucket=None, owner=None, group=None,
-                 render=None, report=False, post_process=None, mode=None):
+                 render=None, report=False, post_process=None, mode=None,
+                 auto_override=False):
         render = render or self.render_cheetah
+        if auto_override:
+            source_path = self.get_override_config_path(source_path)
         return self.manager.add_file(node=self.node, config=self.config,
                                      type="file", dest_path=dest_path,
                                      source_path=source_path,
@@ -480,11 +520,12 @@ class PlugIn:
     def get_system(self, name):
         return self.get_one(name, nodes=False, systems=True)
 
-    def render_text(self, source_path, dest_path):
+    def render_text(self, source_path, dest_path, source_text=None):
         try:
             # paths are always rendered as templates
             dest_path = self.render_cheetah(None, dest_path)[0]
-            return dest_path, file(source_path, "rb").read()
+            text = source_text if (source_text is not None) else file(source_path, "rb").read()
+            return dest_path, text
         except (IOError, OSError), error:
             raise errors.VerifyError(source_path, error)
 
@@ -514,34 +555,38 @@ class PlugIn:
                      plugin=self)
         return names
 
-    def render_cheetah(self, source_path, dest_path):
+    def _render_cheetah(self, source=None, file=None):
+        """helper to render a text or a file with Cheetah into a str"""
         names = self.get_names()
-        # TODO: template caching
+        return str(CheetahTemplate(source=source, file=file, searchList=[names]))
+
+    def render_cheetah(self, source_path, dest_path, source_text=None):
         try:
             if source_path:
-                source_path = str(CheetahTemplate(source_path, searchList=[names]))
+                source_path = self._render_cheetah(source_path)
 
-            if source_path is not None:
-                text = str(CheetahTemplate(file=source_path,
-                                           searchList=[names]))
+            if source_text:
+                text = self._render_cheetah(source_text)
+            elif source_path is not None:
+                text = self._render_cheetah(file=source_path)
             else:
                 text = None
 
             if dest_path:
-                dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
+                dest_path = self._render_cheetah(dest_path)
 
             return dest_path, text
         except (Cheetah.Template.Error, SyntaxError,
-                Cheetah.NameMapper.NotFound), error:
+                Cheetah.NameMapper.NotFound) as error:
             raise errors.VerifyError("%s: %s: %s" % (
                 source_path, error.__class__.__name__, error))
 
-    def render_genshi_xml(self, source_path, dest_path):
+    def render_genshi_xml(self, source_path, dest_path, source_text=None):
         assert genshi, "Genshi is not installed"
-
+        assert not source_text, "genshi rendering from source_text not implemented yet"
         names = self.get_names()
         if dest_path:
-            dest_path = str(CheetahTemplate(dest_path, searchList=[names]))
+            dest_path = self._render_cheetah(dest_path)
 
         try:
             tmpl = genshi.template.MarkupTemplate(file(source_path),

@@ -7,11 +7,13 @@ See LICENSE for details.
 """
 from . import errors
 from . import cloud_aws
+from . import cloud_vsphere
 from .cloudbase import Provider # provides backward compatibility with older extensions
 
 
 PROVIDERS = {
     "aws-ec2" : cloud_aws.AwsProvider,
+    "vsphere" : cloud_vsphere.VSphereProvider,
     }
 
 

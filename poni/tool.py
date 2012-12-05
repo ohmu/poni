@@ -72,7 +72,7 @@ arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
 
 class ControlTask(work.Task):
     def __init__(self, op, args, verbose=False, method=None, quiet=False,
-                 output_dir=None, color_mode="auto"):
+                 output_dir=None, color="auto"):
         work.Task.__init__(self)
         self.op = op
         self.args = args
@@ -80,7 +80,7 @@ class ControlTask(work.Task):
         self.method = method
         self.quiet = quiet
         self.output_dir = output_dir
-        self.color_mode = color_mode
+        self.color = color
 
     def __repr__(self):
         return "%s/%s [%s]" % (self.op["node"].name, self.op["config"].name,
@@ -127,7 +127,7 @@ class ControlTask(work.Task):
                                quiet=self.quiet,
                                output_dir=self.output_dir,
                                method=self.method,
-                               color_mode=self.color_mode,
+                               color=self.color,
                                send_output=self.send_output)
             self.log.debug("op %s returns: %r", self.op["name"], ret)
             self.op["result"] = ret
@@ -156,12 +156,22 @@ class Tool:
         self.sky = cloud.Sky()
         self.parser = self.create_parser()
         self.task_times = times.Times()
+        self.cached_confman = None
+        self.cached_manager = None
+        self.collect_cache = {}
+
+    def reset_cache(self):
+        if self.cached_confman:
+            self.cached_confman.reset_cache()
+
+        self.cached_manager = None
+        self.collect_cache = {}
 
     @argh.alias("add-system")
     @argh.arg('system', type=str, help='system name')
     def handle_add_system(self, arg):
         """add a sub-system"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         system_dir = confman.create_system(arg.system)
         self.log.debug("created: %s", system_dir)
 
@@ -197,7 +207,7 @@ class Tool:
     @argh.alias("init")
     def handle_init(self, arg):
         """init repository"""
-        confman = core.ConfigMan(arg.root_dir, must_exist=False)
+        confman = self.get_confman(arg.root_dir, must_exist=False)
         confman.init_repo()
 
     @argh.alias("import")
@@ -205,7 +215,7 @@ class Tool:
     @argh.arg('source', type=path, help='source dir/file', nargs="+")
     def handle_import(self, arg):
         """import nodes/configs"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         for glob_pattern in arg.source:
             sources = glob.glob(glob_pattern)
             if not sources:
@@ -302,7 +312,7 @@ class Tool:
     @argh.arg('source', type=path, help='source file or directory', nargs="+")
     def handle_update_config(self, arg):
         """update files to a config"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         configs = list(confman.find_config(arg.config))
         if not configs:
             raise errors.UserError("no config matching %r found" % arg.config)
@@ -330,9 +340,10 @@ class Tool:
     @argh.arg("-d", "--copy-dir", metavar="DIR", type=str, default="",
               dest="copy_dir", help="copy config files from DIR")
     @arg_flag("-c", "--create-node", help="create node if it does not exist")
+    @arg_flag("-e", "--skip-existing", help="do nothing if the config already exists")
     def handle_add_config(self, arg):
         """add a config to node(s)"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         if arg.inherit_config:
             conf_node, conf = list(confman.get_config(arg.inherit_config))
             parent_config_name = "%s/%s" % (conf_node.name, conf.name)
@@ -353,16 +364,21 @@ class Tool:
         for node in nodes:
             existing = list(c for c in node.iter_configs()
                             if c.name == arg.config)
+            updates.append("%s/%s" % (node.name, arg.config))
             if existing:
-                raise errors.UserError("config '%s/%s' already exists" % (
-                        node.name, arg.config))
+                if arg.skip_existing:
+                    self.log.info("config '%s/%s' already exists, skipped",
+                                  node.name, arg.config)
+                    continue
+                else:
+                    raise errors.UserError("config '%s/%s' already exists" % (
+                            node.name, arg.config))
 
             node.add_config(arg.config, parent=parent_config_name,
                             copy_dir=arg.copy_dir)
             # TODO: verbose output
             self.log.debug("added config %r to %s, parent=%r", arg.config,
                            node.path, parent_config_name)
-            updates.append("%s/%s" % (node.name, arg.config))
 
         if not updates:
             raise errors.UserError("no matching nodes found")
@@ -378,7 +394,7 @@ class Tool:
     @argh.arg('path', type=path, help='library path within config')
     def handle_add_library(self, arg):
         """add a Python library from a config to PYTHONPATH"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
 
         if arg.config:
             # path is relative to a config
@@ -428,8 +444,8 @@ class Tool:
     @argh.arg('operation', type=str, help='operation to execute')
     def handle_control(self, arg):
         """config control operation"""
-        confman = core.ConfigMan(arg.root_dir)
-        manager = config.Manager(confman)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
+        manager = self.get_manager(confman)
         self.collect_all(manager)
 
         # collect all possible control operations
@@ -527,7 +543,7 @@ class Tool:
                    op["config"].name, op["name"])
             task = ControlTask(op, arg.extras, verbose=arg.verbose,
                                quiet=arg.quiet, output_dir=arg.output_dir,
-                               method=arg.method, color_mode=arg.color_mode)
+                               method=arg.method, color=arg.color)
             runner.add_task(task)
 
         # execute tasks
@@ -576,9 +592,9 @@ class Tool:
     @argh.arg('cmd', type=str, help='command to execute')
     def handle_remote_exec(self, arg):
         """run a shell-command"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         def rexec(arg, node, remote):
-            color = colors.Output(sys.stdout, color=arg.color_mode).color
+            color = colors.Output(sys.stdout, color=arg.color).color
             if arg.output_dir:
                 output_file_path = arg.output_dir / ("%s.log" % node.name.replace("/", "_"))
                 output_file = output_file_path.open("wt")
@@ -602,8 +618,8 @@ class Tool:
     @arg_target_nodes
     def handle_remote_shell(self, arg):
         """start an interactive shell session"""
-        confman = core.ConfigMan(arg.root_dir)
-        color = colors.Output(sys.stdout, color=arg.color_mode).color
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
+        color = colors.Output(sys.stdout, color=arg.color).color
         def rshell(arg, node, remote):
             remote.shell(verbose=arg.verbose, color=color)
 
@@ -638,7 +654,7 @@ class Tool:
     @argh.alias("init")
     def handle_vc_init(self, arg):
         """init version control in repo"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         if confman.vc:
             raise errors.UserError(
                 "version control already initialized in this repo")
@@ -653,7 +669,7 @@ class Tool:
     @argh.alias("diff")
     def handle_vc_diff(self, arg):
         """show repository working status diff"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         self.require_vc(confman)
         for out in confman.vc.status():
             print out,
@@ -662,7 +678,7 @@ class Tool:
     @argh.arg('message', type=str, help='commit message')
     def handle_vc_checkpoint(self, arg):
         """commit all locally added and changed files in the repository"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         self.require_vc(confman)
         confman.vc.commit_all(arg.message)
 
@@ -671,7 +687,7 @@ class Tool:
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     def handle_cloud_terminate(self, arg):
         """terminate cloud instances"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         count = 0
         for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
@@ -688,7 +704,7 @@ class Tool:
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     def handle_cloud_update(self, arg):
         """update node cloud instance properties"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if not cloud_prop.get("instance"):
@@ -718,7 +734,7 @@ class Tool:
               help="target instance state, default: 'running'")
     def handle_cloud_wait(self, arg):
         """wait cloud instances to reach a specific running state"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         return self.cloud_op(confman, arg, False)
 
     @argh.alias("init")
@@ -728,7 +744,7 @@ class Tool:
     @arg_flag("--wait", dest="wait", help="wait for instance to start")
     def handle_cloud_init(self, arg):
         """reserve and start a cloud instance for nodes"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         return self.cloud_op(confman, arg, True)
 
     @argh.alias("ip")
@@ -741,8 +757,7 @@ class Tool:
                     for node in confman.find(arg.target,
                                     full_match=arg.full_match)
                     if node.get("cloud", None)]
-        for provider, props in itertools.groupby(props,
-                                lambda prop: self.sky.get_provider(prop)):
+        for provider, props in itertools.groupby(props, self.sky.get_provider):
             provider.assign_ip(props)
 
     def cloud_op(self, confman, arg, start):
@@ -804,6 +819,60 @@ class Tool:
                         self.log.info("%s: updated: %s", node.name, change_str)
                         node.save()
 
+    def _get_cloud_hosts_from_args(self, arg):
+        confman = core.ConfigMan(arg.root_dir)
+        props = [node["cloud"] for node in confman.find(arg.nodes, full_match=arg.full_match)
+                 if node.get("cloud", None)]
+        if not props:
+            raise errors.UserError("%r does not match any nodes" % (arg.nodes))
+        for provider, props in itertools.groupby(props, lambda prop: self.sky.get_provider(prop)):
+            yield provider, props
+
+    @argh.alias("create-snapshot")
+    @arg_full_match
+    @arg_target_nodes
+    @argh.arg("name", type=str, help="snapshot name")
+    @argh.arg("--description", type=str, dest="description", default="", help="optional description of the snapshot")
+    @arg_flag("--memory", dest="memory", help="include memory in the snapshot")
+    def handle_cloud_create_snapshot(self, arg):
+        """create a named snapshot for nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.create_snapshot(props, name=arg.name, description=arg.description, memory=arg.memory)
+
+    @argh.alias("revert-to-snapshot")
+    @arg_full_match
+    @arg_target_nodes
+    @argh.arg("name", type=str, help="snapshot name")
+    def handle_cloud_revert_to_snapshot(self, arg):
+        """revert the nodes to a named snapshot"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.revert_to_snapshot(props, name=arg.name)
+
+    @argh.alias("remove-snapshot")
+    @arg_full_match
+    @arg_target_nodes
+    @argh.arg("name", type=str, help="snapshot name")
+    def handle_cloud_remove_snapshot(self, arg):
+        """remove a named snapshot from nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.remove_snapshot(props, name=arg.name)
+
+    @argh.alias("power-off")
+    @arg_full_match
+    @arg_target_nodes
+    def handle_cloud_power_off(self, arg):
+        """Power off nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.power_off_instances(props)
+
+    @argh.alias("power-on")
+    @arg_full_match
+    @arg_target_nodes
+    def handle_cloud_power_on(self, arg):
+        """Power on nodes"""
+        for provider, props in self._get_cloud_hosts_from_args(arg):
+            provider.power_on_instances(props)
+
     @argh.alias("set")
     @arg_verbose
     @arg_full_match
@@ -813,7 +882,7 @@ class Tool:
     @argh.arg('property', type=str, nargs="+", help="'name=[type:]value'")
     def handle_set(self, arg):
         """set system/node properties"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         logger = logging.info if arg.verbose else logging.debug
         changed_items = []
         found = False
@@ -862,6 +931,10 @@ class Tool:
             item.save()
 
     def collect_all(self, manager):
+        items = self.collect_cache.get(manager)
+        if items:
+            return items
+
         items = []
         for item in manager.confman.find("."):
             item.collect(manager)
@@ -872,11 +945,13 @@ class Tool:
         for item in items:
             item.collect_parents(manager)
 
+        self.collect_cache[manager] = items
+
         return items
 
     def verify_op(self, confman, target, full_match=False, exclude=None,
                   **verify_options):
-        manager = config.Manager(confman)
+        manager = self.get_manager(confman)
         self.collect_all(manager)
 
         if target:
@@ -910,11 +985,11 @@ class Tool:
               help="show raw template vs. rendered output diff")
     def handle_show(self, arg):
         """render and show node config files"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         manager, stats = self.verify_op(
             confman, arg.nodes, show=(not arg.show_buckets),
             full_match=arg.full_match, raw=arg.show_raw,
-            color_mode=arg.color_mode, show_diff=arg.show_diff,
+            color=arg.color, show_diff=arg.show_diff,
             exclude=arg.exclude)
 
         if arg.show_buckets:
@@ -939,11 +1014,11 @@ class Tool:
     @arg_host_access_method
     def handle_deploy(self, arg):
         """deploy node configs"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, deploy=True, verbose=arg.verbose,
             full_match=arg.full_match, path_prefix=arg.path_prefix,
-            access_method=arg.method, color_mode=arg.color_mode,
+            access_method=arg.method, color=arg.color,
             exclude=arg.exclude)
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -962,12 +1037,12 @@ class Tool:
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
     def handle_audit(self, arg):
         """audit active node configs"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, deploy=False, audit=True,
             show_diff=arg.show_diff, full_match=arg.full_match,
             path_prefix=arg.path_prefix, access_method=arg.method,
-            color_mode=arg.color_mode, verbose=arg.verbose,
+            color=arg.color, verbose=arg.verbose,
             exclude=arg.exclude)
 
         if stats.error_count:
@@ -985,11 +1060,11 @@ class Tool:
     @arg_target_nodes_0_to_n
     def handle_verify(self, arg):
         """verify local node configs"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, full_match=arg.full_match,
             access_method=arg.method, verbose=arg.verbose,
-            color_mode=arg.color_mode, exclude=arg.exclude)
+            color=arg.color, exclude=arg.exclude)
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -1013,7 +1088,7 @@ class Tool:
     @arg_flag("-c", "--copy-props", help="copy parent node's properties")
     def handle_add_node(self, arg):
         """add a new node"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         if arg.inherit_node:
             nodes = list(confman.find(arg.inherit_node,
                                       full_match=arg.full_match))
@@ -1072,14 +1147,33 @@ class Tool:
               help="one line per property")
     def handle_list(self, arg):
         """list systems and nodes"""
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
 
-        manager = config.Manager(confman)
+        manager = self.get_manager(confman)
         self.collect_all(manager) # TODO: needed by "list -C"
 
         list_output = listout.ListOutput(self, confman, **arg.__dict__)
         for output in list_output.output():
             yield output
+
+    def get_confman(self, root_dir, must_exist=True, reset_cache=True):
+        if reset_cache:
+            self.reset_cache()
+
+        if not self.cached_confman:
+            self.cached_confman = core.ConfigMan(root_dir, must_exist=must_exist)
+
+        return self.cached_confman
+
+    def get_manager(self, confman):
+        if self.cached_manager:
+            #self.cached_manager.reset()
+            pass
+        else:
+            self.cached_manager = config.Manager(confman)
+
+        return self.cached_manager
+
 
     @argh.alias("list")
     @arg_full_match
@@ -1088,7 +1182,7 @@ class Tool:
     def handle_settings_list(self, arg):
         """list settings"""
         pattern = arg.pattern or "."
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
         list_output = listout.ListOutput(self, confman, show_settings=True,
                                          show_config=True, **arg.__dict__)
         for output in list_output.output():
@@ -1101,7 +1195,7 @@ class Tool:
     def handle_settings_set(self, arg):
         """override settings values"""
         pattern = arg.pattern or "."
-        confman = core.ConfigMan(arg.root_dir)
+        confman = self.get_confman(arg.root_dir)
         configs = list(confman.find_config(arg.pattern, all_configs=True,
                                            full_match=arg.full_match))
         if not configs:
@@ -1175,7 +1269,7 @@ class Tool:
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
         parser.add_argument(
-            "-c", "--color", dest="color_mode", default="auto",
+            "-c", "--color", default="auto",
             choices=["on", "off", "auto"], help="use color highlighting")
 
         commands = [
@@ -1194,6 +1288,11 @@ class Tool:
                 self.handle_cloud_init, self.handle_cloud_terminate,
                 self.handle_cloud_update, self.handle_cloud_wait,
                 self.handle_cloud_ip,
+                self.handle_cloud_create_snapshot,
+                self.handle_cloud_revert_to_snapshot,
+                self.handle_cloud_remove_snapshot,
+                self.handle_cloud_power_off,
+                self.handle_cloud_power_on,
                 ],
                             namespace="cloud", title="cloud operations",
                             help="command to execute")

@@ -8,13 +8,14 @@ See LICENSE for details.
 
 from __future__ import with_statement
 
-import os
-import subprocess
-import logging
-import shutil
-import sys
-import select
 import errno
+import logging
+import os
+import select
+import shutil
+import subprocess
+import sys
+import time
 from . import errors
 from . import colors
 
@@ -28,7 +29,7 @@ class RemoteControl:
     def __init__(self, node):
         self.node = node
         self.warn_timeout = 30.0 # seconds to wait before warning user after receiving any output
-        self.terminate_timeout = 300.0 # seconds to wait before disconnecting after receiving any output
+        self.terminate_timeout = node.get_tree_property("control_timeout", 300.0) # seconds to wait before disconnecting after receiving any output
 
     def get_out_line(self, color, tag, command, result):
         desc = "%s (%s): %s" % (color(self.node.name, "node"),
@@ -63,7 +64,8 @@ class RemoteControl:
             return colors.Output(out_file, color="no").color
 
     def execute(self, command, verbose=False, color=None, output_lines=None,
-        output_file=None, quiet=False, exec_options={}):
+        output_file=None, quiet=False, exec_options=None):
+        exec_options = exec_options or {}
         if output_file is not None:
             stdout_file = output_file
             stderr_file = output_file
@@ -80,6 +82,7 @@ class RemoteControl:
         self.tag_line(color("BEGIN", "header"), command, verbose=verbose,
                       color=color, out_file=stdout_file)
 
+        start = time.time()
         try:
             while True:
                 for code, output in self.execute_command(command,
@@ -120,7 +123,8 @@ class RemoteControl:
                            "op_error")
             raise
         finally:
-            self.tag_line(color("END", "header"), command, result=result,
+            elapsed = time.time() - start
+            self.tag_line(color("END %.1fs" % elapsed, "header"), command, result=result,
                           verbose=verbose, color=color, out_file=stdout_file)
 
     def shell(self, verbose=False, color=None):
@@ -147,7 +151,7 @@ class RemoteControl:
                    group=None):
         assert 0, "must implement in sub-class"
 
-    def execute_command(self, command):
+    def execute_command(self, command, pseudo_tty=False):
         assert 0, "must implement in sub-class"
 
     def execute_shell(self):
@@ -213,7 +217,7 @@ class LocalControl(RemoteControl):
         f.close()
 
     @convert_local_errors
-    def execute_command(self, cmd):
+    def execute_command(self, cmd, pseudo_tty=False):
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
         fds = [process.stdout, process.stderr]
@@ -251,9 +255,11 @@ class SshRemoteControl(RemoteControl):
         self.log = logging.getLogger("ssh")
         RemoteControl.__init__(self, node)
         self.key_filename = None
-        cloud_key = node.get("cloud", {}).get("key-pair")
+        cloud_prop = node.get("cloud", {})
+        # renamed property name: backward-compatibility
+        cloud_key = cloud_prop.get("key_pair", cloud_prop.get("key-pair"))
         if cloud_key:
-            # cloud 'key-pair' overrides 'ssh-key' from host properties
+            # cloud 'key_pair' overrides 'ssh-key' from host properties
             self.key_filename = "%s.pem" % cloud_key
         else:
             self.key_filename = node.get_tree_property("ssh-key")

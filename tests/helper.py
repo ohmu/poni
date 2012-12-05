@@ -16,6 +16,11 @@ class Helper:
         self.temp_files.append(f)
         return path(f)
 
+    def temp_dir(self, prefix="test_poni_dir"):
+        d = tempfile.mkdtemp(prefix=prefix)
+        self.temp_files.append(d)
+        return path(d)
+
     def setup(self):
         pass
 
@@ -49,7 +54,6 @@ class Helper:
         plugin_py.write_bytes(plugin_text)
         assert not poni.run(["update-config", conf_path, plugin_py])
         return poni
-
 
 
 def combos(seq, max_len=None):

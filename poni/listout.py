@@ -153,6 +153,9 @@ class ListOutput(colors.Output):
             yield parent_name, "configparent"
             yield ")", None
 
+        if entry["inherited"]:
+            yield " [inherited]", None
+
     def format_unknown(self, entry):
         yield "UNKNOWN: %r" % entry["type"], "red"
 
@@ -209,10 +212,10 @@ class ListOutput(colors.Output):
                     yield dict(type="prop", item=item, prop=items)
 
             if isinstance(item, core.Node):
-                for conf in sorted(item.iter_configs(),
+                for conf in sorted(item.iter_all_configs(),
                                    key=lambda x: x.name):
                     if self.show_config:
-                        yield dict(type="config", item=item, config=conf)
+                        yield dict(type="config", item=item, config=conf, inherited=(conf.node != item))
 
                     if self.show_layers:
                         for i, (sort_key, layer_name, file_path) \
