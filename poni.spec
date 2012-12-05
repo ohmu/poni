@@ -6,7 +6,7 @@ Release:        %{minor_version}%{?dist}
 Summary:        simple system configuration management tool
 
 Group:          Development/Languages
-License:        MIT
+License:        ASL 2.0
 Source0:        poni-%{full_version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
