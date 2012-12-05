@@ -1,3 +1,11 @@
+"""
+parallel task management
+
+Copyright (c) 2010-2012 Mika Eloranta
+See LICENSE for details.
+
+"""
+
 import time
 import logging
 import threading

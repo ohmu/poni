@@ -1,3 +1,11 @@
+"""
+version control with Git
+
+Copyright (c) 2010-2012 Mika Eloranta
+See LICENSE for details.
+
+"""
+
 from path import path
 
 try:

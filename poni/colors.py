@@ -1,3 +1,11 @@
+"""
+ANSI color code escapes for output
+
+Copyright (c) 2010-2012 Mika Eloranta
+See LICENSE for details.
+
+"""
+
 CODES = {
     'reset': '\033[1;m',
     'gray' : '\033[1;30m',

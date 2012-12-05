@@ -1,3 +1,11 @@
+"""
+timing reports
+
+Copyright (c) 2010-2012 Mika Eloranta
+See LICENSE for details.
+
+"""
+
 import sys
 import json
 import datetime

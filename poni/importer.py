@@ -1,3 +1,11 @@
+"""
+debian .deb package importer
+
+Copyright (c) 2010-2012 Mika Eloranta
+See LICENSE for details.
+
+"""
+
 import logging
 from path import path
 from . import errors
