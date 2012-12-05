@@ -61,6 +61,7 @@ Installing the following Python libraries will add optional functionality:
 * GitPython_ (Version controlling the repository with Git)
 * Boto_ (`Amazon EC2`_ virtual machine provisioning)
 * Genshi_ (XML-based templating)
+* pyvsphere_ (VMWare virtual machine provisioning)
 
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
 .. _Paramiko: http://pypi.python.org/pypi/paramiko
@@ -71,6 +72,7 @@ Installing the following Python libraries will add optional functionality:
 .. _Cheetah: http://pypi.python.org/pypi/Cheetah
 .. _Genshi: http://pypi.python.org/pypi/Genshi
 .. _Sphinx: http://sphinx.pocoo.org/
+.. _pyvsphere: https://github.com/F-Secure/pyvsphere
 
 Installation using pip or easy_install
 --------------------------------------
@@ -104,6 +106,7 @@ Thanks for the contributions!
 * Santeri Paavolainen (fixes)
 * Lakshmi Vyas (new features for AWS-EC2 support)
 * Lauri Heiskanen (enabling pseudo-tty)
+* F-Secure Corporation (major improvements, VMWare vSphere support)
 
 License (Apache 2.0)
 ====================
