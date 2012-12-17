@@ -7,9 +7,9 @@ See LICENSE for details.
 """
 from collections import defaultdict
 import copy
-import datetime
 import logging
 import os
+import re
 import time
 
 from . import errors
@@ -275,7 +275,6 @@ class InstanceStarter(object):
                               self.total_instances - len(self.pending), self.total_instances,
                               ", ".join(("%s: %r" % s) for s in summary.iteritems()))
                 time.sleep(5.0)
-
         return self.output
 
 
@@ -710,3 +709,398 @@ class AwsProvider(cloudbase.Provider):
     def wait_instances(self, props, wait_state="running"):
         starter = InstanceStarter(self, props)
         return starter.wait_instances(wait_state)
+
+    def _volume_id_for_mountpoint(self, instance, device_name):
+        """
+        Find the AWS EBS ID for the volume that is at device_name.
+        """
+        block_device_mapping = instance.block_device_mapping
+        for dev_name in block_device_mapping:
+            if dev_name == device_name:
+                return block_device_mapping[dev_name].volume_id
+        return None
+
+    def _block_dev_name(self, device_name):
+        """
+        Strip the partition number away from a disk device.
+        """
+        match = re.match("(/dev/[a-z]+)([0-9]+)", device_name)
+        if match:
+            return match.group(1)
+
+        return device_name
+
+    def _name_is_mandatory(self, name):
+        if name is None:
+            # A name is mandatory.
+            raise errors.CloudError("You must provide a name when you "
+                                    "revert a snapshot")
+
+    def _find_snapshots_for_instance(self, conn, instance, name):
+        """
+        Locate snapshots with name created from this instance.
+
+        We use our local tagging rules to find a snapshot
+        that was originally from the same node.
+        """
+        filters = {"tag:Name": name,
+                   "tag:Original_instance": instance.id}
+        snapshots = conn.get_all_snapshots(filters=filters)
+        if snapshots:
+            # Sort by date so that the latest snapshot is at the head
+            # of the list.
+            snapshots.sort(reverse=True, key=lambda sn: sn.start_time)
+        return snapshots
+
+    def _get_timeout_value(self):
+        """
+        Get the value of timeout for some AWS ops
+        """
+        return os.environ.get("AWS_OPS_TIMEOUT", 300)
+
+    def _get_deadline(self):
+        """
+        Get a deadline (in wall wall clock time) for AWS polling.
+        """
+        return self._get_timeout_value() + time.time()
+
+    def _wait_until(self, end_condition, timeout_message, deadline, *args):
+        """
+        Wait in a polling mode for some condition to get fulfilled.
+        """
+        while not end_condition(*args):
+            if time.time() > deadline:
+                raise errors.CloudError("Timeout (%d) when %s",
+                                        self._get_timeout_value(),
+                                        timeout_message)
+            time.sleep(5.0)
+
+    def _all_instances_in_state(self, instances, state):
+        """
+        Returns true if every instance in 'instances' is in 'state'
+        """
+        missing_count = 0
+        for instance in instances:
+            instance.update()
+            if instance.state != state:
+                missing_count += 1
+
+        if missing_count == 0:
+            self.log.info("All instances %s" % state)
+            return True
+
+        self.log.info("%d instances not yet %s", missing_count, state)
+        return False
+
+    def _wait_until_instances_state(self, instances, state, deadline):
+        """
+        Wait for every instance in 'instances' to reach 'state'.
+
+        Deadline specifies the last wall clock time until which to
+        wait.
+        """
+        self._wait_until(self._all_instances_in_state,
+                         "Waiting for instances to be in %s state" % state,
+                         deadline,
+                         instances, state)
+
+    def _start_instance(self, instance):
+        """Call start for the provided instance."""
+        self.log.info("Starting instance %s", instance.id)
+        instance.start()
+
+    def _stop_instance(self, instance):
+        """Call stop for the provided instance."""
+        self.log.info("Stopping instance %s", instance.id)
+        instance.stop()
+
+    def _startstop_instances(self, props,
+                             startstop_method,
+                             accepted_start_states,
+                             result_state):
+        """
+        Perform startstop_method on each instance that is in props.
+        """
+        result = {}
+        instances_changing_state = []
+
+        for instance in self._get_instances(props):
+            if instance.state not in accepted_start_states:
+                self.log.warning("Instance %s is in state %s. Ignoring",
+                                 instance.id, instance.state)
+                continue
+
+            startstop_method(instance)
+            instances_changing_state.append(instance)
+
+            result[instance.id] = {}
+
+        # Now wait for all machines to start or stop.
+        self._wait_until_instances_state(instances_changing_state,
+                                         result_state,
+                                         self._get_deadline())
+        return result
+
+    def _all_snapshots_complete(self, pending_snapshots, conn, name):
+        """
+        Polls for the completeness of all pending_snapshots.
+
+        When a snapshot is done, name gets assigned to the tags of the
+        snapshot.
+        """
+        pending_snapshot_count = 0
+
+        for instance_id, snd in pending_snapshots.iteritems():
+            snapshot = snd["snapshot"]
+            if "final_status" in snd:
+                # This snapshot was already finished
+                # either with error or success.
+                continue
+
+            snapshot.update()
+
+            if snapshot.status == "pending":
+                pending_snapshot_count += 1
+            elif snapshot.status == "completed":
+                # Snapshot ready
+                self.log.info("Snapshot %s of instance %s completed. ",
+                              snapshot.id, instance_id)
+
+                # Add the originating node id as a tag, and the specified
+                # name string as name if given.
+                tags = {"Original_instance": instance_id,
+                        "Name": name}
+                conn.create_tags([snapshot.id], tags)
+
+                # Wipe out old snapshots with the same name.
+                old_snapshots = snd["old_snapshots"]
+                if old_snapshots:
+                    for old_snapshot in old_snapshots:
+                        old_snapshot.delete()
+                snd["final_status"] = "completed"
+            else:
+                # Error.
+                self.log.error("Creating snapshot %s of %s failed. "
+                               "End status %s",
+                               snapshot.id, instance_id, snapshot.status)
+                snd["final_status"] = "error"
+
+        if pending_snapshot_count != 0:
+            self.log.info("Waiting for snapshots. %d pending",
+                          pending_snapshot_count)
+        else:
+            # No more waiting.
+            failed_snaps = 0
+            for instance_id, snd in pending_snapshots.iteritems():
+                if snd["final_status"] == "error":
+                    failed_snaps += 1
+
+            if failed_snaps != 0:
+                raise errors.CloudError("%d snapshots failed", failed_snaps)
+
+            return True
+
+        return False
+
+    @convert_boto_errors
+    def create_snapshot(self, props, name=None, description=None,
+                        memory=False):
+        """
+        Create a new snapshot for the given instances with the specified props.
+
+        Note that in AWS there are no machine-wide snapshots. Thus the memory
+        parameter is not used for anything.
+
+        This first version does a snapshot of the root file system
+        only.
+        """
+        self._name_is_mandatory(name)
+
+        result = {}
+        pending_snapshots = {}
+
+        conn = self._get_conn()
+        for instance in self._get_instances(props):
+
+            # Find old snapshots with matching properties for
+            # deleting them later on.
+            old_snapshots = self._find_snapshots_for_instance(conn, instance,
+                                                              name)
+
+            # Find the EBS volume that is the root device of the instance.
+            root_vol_device = self._block_dev_name(instance.root_device_name)
+            volume_id = self._volume_id_for_mountpoint(instance,
+                                                       root_vol_device)
+            if volume_id is None:
+                # No root dev? Skip.
+                self.log.warning("No EBS volume found for root device %r "
+                                 "of instance %s",
+                                 root_vol_device, instance)
+                continue
+
+            # Initiate the creating of the snapshot.  We initiate the
+            # snapshot for all requested VMs here, and later on wait
+            # for them to complete.
+
+            snapshot = conn.create_snapshot(volume_id, description)
+            self.log.info("Initiated snapshot %s from instance %s volume %s",
+                          snapshot.id, instance.id, volume_id)
+            pending_snapshots[instance.id] = {"snapshot": snapshot,
+                                              "old_snapshots": old_snapshots,
+                                              "checks": 0}
+            result[instance.id] = {}
+
+        self._wait_until(self._all_snapshots_complete,
+                         "Waiting for snapshots to complete",
+                         self._get_deadline(),
+                         pending_snapshots, conn, name)
+        return result
+
+    @convert_boto_errors
+    def revert_to_snapshot(self, props, name=None):
+        """
+        Revert the given instances to the specified snapshot.
+        """
+        self._name_is_mandatory(name)
+
+        result = {}
+
+        instances_to_start = []
+
+        deadline = self._get_deadline()
+        conn = self._get_conn()
+        for instance in self._get_instances(props):
+            # The instance should be in a state from which it can be started.
+            if instance.state in ['shutting-down', 'terminated']:
+                self.log.warning("Instance %s state %s, ignoring.",
+                                 instance.id, instance.state)
+                continue
+
+            # We use this availability zone later. Pick it up here
+            # because for some weird reason boto does not give it when
+            # the machine is shutting down.
+            zone = instance.placement
+
+            # Root device. To be used later.
+            root_dev = self._block_dev_name(instance.root_device_name or
+                                            "/dev/sda")
+
+            # Get the id of the root device volume. Even this is for later use.
+            old_volume_id = self._volume_id_for_mountpoint(instance,
+                                                           root_dev)
+
+            # Get the snapshots that have the requested name and that
+            # are for this machine.
+            snapshots = self._find_snapshots_for_instance(conn, instance, name)
+            if not snapshots:
+                self.log.warning("Could not find snapshot %s for instance %s",
+                                 name, instance.id)
+                continue
+
+            # As we now found a snapshot to which to revert, initiate
+            # the shutdown of the instance.
+            if instance.state not in ['stopping', 'stopped']:
+                self.log.info("Stopping instance %s", instance.id)
+                instance.stop(force=True)
+
+            # Create a volume out of the snapshot.
+            vol = snapshots[0].create_volume(zone)
+
+            # Now wait for the machine to stop.
+            self._wait_until_instances_state([instance], "stopped", deadline)
+
+            # Detach the previous volume.
+            if old_volume_id is not None:
+                if not conn.detach_volume(old_volume_id, instance.id,
+                                          force=True):
+                    self.log.warning("Detaching root volume %s from "
+                                     "instance %s failed",
+                                     old_volume_id, instance.id)
+
+                def _has_no_root_dev(instance, root_dev):
+                    """Check whether the volume id for root device is empty."""
+                    instance.update()
+                    self.log.info("Waiting for root device %s of %s to detach",
+                                  root_dev, instance.id)
+                    vol_id = self._volume_id_for_mountpoint(instance, root_dev)
+                    return vol_id is None
+
+                # Wait for the volume to actually detach.
+                self._wait_until(_has_no_root_dev,
+                                 "Waiting for the root device of "
+                                 "%s to detach" % instance.id,
+                                 deadline,
+                                 instance, root_dev)
+
+            # Attach the new EBS volume that we created from the snapshot.
+            self.log.info("Attaching a new volume created from snapshot")
+            if not vol.attach(instance.id, root_dev):
+                self.log.warning("Attaching volume %s to %s of %s failed",
+                                 vol.id, root_dev, instance.id)
+                continue
+
+            # Start the instance again.
+            self.log.info("Starting ")
+            instance.start()
+            instances_to_start.append(instance)
+            result[instance.id] = {}  # Is instance.id correct here?
+
+            # Finally, delete the previous volume so that we do not
+            # leave the EBSs lying around.
+            if old_volume_id is not None:
+                self.log.info("Deleting the previous volume %s", old_volume_id)
+                conn.delete_volume(old_volume_id)
+
+        self._wait_until_instances_state(instances_to_start,
+                                         "running",
+                                         deadline)
+        return result
+
+    @convert_boto_errors
+    def remove_snapshot(self, props, name):
+        """
+        Delete snapshots.
+        """
+        self._name_is_mandatory(name)
+
+        result = {}
+
+        conn = self._get_conn()
+        for instance in self._get_instances(props):
+            self.log.info("Looking for snapshots for %s", instance.id)
+            snapshots = self._find_snapshots_for_instance(conn, instance, name)
+
+            if not snapshots:
+                self.log.warning("No matching snapshots found for instance %s",
+                                 instance.id)
+                continue
+
+            for sn in snapshots:
+                self.log.info("Deleting snapshot %s of instance %s",
+                              sn.id, instance.id)
+                if not sn.delete():
+                    self.log.warning("Deleting snapshot %s failed", sn.id)
+
+            result[instance.id] = {}
+
+        return result
+
+    @convert_boto_errors
+    def power_off_instances(self, props):
+        """
+        Stop AWS instances.
+        """
+        return self._startstop_instances(props,
+                                         self._stop_instance,
+                                         ["running"],
+                                         "stopped")
+
+    @convert_boto_errors
+    def power_on_instances(self, props):
+        """
+        Restart AWS instances.
+        """
+        return self._startstop_instances(props,
+                                         self._start_instance,
+                                         ["stopping", "stopped"],
+                                         "running")
