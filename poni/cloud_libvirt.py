@@ -130,9 +130,10 @@ class LibvirtProvider(Provider):
             if libvirt.getVersion() < 9004:
                 # libvirt support for no_verify was introduced in 0.9.4
                 procs = []
-                for host in self.hosts.iterkeys():
+                for hostport in self.hosts.iterkeys():
+                    host, _, port = hostport.partition(':')
                     args = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no",
-                            "root@{0}".format(host), "uptime"]
+                            "-p{0}".format(port), "root@{0}".format(host), "uptime"]
                     procs.append(subprocess.Popen(args))
                 [proc.wait() for proc in procs]
 
