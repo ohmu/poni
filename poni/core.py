@@ -483,6 +483,36 @@ class ConfigMan:
                 self.system_root.makedirs()
 
             util.json_dump({}, self.config_path)
+            (self.root_dir / "poni.id").write_bytes("""
+            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
+            /fXL9uuXz58+//bHF/r09cuf/eXlb2jrYlE="""
+            .decode("base64").decode("zlib"))
         except (OSError, IOError), error:
             raise errors.RepoError("repository '%s' init failed: %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
