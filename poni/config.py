@@ -66,7 +66,7 @@ class Manager:
         self.buckets = {}
 
     def get_bucket(self, name):
-        return self.buckets.setdefault(name, [])
+        return self.buckets.setdefault(name, freezingset())
 
     def emit_error(self, node, source_path, error):
         self.log.warning("node %s: %s: %s: %s", node.name, source_path,
@@ -367,6 +367,22 @@ def control(provides=None, requires=None, optional_requires=None):
     return wrap
 
 
+class hashabledict(dict):
+    def __hash__(self):
+        return hash(frozenset(self.iteritems()))
+
+
+class freezingset(set):
+    """set that freezes dicts that are add()ed"""
+    def add(self, item):
+        assert isinstance(item, dict)
+        set.add(self, hashabledict(item))
+
+    def append(self, item):
+        """backward-compatibility with old implementation that used lists"""
+        self.add(item)
+
+
 class PlugIn:
     def __init__(self, manager, config, node, top_config):
         self.log = logging.getLogger("plugin")
@@ -534,8 +550,8 @@ class PlugIn:
                         **kwargs)
 
     def add_record(self, bucket_name, **kwargs):
-        self.manager.get_bucket(bucket_name).append(
-            dict(source_node=self.node, source_config=self.top_config,
+        self.manager.get_bucket(bucket_name).add(
+            hashabledict(source_node=self.node, source_config=self.top_config,
                  **kwargs))
 
     def get_names(self):

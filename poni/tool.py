@@ -953,6 +953,8 @@ class Tool:
                   **verify_options):
         manager = self.get_manager(confman)
         self.collect_all(manager)
+        self.log.debug("verify_op %r: confman cache=%r, manager files=%r, buckets=%r",
+                       target, confman.dump_stats(), len(manager.files), dict((k, len(v)) for k, v in manager.buckets.iteritems()))
 
         if target:
             if exclude:

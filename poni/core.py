@@ -457,6 +457,13 @@ class ConfigMan:
 
         self.vc = vc.create_vc(self.root_dir)
 
+    def dump_stats(self):
+        return dict(
+            node_cache=len(self.node_cache),
+            find_cache=len(self.find_cache),
+            find_config_cache=len(self.find_config_cache),
+            )
+
     def reset_cache(self):
         self.node_cache = {}
         self.find_cache = {}
