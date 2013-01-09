@@ -433,6 +433,8 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
+    @arg_flag("-i", "--ignore-missing",
+              help="do not fail in case no matching operations are found")
     @arg_quiet
     @arg_output_dir
     @arg_flag("-t", "--clock-tasks", dest="show_times",
@@ -472,6 +474,7 @@ class Tool:
                     ops.append(op)
 
         handled = set()
+
         def add_all_required_ops(op):
             key = (op["node"].name, op["config"].name, op["name"])
             if key in handled:
@@ -515,11 +518,15 @@ class Tool:
                 or not comparison.match_config(conf.name)):
                 continue
 
-            op["run"] = True # only explicit targets are marked for running
+            op["run"] = True  # only explicit targets are marked for running
             add_all_required_ops(op)
 
         if not tasks:
-            raise errors.UserError("no matching operations found")
+            if arg.ignore_missing:
+                self.log.info("no matching operations found: --ignore-missing specified, ok!")
+                return
+            else:
+                raise errors.UserError("no matching operations found")
 
         if arg.no_deps:
             # filter out the implicit dependency tasks
