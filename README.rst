@@ -59,9 +59,11 @@ Installing the following Python libraries will add optional functionality:
 
 * Paramiko_ (Remote node control using SSH)
 * GitPython_ (Version controlling the repository with Git)
-* Boto_ (`Amazon EC2`_ virtual machine provisioning)
 * Genshi_ (XML-based templating)
+* Boto_ (`Amazon EC2`_ virtual machine provisioning)
 * pyvsphere_ (VMWare virtual machine provisioning)
+* libvirt-python_ (libvirt virtual machine provisioning)
+* PyDNS_ (libvirt provisioning dependency)
 
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
 .. _Paramiko: http://pypi.python.org/pypi/paramiko
@@ -73,6 +75,8 @@ Installing the following Python libraries will add optional functionality:
 .. _Genshi: http://pypi.python.org/pypi/Genshi
 .. _Sphinx: http://sphinx.pocoo.org/
 .. _pyvsphere: https://github.com/F-Secure/pyvsphere
+.. _libvirt-python: http://libvirt.org/python.html
+.. _PyDNS: http://pydns.sourceforge.net/
 
 Installation using pip or easy_install
 --------------------------------------
@@ -106,7 +110,7 @@ Thanks for the contributions!
 * Santeri Paavolainen (fixes)
 * Lakshmi Vyas (new features for AWS-EC2 support)
 * Lauri Heiskanen (enabling pseudo-tty)
-* F-Secure Corporation (major improvements, VMWare vSphere support)
+* F-Secure Corporation (major improvements, VMWare vSphere and libvirt support)
 
 License (Apache 2.0)
 ====================
