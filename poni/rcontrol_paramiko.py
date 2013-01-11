@@ -84,6 +84,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         rcontrol.SshRemoteControl.__init__(self, node)
         self._ssh = None
         self._sftp = None
+        self.ping_interval = 10
 
     def get_sftp(self):
         if not self._sftp:
@@ -192,6 +193,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         rx_time = time.time()
         log_name = "%s (%s): %r" % (self.node.name, self.node.get("host"), cmd)
         next_warn = time.time() + self.warn_timeout
+        next_ping = time.time() + self.ping_interval
 
         def available_output():
             """read all the output that is immediately available"""
@@ -234,6 +236,10 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                 self.log.warning("%s: no output in %.1fs", log_name,
                                  elapsed_since)
                 next_warn = time.time() + self.warn_timeout
+
+            if now > next_ping:
+                channel.transport.send_ignore()
+                next_ping = time.time() + self.ping_interval
 
     @convert_paramiko_errors
     def execute_shell(self):
