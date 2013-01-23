@@ -1275,6 +1275,7 @@ class Tool:
                             help="time-log this operation as NAME")
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
+            type=lambda rel_path: os.path.abspath(rel_path),
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
         parser.add_argument(
