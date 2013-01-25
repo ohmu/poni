@@ -258,6 +258,7 @@ class Tool:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
 
         variables = dict(util.parse_prop(var) for var in arg.variable)
+        variables['current_script_dir'] = os.path.dirname(arg.script)
         try:
             script_text = str(CheetahTemplate(script_text,
                                               searchList=[variables]))
@@ -327,8 +328,8 @@ class Tool:
                 elif source_path.isdir():
                     assert 0, "unimplemented"
                 else:
-                    raise errors.UserError("don't know how to handle: %r" %
-                                           str(source_path))
+                    raise errors.UserError("don't know how to handle: %r (cwd: %s)" %
+                                           (str(source_path), os.getcwd()))
 
     @argh.alias("add-config")
     @arg_verbose
