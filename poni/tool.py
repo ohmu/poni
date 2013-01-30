@@ -697,14 +697,19 @@ class Tool:
         """terminate cloud instances"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         count = 0
+        # group operations by provider
+        clouds = {}
         for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if cloud_prop.get("instance"):
                 provider = self.sky.get_provider(cloud_prop)
-                provider.terminate_instances([cloud_prop])
-                self.log.info("terminated: %s", node.name)
-                count += 1
-
+                if provider not in clouds:
+                    clouds[provider] = []
+                clouds[provider].append(cloud_prop)
+                self.log.info("terminating: %s", node.name)
+        for provider, props in clouds.iteritems():
+            provider.terminate_instances(props)
+            count += len(props)
         self.log.info("%s instances terminated", count)
 
     @argh.alias("update")
