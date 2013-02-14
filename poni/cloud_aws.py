@@ -547,12 +547,6 @@ class AwsProvider(cloudbase.Provider):
             if not disk:
                 continue
 
-            size_gb = int(disk["size"] / 1024) # disk size property definitions are in MB
-            if size_gb <= 0:
-                raise errors.CloudError(
-                    "%s: invalid AWS EBS disk size %r, must be 1024 MB or greater" % (
-                        vm_name, disk["size"]))
-
             try:
                 device = disk["device"]
             except KeyError:
@@ -561,10 +555,26 @@ class AwsProvider(cloudbase.Provider):
                     " but not found" % vm_name)
 
             dev = boto.ec2.blockdevicemapping.BlockDeviceType()
-            dev.size = size_gb
+            # if type is not specified we assume EBS
+            if disk.get("type", '').startswith("ephemeral"):
+                # If it is ephemeral type the size has no meaning anymore
+                # we get the whole disk
+                # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/InstanceStorage.html
+                dev.ephemeral_name = disk.get("type")
+            else:
+                size_gb = int(disk["size"] / 1024)  # disk size property definitions are in MB
+                if size_gb <= 0:
+                    raise errors.CloudError(
+                        "%s: invalid AWS EBS disk size %r, must be 1024 MB or greater" % (
+                            vm_name, disk["size"]))
+
+                dev.size = size_gb
+
             dev.delete_on_termination = disk.get("delete_on_termination", True)
             if disk.get("snapshot"):
                 dev.snapshot_id = disk.get("snapshot")
+
+            self.log.info("%s: device %s type %s", cloud_prop.get("vm_name"), device, disk.get("type"))
 
             disk_map[device] = dev
 
