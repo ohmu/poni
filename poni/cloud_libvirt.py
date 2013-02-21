@@ -755,7 +755,7 @@ class PoniLVPool(object):
         try:
             vol = self.pool.createXML(desc, 0)
         except libvirt.libvirtError, ex:
-            if "storage vol already exists" not in str(ex):
+            if not re.search("storage vol( '.*?')? already exists", str(ex)):
                 raise
             if not overwrite:
                 raise LVPError("%r volume already exists" % (spec["fullname"], ))
