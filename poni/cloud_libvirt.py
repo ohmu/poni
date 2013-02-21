@@ -637,7 +637,7 @@ class PoniLVConn(object):
                 "path": disk_path,
                 "disk_type": disk_type,
                 "driver_type": driver_type,
-                "cache": item.get("cache", "writeback"),
+                "cache": item.get("cache", "none"),
                 "source": "dev" if disk_type == "block" else "file",
                 "target_dev": dev_name,
             }

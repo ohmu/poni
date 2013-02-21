@@ -258,6 +258,7 @@ class Tool:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
 
         variables = dict(util.parse_prop(var) for var in arg.variable)
+        variables['current_script_dir'] = os.path.dirname(arg.script)
         try:
             script_text = str(CheetahTemplate(script_text,
                                               searchList=[variables]))
@@ -327,8 +328,8 @@ class Tool:
                 elif source_path.isdir():
                     assert 0, "unimplemented"
                 else:
-                    raise errors.UserError("don't know how to handle: %r" %
-                                           str(source_path))
+                    raise errors.UserError("don't know how to handle: %r (cwd: %s)" %
+                                           (str(source_path), os.getcwd()))
 
     @argh.alias("add-config")
     @arg_verbose
@@ -433,6 +434,8 @@ class Tool:
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
+    @arg_flag("-i", "--ignore-missing",
+              help="do not fail in case no matching operations are found")
     @arg_quiet
     @arg_output_dir
     @arg_flag("-t", "--clock-tasks", dest="show_times",
@@ -472,6 +475,7 @@ class Tool:
                     ops.append(op)
 
         handled = set()
+
         def add_all_required_ops(op):
             key = (op["node"].name, op["config"].name, op["name"])
             if key in handled:
@@ -515,11 +519,15 @@ class Tool:
                 or not comparison.match_config(conf.name)):
                 continue
 
-            op["run"] = True # only explicit targets are marked for running
+            op["run"] = True  # only explicit targets are marked for running
             add_all_required_ops(op)
 
         if not tasks:
-            raise errors.UserError("no matching operations found")
+            if arg.ignore_missing:
+                self.log.info("no matching operations found: --ignore-missing specified, ok!")
+                return
+            else:
+                raise errors.UserError("no matching operations found")
 
         if arg.no_deps:
             # filter out the implicit dependency tasks
@@ -689,14 +697,19 @@ class Tool:
         """terminate cloud instances"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         count = 0
+        # group operations by provider
+        clouds = {}
         for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
             if cloud_prop.get("instance"):
                 provider = self.sky.get_provider(cloud_prop)
-                provider.terminate_instances([cloud_prop])
-                self.log.info("terminated: %s", node.name)
-                count += 1
-
+                if provider not in clouds:
+                    clouds[provider] = []
+                clouds[provider].append(cloud_prop)
+                self.log.info("terminating: %s", node.name)
+        for provider, props in clouds.iteritems():
+            provider.terminate_instances(props)
+            count += len(props)
         self.log.info("%s instances terminated", count)
 
     @argh.alias("update")
@@ -953,6 +966,8 @@ class Tool:
                   **verify_options):
         manager = self.get_manager(confman)
         self.collect_all(manager)
+        self.log.debug("verify_op %r: confman cache=%r, manager files=%r, buckets=%r",
+                       target, confman.dump_stats(), len(manager.files), dict((k, len(v)) for k, v in manager.buckets.iteritems()))
 
         if target:
             if exclude:
@@ -1266,6 +1281,7 @@ class Tool:
                             help="time-log this operation as NAME")
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
+            type=lambda rel_path: os.path.abspath(rel_path),
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
         parser.add_argument(

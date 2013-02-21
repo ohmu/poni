@@ -84,13 +84,11 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         rcontrol.SshRemoteControl.__init__(self, node)
         self._ssh = None
         self._sftp = None
+        self.ping_interval = 10
 
     def get_sftp(self):
         if not self._sftp:
-            if self._ssh:
-                self._sftp = self._ssh.open_sftp()
-            if not self._sftp:
-                self._sftp = self.get_ssh().open_sftp()
+            self._sftp = self.get_ssh(lambda ssh: ssh.open_sftp())
         return self._sftp
 
     @convert_paramiko_errors
@@ -127,7 +125,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
             self._ssh.close()
             self._ssh = None
 
-    def get_ssh(self):
+    def get_ssh(self, action=None):
         host = self.node.get("host")
         user = self.node.get("user")
         password = self.node.get("password")
@@ -139,9 +137,6 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         elif not user:
             raise errors.RemoteError("%s: 'user' property not defined" % (
                 self.node.name))
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         if self.key_filename:
             key_file = self.key_filename
@@ -157,30 +152,32 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         end_time = time.time() + self.connect_timeout
         while time.time() < end_time:
             try:
-                ssh.connect(host, port=port, username=user, key_filename=key_file, password=password)
-                self._ssh = ssh
-                return self._ssh
+                if not self._ssh:
+                    ssh = paramiko.SSHClient()
+                    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    ssh.connect(host, port=port, username=user, key_filename=key_file, password=password)
+                    self._ssh = ssh
+                return action(self._ssh) if action else self._ssh
             except (socket.error, paramiko.SSHException), error:
                 remaining = max(0, end_time - time.time())
                 self.log.warning("%s: ssh connection to %s failed: %s: %s, "
                                  "retry time remaining=%.0fs" % (
                                  self.node.name, host,
                                  error.__class__.__name__, error, remaining))
-                time.sleep(5)
+                self._ssh = None
+                time.sleep(2.5)
 
         raise errors.RemoteError("%s: ssh connect failed: %s: %s" % (
                 self.node.name, error.__class__.__name__, error))
 
     @convert_paramiko_errors
     def execute_command(self, cmd, pseudo_tty=False):
-        channel = None
-        if self._ssh:
-            transport = self._ssh.get_transport()
-            channel = transport.open_session()
-        if not channel:
-            transport = self.get_ssh().get_transport()
-            channel = transport.open_session()
-
+        def get_channel(ssh):
+            channel = ssh.get_transport().open_session()
+            if not channel:
+                raise paramiko.SSHException("channel opening failed")
+            return channel
+        channel = self.get_ssh(get_channel)
         if not channel:
             raise errors.RemoteError("failed to open an SSH session to %s" % (
                     self.node.name))
@@ -192,6 +189,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         rx_time = time.time()
         log_name = "%s (%s): %r" % (self.node.name, self.node.get("host"), cmd)
         next_warn = time.time() + self.warn_timeout
+        next_ping = time.time() + self.ping_interval
 
         def available_output():
             """read all the output that is immediately available"""
@@ -235,13 +233,17 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                                  elapsed_since)
                 next_warn = time.time() + self.warn_timeout
 
+            if now > next_ping:
+                channel.transport.send_ignore()
+                next_ping = time.time() + self.ping_interval
+
     @convert_paramiko_errors
     def execute_shell(self):
-        ssh = self._ssh if self._ssh else self.get_ssh()
-        channel = None
+        def invoke_shell(ssh):
+            # TODO: get dimensions from `stty size` or something like that
+            return ssh.invoke_shell(term='vt100', width=80, height=24)
         try:
-            channel = ssh.invoke_shell(term='vt100',
-                                       width=80, height=24) # TODO: dimensions?
+            channel = self.get_ssh(invoke_shell)
             interactive_shell(channel)
         finally:
             if channel:
