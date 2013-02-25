@@ -110,7 +110,7 @@ class Manager:
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
                verbose=False, callback=None, path_prefix="", raw=False,
-               access_method=None, color="auto", config_patterns=None):
+               access_method=None, color="auto", config_patterns=None, tag=None):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
@@ -119,6 +119,7 @@ class Manager:
         color = colors.Output(sys.stdout, color=color).color
         stats = util.PropDict(dict(error_count=0, file_count=0))
         config_patterns = [re.compile(p) for p in (config_patterns or [])]
+        tag = tag or ""  # empty string indicates untagged files
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
@@ -128,7 +129,9 @@ class Manager:
                 self.log.debug("filtered: config patterns do not match: %r", entry)
                 continue
 
-            filtered_out = False
+            # is the target excluded from the operation by --tag?
+            filtered_out = tag not in (entry.get("tags") or [""])
+
             if callback and not callback(entry):
                 self.log.debug("filtered: callback: %r", entry)
                 filtered_out = True
@@ -355,7 +358,9 @@ class Manager:
 
         return error
 
-    def add_file(self, **kw):
+    def add_file(self, tags=None, **kw):
+        tags = ([tags] if isinstance(tags, basestring) else tags) if tags else []
+        kw["tags"] = tags
         self.files.append(kw)
 
 
@@ -504,7 +509,7 @@ class PlugIn:
     def add_file(self, source_path, dest_path=None, source_text=None,
                  dest_bucket=None, owner=None, group=None,
                  render=None, report=False, post_process=None, mode=None,
-                 auto_override=False):
+                 auto_override=False, tags=None):
         render = render or self.render_cheetah
         if auto_override:
             source_path = self.get_override_config_path(source_path)
@@ -516,13 +521,14 @@ class PlugIn:
                                      post_process=post_process,
                                      dest_bucket=dest_bucket,
                                      owner=owner, group=group,
-                                     mode=mode)
+                                     mode=mode, tags=tags)
 
-    def add_dir(self, source_path, dest_path, render=None):
+    def add_dir(self, source_path, dest_path, render=None, tags=None):
         render = render or self.render_cheetah
         return self.manager.add_file(type="dir", node=self.node,
                                      config=self.config, dest_path=dest_path,
-                                     source_path=source_path, render=render)
+                                     source_path=source_path, render=render,
+                                     tag=tags)
 
     def get_one(self, name, nodes=True, systems=False):
         hits = list(self.manager.confman.find(name, nodes=nodes,

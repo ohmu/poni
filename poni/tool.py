@@ -70,6 +70,8 @@ arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
                           help="write command output to files in DIR")
 arg_config_pattern = argh.arg("-c", "--config", metavar="PATTERN", type=str, nargs="*",
                               help='apply to only configs matching pattern')
+arg_tag = argh.arg("-t", "--tag", metavar="TAG", type=str,
+                   help='apply to only files that are labeled with the specified tag')
 
 
 class ControlTask(work.Task):
@@ -1001,6 +1003,7 @@ class Tool:
     @arg_flag("-d", "--diff", dest="show_diff",
               help="show raw template vs. rendered output diff")
     @arg_config_pattern
+    @arg_tag
     def handle_show(self, arg):
         """render and show node config files"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1008,7 +1011,8 @@ class Tool:
             confman, arg.nodes, show=(not arg.show_buckets),
             full_match=arg.full_match, raw=arg.show_raw,
             color=arg.color, show_diff=arg.show_diff,
-            exclude=arg.exclude, config_patterns=arg.config)
+            exclude=arg.exclude, config_patterns=arg.config,
+            tag=arg.tag)
 
         if arg.show_buckets:
             for name, items in manager.buckets.iteritems():
@@ -1031,6 +1035,7 @@ class Tool:
     @arg_target_nodes_0_to_n
     @arg_host_access_method
     @arg_config_pattern
+    @arg_tag
     def handle_deploy(self, arg):
         """deploy node configs"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1038,7 +1043,7 @@ class Tool:
             confman, arg.nodes, show=False, deploy=True, verbose=arg.verbose,
             full_match=arg.full_match, path_prefix=arg.path_prefix,
             access_method=arg.method, color=arg.color,
-            exclude=arg.exclude, config_patterns=arg.config)
+            exclude=arg.exclude, config_patterns=arg.config, tag=arg.tag)
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
                            stats.error_count, stats.file_count))
@@ -1055,6 +1060,7 @@ class Tool:
     @arg_host_access_method
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
     @arg_config_pattern
+    @arg_tag
     def handle_audit(self, arg):
         """audit active node configs"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1063,7 +1069,7 @@ class Tool:
             show_diff=arg.show_diff, full_match=arg.full_match,
             path_prefix=arg.path_prefix, access_method=arg.method,
             color=arg.color, verbose=arg.verbose,
-            exclude=arg.exclude, config_patterns=arg.config)
+            exclude=arg.exclude, config_patterns=arg.config, tag=arg.tag)
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
@@ -1078,6 +1084,7 @@ class Tool:
     @arg_full_match
     @arg_host_access_method
     @arg_config_pattern
+    @arg_tag
     @arg_target_nodes_0_to_n
     def handle_verify(self, arg):
         """verify local node configs"""
@@ -1085,7 +1092,8 @@ class Tool:
         manager, stats = self.verify_op(
             confman, arg.nodes, show=False, full_match=arg.full_match,
             access_method=arg.method, verbose=arg.verbose,
-            color=arg.color, exclude=arg.exclude, config_patterns=arg.config)
+            color=arg.color, exclude=arg.exclude, config_patterns=arg.config,
+            tag=arg.tag)
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
