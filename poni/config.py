@@ -14,6 +14,7 @@ import difflib
 import itertools
 import logging
 import random
+import re
 import sys
 import time
 
@@ -109,18 +110,22 @@ class Manager:
 
     def verify(self, show=False, deploy=False, audit=False, show_diff=False,
                verbose=False, callback=None, path_prefix="", raw=False,
-               access_method=None, color="auto"):
+               access_method=None, color="auto", config_patterns=None):
         self.log.debug("verify: %s", dict(show=show, deploy=deploy,
                                           audit=audit, show_diff=show_diff,
                                           verbose=verbose, callback=callback))
         files = [f for f in self.files if not f.get("report")]
         reports = [f for f in self.files if f.get("report")]
-
         color = colors.Output(sys.stdout, color=color).color
         stats = util.PropDict(dict(error_count=0, file_count=0))
+        config_patterns = [re.compile(p) for p in (config_patterns or [])]
         for entry in itertools.chain(files, reports):
             if not entry["node"].verify_enabled():
                 self.log.debug("filtered: verify disabled: %r", entry)
+                continue
+
+            if config_patterns and not any(p.search(entry["config"].name) for p in config_patterns):
+                self.log.debug("filtered: config patterns do not match: %r", entry)
                 continue
 
             filtered_out = False
