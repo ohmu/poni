@@ -903,9 +903,9 @@ class PoniLVDom(object):
 
     @convert_lvdom_errors
     def revert_to_snapshot(self, name):
-        self.log.info("reverting %r to %r", name, self.name)
+        self.log.info("reverting %r to %r by force", name, self.name)
         snap = self.dom.snapshotLookupByName(name, 0)
-        self.dom.revertToSnapshot(snap, 0)
+        self.dom.revertToSnapshot(snap, libvirt.VIR_DOMAIN_SNAPSHOT_REVERT_FORCE)
 
 
 def mac_to_ipv6(prefix, mac):
