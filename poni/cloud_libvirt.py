@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import socket
 import subprocess
@@ -19,6 +20,7 @@ import uuid
 from xml.dom.minidom import parseString as xmlparse
 from poni.cloudbase import Provider
 from poni.errors import CloudError
+from poni import util
 import paramiko
 
 MISSING_LIBS = []
@@ -212,10 +214,18 @@ class LibvirtProvider(Provider):
 
     def __get_instances(self, props, non_existent=False):
         vms = {}
-        for conn in self.conns():
+        tasks = util.TaskPool()
+
+        def add_vms(conn):
             conn.refresh()
             for vm_name in conn.vms:
                 vms.setdefault(vm_name, []).append(conn)
+
+        for conn in self.conns():
+            tasks.apply_async(add_vms, [conn])
+
+        tasks.wait_all()
+
         props = dict((prop["vm_name"], prop) for prop in props)
         for vm_name, prop in props.iteritems():
             if vm_name in vms:
@@ -239,15 +249,42 @@ class LibvirtProvider(Provider):
         out_prop["instance"] = prop["vm_name"]
         return dict(cloud=out_prop)
 
+    def delete_vm(self, conn, instance):
+        """Delete a VM instance"""
+        self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
+        conn.delete_vm(instance["vm_name"])
+
     def terminate_instances(self, props):
         """
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
+        tasks = util.TaskPool()
         for instance in self.__get_instances(props):
             for conn in instance["vm_conns"]:
-                self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
-                conn.delete_vm(instance["vm_name"])
+                tasks.apply_async(self.delete_vm, [conn, instance])
+
+        tasks.wait_all()
+
+    def weighted_random_choice(self, cands):
+        """Weighted random selection of a single target host from a list of candidates"""
+        # Only consider the entries with the highest priority (lowest service priority value)
+        lowest_priority = min(conn.srv_priority for conn in cands)
+        result = sorted(((conn.weight, conn) for conn in cands
+                         if conn.srv_priority == lowest_priority),
+                        reverse=True)
+        if not result:
+            raise LVPError("No connection available for cloning {0}".format(instance["vm_name"]))
+
+        total_weight = sum(e[0] for e in result)
+        random_pos = random.random() * total_weight
+        weight_pos = 0.0
+        for weight, conn in result:
+            weight_pos += weight
+            if weight_pos >= random_pos:
+                return conn
+
+        assert False, "execution should never end up here"
 
     def wait_instances(self, props, wait_state="running"):
         """
@@ -263,23 +300,22 @@ class LibvirtProvider(Provider):
         cloning_start = time.time()
 
         self.log.info("deleting existing VM instances")
+        tasks = util.TaskPool()
         for instance in self.__get_instances(props):
             # Delete any existing instances if required to reinit (the
             # default) or if the same VM was found from multiple hosts.
             if instance["prop"].get("reinit", True) or len(instance["vm_conns"]) > 1:
                 for conn in instance["vm_conns"]:
-                    self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
-                    conn.delete_vm(instance["vm_name"])
+                    tasks.apply_async(self.delete_vm, [conn, instance])
 
-        self.log.info("cloning VM instances")
-        instances = []
-        conns = [conn for conn in self.conns() if conn.srv_weight > 0]
-        for instance in self.__get_instances(props, non_existent=True):
+        tasks.wait_all()
+
+        def clone_instance(instance):
             prop = instance["prop"]
             ipv6pre = prop.get("ipv6_prefix")
 
             if instance["vm_state"] == "VM_RUNNING":
-                continue  # done
+                return  # done
             elif instance["vm_state"] == "VM_DIRTY":
                 # turn this into an active instance
                 vm = instance["vm_conns"][0].vms[instance["vm_name"]]
@@ -292,17 +328,13 @@ class LibvirtProvider(Provider):
                     cands = (conn for conn in cands if prop["hosts"]["exclude"] not in conn.host)
                 if prop.get("hosts", {}).get("include"):
                     cands = (conn for conn in cands if prop["hosts"]["include"] in conn.host)
-                # Only consider the entries with the highest priority (lowest service priority value)
-                result = sorted((-conn.srv_priority, conn.weight, conn) for conn in cands)
-                if not result:
-                    raise LVPError("No connection available for cloning {0}".format(instance["vm_name"]))
-                conn = result[-1][-1]
 
+                conn = self.weighted_random_choice(cands)
                 self.log.info("cloning %r on %r", instance["vm_name"], conn.host)
                 vm = conn.clone_vm(instance["vm_name"], prop, overwrite=True)
                 instance["vm_conns"] = [conn]
             else:
-                continue  # XXX
+                return  # XXX
 
             instance["vm_state"] = "VM_RUNNING"
             instance["ipproto"] = prop.get("ipproto", "ipv4")
@@ -310,6 +342,14 @@ class LibvirtProvider(Provider):
             instance["ssh_key"] = "{0}/.ssh/{1}".format(home, prop["ssh_key"])
             instances.append(instance)
 
+        self.log.info("cloning VM instances")
+        instances = []
+        conns = [conn for conn in self.conns() if conn.srv_weight > 0]
+        tasks = util.TaskPool()
+        for instance in self.__get_instances(props, non_existent=True):
+            tasks.apply_async(clone_instance, [instance])
+
+        tasks.wait_all()
         self.log.info("cloning done: took %.2fs" % (time.time() - cloning_start))
 
         # get ipv4 addresses for the hosts (XXX: come up with something better)

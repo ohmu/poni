@@ -6,7 +6,9 @@ See LICENSE for details.
 
 """
 
+import logging
 import os
+from multiprocessing.pool import ThreadPool
 from path import path
 from . import errors
 from . import recode
@@ -160,3 +162,23 @@ def path_iter_dict(dict_obj, prefix=None):
 class PropDict(dict):
     def __getattr__(self, name):
         return self.get(name, None)
+
+
+class TaskPool(ThreadPool):
+    def __init__(self, task_count=8):
+        ThreadPool.__init__(self, task_count)
+        self.log = logging.getLogger("taskpool")
+
+    def _call_wrapper(self, method, method_args, method_kwargs=None):
+        try:
+            return method(*method_args, **(method_kwargs or {}))
+        except Exception as error:
+            self.log.exception("task error: {0.__class__.__name__}: {0}".format(error))
+            raise
+
+    def apply_async(self, method, args):
+        ThreadPool.apply_async(self, self._call_wrapper, [method, args])
+
+    def wait_all(self):
+        self.close()
+        self.join()
