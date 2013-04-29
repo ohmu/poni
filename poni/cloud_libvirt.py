@@ -44,8 +44,9 @@ else:
             if self._log_channel is not None:
                 self._transport.set_log_channel(self._log_channel)
             self._transport.start_client()
-            paramiko.resource.ResourceManager.register(self, self._transport) # pylint: disable=E1120
+            paramiko.resource.ResourceManager.register(self, self._transport)  # pylint: disable=E1120
             self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
+
 
 def _do_dns_lookup(req, max_retries=3):
     "Make a DNS lookup and retry on DNS timeouts"
@@ -58,6 +59,7 @@ def _do_dns_lookup(req, max_retries=3):
             time.sleep(1)
             tri += 1
     raise
+
 
 def _lv_dns_lookup(name, qtype):
     """DNS lookup using PyDNS, handles retry over TCP in case of truncation
@@ -80,12 +82,15 @@ def _lv_dns_lookup(name, qtype):
             result.append(a["data"])
     return result
 
+
 def _created_str():
     return "created by poni.cloud_libvirt by {0}@{1} on {2}+00:00".format(
         os.getenv("USER"), socket.gethostname(), datetime.datetime.utcnow().isoformat()[0:19])
 
+
 class LVPError(CloudError):
     """LibvirtProvider error"""
+
 
 class LibvirtProvider(Provider):
     def __init__(self, cloud_prop):
@@ -222,7 +227,7 @@ class LibvirtProvider(Provider):
             ipv6pre = prop.get("ipv6_prefix")
 
             if instance["vm_state"] == "VM_RUNNING":
-                continue # done
+                continue  # done
             elif instance["vm_state"] == "VM_DIRTY":
                 # turn this into an active instance
                 vm = instance["vm_conns"][0].vms[instance["vm_name"]]
@@ -245,7 +250,7 @@ class LibvirtProvider(Provider):
                 vm = conn.clone_vm(instance["vm_name"], prop, overwrite=True)
                 instance["vm_conns"] = [conn]
             else:
-                continue # XXX
+                continue  # XXX
 
             instance["vm_state"] = "VM_RUNNING"
             instance["ipproto"] = prop.get("ipproto", "ipv4")
@@ -294,7 +299,7 @@ class LibvirtProvider(Provider):
                     tunchan = trans.open_channel("direct-tcpip", (instance["ipv6"], 22), ("localhost", 0))
                     client = SSHClientLVP()
                     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    client.connect_socket(tunchan, username = "root", key_filename = instance["ssh_key"])
+                    client.connect_socket(tunchan, username="root", key_filename=instance["ssh_key"])
                     cmdchan = client.get_transport().open_session()
                     cmdchan.set_combine_stderr(True)
                     cmdchan.exec_command('ip -4 addr show scope global')
@@ -400,12 +405,13 @@ class PoniLVXmlOb(object):
             return PoniLVXmlOb()
         elem = self.__tree.getElementsByTagName(name)
         if elem:
-            return PoniLVXmlOb(tree=elem[0], path=self.__path+[name])
+            return PoniLVXmlOb(tree=elem[0], path=(self.__path + [name]))
         if name.endswith("_list"):
             name = name[:-5]
             elems = self.__tree.getElementsByTagName(name)
-            return [PoniLVXmlOb(tree=elem, path=self.__path+[name]) for elem in elems]
+            return [PoniLVXmlOb(tree=elem, path=(self.__path + [name])) for elem in elems]
         return PoniLVXmlOb()
+
 
 class PoniLVConn(object):
     def __init__(self, host, port=None, uri=None, keyfile=None, priority=None, weight=None):
@@ -441,8 +447,8 @@ class PoniLVConn(object):
     def weight(self):
         """calculate a weight for this node based on its cpus and ram"""
         counters = {
-            "total_mhz": self.vms_online + self.cpus_online/4.0,
-            "memory": self.vms_online + self.ram_online/4096.0,
+            "total_mhz": self.vms_online + self.cpus_online / 4.0,
+            "memory": self.vms_online + self.ram_online / 4096.0,
         }
         load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters.iteritems())
         return load_w * self.srv_weight
@@ -502,7 +508,7 @@ class PoniLVConn(object):
             self.pools[name] = pool
         doms = [dom for dom in self.vms.itervalues() if dom.info["cputime"] > 0]
         self.cpus_online = sum(dom.info["cpus"] for dom in doms)
-        self.ram_online = sum(dom.info["maxmem"]/1024 for dom in doms)
+        self.ram_online = sum(dom.info["maxmem"] / 1024 for dom in doms)
 
     def delete_vm(self, vm_name):
         if vm_name not in self.vms:
@@ -573,13 +579,15 @@ class PoniLVConn(object):
                 </disk>
                 """
         spec = copy.deepcopy(spec)
+
         def macaddr(index):
             """create a mac address based on the VM name for DHCP predictability"""
             mac_ext = hashlib.md5(name).hexdigest()
-            return "52:54:00:%s:%s:%02x" % (mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16)^index)
+            return "52:54:00:%s:%s:%02x" % (mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16) ^ index)
+
         def gethw(prefix):
             """grab all relevant hardware entries from spec"""
-            fp = "hardware."+prefix
+            fp = "hardware." + prefix
             rel = sorted((int(k[len(fp):]), k) for k in spec.iterkeys() if k.startswith(fp))
             return [spec[k] for i, k in rel]
 
@@ -616,9 +624,9 @@ class PoniLVConn(object):
                 pool = self.pools[item["pool"]]
                 vol_name = "%s-%s" % (name, dev_name)
                 if "clone" in item:
-                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite = overwrite)
+                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite=overwrite)
                 if "create" in item:
-                    vol = pool.create_volume(vol_name, item["size"], overwrite = overwrite)
+                    vol = pool.create_volume(vol_name, item["size"], overwrite=overwrite)
                 disk_path = vol.path
                 disk_type = vol.device
                 driver_type = vol.format
@@ -653,7 +661,7 @@ class PoniLVConn(object):
                 "type": item.get("type", "network"),
                 "network": item.get("network", default_network),
             }
-            if "bridge" in item: # support for old style bridge-only defs
+            if "bridge" in item:  # support for old style bridge-only defs
                 ispec["type"] = "bridge"
                 ispec["network"] = item["bridge"]
             spec["interfaces"] += interface_desc % ispec
@@ -702,6 +710,7 @@ class PoniLVVol(object):
         self.format = tformat or "raw"
         self.device = "block" if xml.volume.source.device else "file"
 
+
 class PoniLVPool(object):
     def __init__(self, pool):
         self.pool = pool
@@ -714,9 +723,9 @@ class PoniLVPool(object):
     def __pool_info(self):
         vals = self.pool.info()
         self.info = {
-            "capacity": vals[1]/(1024*1024),
-            "used": vals[2]/(1024*1024),
-            "free": vals[3]/(1024*1024),
+            "capacity": vals[1] / (1024 * 1024),
+            "used": vals[2] / (1024 * 1024),
+            "free": vals[3] / (1024 * 1024),
         }
 
     def _define_volume(self, target, megabytes, source, overwrite):
@@ -810,12 +819,14 @@ def convert_lvdom_errors(method):
     wrapper.__name__ = method.__name__
     return wrapper
 
+
 def ignore_lvdom_errors(*errs):
     """Mark various errors to be ignored"""
     def decorate(method):
         method.ignore_lvdom_errors = errs
         return method
     return decorate
+
 
 class PoniLVDom(object):
     def __init__(self, conn, dom):
@@ -829,7 +840,7 @@ class PoniLVDom(object):
         self.__dom_info()
         self.__read_desc()
 
-    def ipv6_addr(self, prefix = "fe80::"):
+    def ipv6_addr(self, prefix="fe80::"):
         return [mac_to_ipv6(prefix, mac) for mac in self.macs]
 
     def delete(self):
@@ -914,5 +925,5 @@ def mac_to_ipv6(prefix, mac):
     addr = "%s%02x%02x:%02xff:fe%02x:%02x%02x" % \
         (prefix, inv_a, int(mp[1], 16), int(mp[2], 16),
          int(mp[3], 16), int(mp[4], 16), int(mp[5], 16))
-    name = socket.getnameinfo((addr, 22), socket.NI_NUMERICSERV|socket.NI_NUMERICHOST)
+    name = socket.getnameinfo((addr, 22), socket.NI_NUMERICSERV | socket.NI_NUMERICHOST)
     return name[0]

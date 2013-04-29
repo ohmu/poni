@@ -17,7 +17,7 @@ except ImportError:
     import simplejson as json
 
 
-DEF_VALUE = object() # used as default value where None cannot be used
+DEF_VALUE = object()  # used as default value where None cannot be used
 
 
 # TODO: refactor and write tests for get_dict_prop/set_dict_prop
