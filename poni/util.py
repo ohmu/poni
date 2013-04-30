@@ -172,6 +172,9 @@ class TaskPool(ThreadPool):
     def _call_wrapper(self, method, method_args, method_kwargs=None):
         try:
             return method(*method_args, **(method_kwargs or {}))
+        except errors.Error as error:
+            self.log.fatal("task error: {0.__class__.__name__}: {0}".format(error))
+            raise
         except Exception as error:
             self.log.exception("task error: {0.__class__.__name__}: {0}".format(error))
             raise
