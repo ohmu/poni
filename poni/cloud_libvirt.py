@@ -100,7 +100,11 @@ class LibvirtProvider(Provider):
         Provider.__init__(self, 'libvirt', cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
         self.ssh_key = None
-        profile = json.load(open(cloud_prop["profile"], "rb"))
+        profile_file = cloud_prop.get("profile")
+        if not profile_file:
+            raise CloudError("required node property 'cloud.profile' pointing to a profile file not defined")
+
+        profile = json.load(open(profile_file, "rb"))
         if "ssh_key" in profile:
             self.ssh_key = os.path.expandvars(os.path.expanduser(profile["ssh_key"]))
 
