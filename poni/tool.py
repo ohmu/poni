@@ -858,9 +858,19 @@ class Tool:
                 updates = provider.wait_instances(props, wait_state=wait_state)
 
                 for node in nodes:
-                    node_update = updates[node["cloud"]["instance"]]
+                    instance_id = node.get("cloud", {}).get("instance")
+                    if not instance_id:
+                        raise errors.CloudError(
+                            "cloud provider failed to set the 'instance' property for node '{0}'".format(
+                                node.name))
 
-                    changes = node.log_update(node_update)
+                    update = updates.get(instance_id)
+                    if not update:
+                        raise errors.CloudError(
+                            "cloud provider failed to return updated properties for node '{0}'".format(
+                                node.name))
+
+                    changes = node.log_update(update)
                     if changes:
                         change_str = ", ".join(
                             ("%s=%r (from %r)" % (c[0], c[2], c[1]))
