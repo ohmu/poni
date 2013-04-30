@@ -165,7 +165,7 @@ class PropDict(dict):
 
 
 class TaskPool(ThreadPool):
-    def __init__(self, task_count=8):
+    def __init__(self, task_count=10):
         ThreadPool.__init__(self, task_count)
         self.log = logging.getLogger("taskpool")
 

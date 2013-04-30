@@ -197,13 +197,20 @@ class LibvirtProvider(Provider):
                 [proc.wait() for proc in procs]
 
             self.hosts_online = []
-            for host, (priority, weight) in self.hosts.iteritems():
+
+            def lv_connect(host, priority, weight):
                 try:
                     conn = PoniLVConn(host, keyfile=self.ssh_key, priority=priority, weight=weight)
                     conn.connect()
                     self.hosts_online.append(conn)
                 except (LVPError, libvirt.libvirtError) as ex:
                     self.log.warn("Connection to %r failed: %r", conn.uri, ex)
+
+            tasks = util.TaskPool()
+            for host, (priority, weight) in self.hosts.iteritems():
+                tasks.apply_async(lv_connect, [host, priority, weight])
+
+            tasks.wait_all()
 
         if not self.hosts_online:
             raise LVPError("No VM hosts available")
@@ -297,11 +304,12 @@ class LibvirtProvider(Provider):
         home = os.getenv("HOME")
         # collapse props to one entry per vm_name
         props = dict((prop["vm_name"], prop) for prop in props).values()
-        cloning_start = time.time()
 
+        instances = self.__get_instances(props)
         self.log.info("deleting existing VM instances")
+        delete_started = time.time()
         tasks = util.TaskPool()
-        for instance in self.__get_instances(props):
+        for instance in instances:
             # Delete any existing instances if required to reinit (the
             # default) or if the same VM was found from multiple hosts.
             if instance["prop"].get("reinit", True) or len(instance["vm_conns"]) > 1:
@@ -309,6 +317,7 @@ class LibvirtProvider(Provider):
                     tasks.apply_async(self.delete_vm, [conn, instance])
 
         tasks.wait_all()
+        cloning_started = time.time()
 
         def clone_instance(instance):
             prop = instance["prop"]
@@ -350,7 +359,7 @@ class LibvirtProvider(Provider):
             tasks.apply_async(clone_instance, [instance])
 
         tasks.wait_all()
-        self.log.info("cloning done: took %.2fs" % (time.time() - cloning_start))
+        boot_started = time.time()
 
         # get ipv4 addresses for the hosts (XXX: come up with something better)
         result = {}
@@ -425,6 +434,10 @@ class LibvirtProvider(Provider):
 
             if not failed:
                 break
+
+        self.log.info("instances ready: delete {1:.2f}s, cloning {2:.2f}s, boot {0:.2f}s".format(
+                cloning_started - delete_started, boot_started - cloning_started,
+                time.time() - boot_started))
 
         [client.close() for client in tunnels.itervalues()]
         self.disconnect()
@@ -754,7 +767,15 @@ class PoniLVConn(object):
         new_desc = desc % spec
         vm = self.conn.defineXML(new_desc)
         self.libvirt_retry(vm.create)
-        self.refresh_list()
+        for retry in range(1, 10):
+            self.refresh_list()
+            if name in self.vms:
+                break
+            time.sleep(2.0)
+            self.log.info("waiting for VM {0} to appear in libvirt hosts... retry #{1}".format(name, retry))
+        else:
+            raise LVPError("VM {0} did not appear in time on libvirt hosts".format(name))
+
         return self.vms[name]
 
     def libvirt_retry(self, op):
