@@ -528,12 +528,16 @@ class ConfigMan:
         conf = self.load_config()
         lib_path = str(lib_path)
         libpath = conf.setdefault("libpath", {})
+        old_path = libpath.get(name)
         libpath[name] = lib_path
 
         # apply the path to sys.path
         sys_lib_path = lib_path if path(lib_path).isabs() else (self.root_dir / lib_path)
         if sys_lib_path not in sys.path:
-            sys.path.append(sys_lib_path)
+            sys.path.insert(0, sys_lib_path)
+
+        if old_path and old_path in sys.path:
+            sys.path.remove(old_path)
 
         self.save_config(conf)
 

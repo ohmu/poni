@@ -28,6 +28,11 @@ try:
 except AttributeError:
     import paramiko
 
+try:
+    from socket import epoll
+except ImportError:
+    epoll = None
+
 
 def convert_paramiko_errors(method):
     """Convert remote Paramiko errors to errors.RemoteError"""
@@ -202,40 +207,53 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
         channel.shutdown_write()
 
         exit_code = None
-        while True:
-            if (exit_code is None) and channel.exit_status_ready():
-                # process has finished executing, but there still may be
-                # output to read from stdout or stderr
-                exit_code = channel.recv_exit_status()
+        if epoll:
+            poll = select.epoll()
+            poll.register(channel.fileno(), select.EPOLLIN)
+        else:
+            poll = None
 
-            # wait for input, note that the results are not used for anything
-            select.select([channel], [], [], 1.0)
+        try:
+            while True:
+                if (exit_code is None) and channel.exit_status_ready():
+                    # process has finished executing, but there still may be
+                    # output to read from stdout or stderr
+                    exit_code = channel.recv_exit_status()
 
-            for output in available_output():
-                rx_time = time.time()
-                next_warn = time.time() + self.warn_timeout
-                yield output
+                # wait for input, note that the results are not used for anything
+                if poll:
+                    poll.poll(timeout=1.0)  # just poll, not interested in the fileno
+                else:
+                    select.select([channel], [], [], 1.0)
 
-            if (exit_code is not None):
-                yield rcontrol.DONE, exit_code
-                break # everything done!
+                for output in available_output():
+                    rx_time = time.time()
+                    next_warn = time.time() + self.warn_timeout
+                    yield output
 
-            now = time.time()
-            if now > (rx_time + self.terminate_timeout):
-                # no output in a long time, terminate connection
-                raise errors.RemoteError(
-                    "%s: no output in %.1f seconds, terminating" % (
-                        log_name, self.terminate_timeout))
+                if (exit_code is not None):
+                    yield rcontrol.DONE, exit_code
+                    break # everything done!
 
-            if now > next_warn:
-                elapsed_since = time.time() - rx_time
-                self.log.warning("%s: no output in %.1fs", log_name,
-                                 elapsed_since)
-                next_warn = time.time() + self.warn_timeout
+                now = time.time()
+                if now > (rx_time + self.terminate_timeout):
+                    # no output in a long time, terminate connection
+                    raise errors.RemoteError(
+                        "%s: no output in %.1f seconds, terminating" % (
+                            log_name, self.terminate_timeout))
 
-            if now > next_ping:
-                channel.transport.send_ignore()
-                next_ping = time.time() + self.ping_interval
+                if now > next_warn:
+                    elapsed_since = time.time() - rx_time
+                    self.log.warning("%s: no output in %.1fs", log_name,
+                                     elapsed_since)
+                    next_warn = time.time() + self.warn_timeout
+
+                if now > next_ping:
+                    channel.transport.send_ignore()
+                    next_ping = time.time() + self.ping_interval
+        finally:
+            if poll:
+                poll.close()
 
     @convert_paramiko_errors
     def execute_shell(self):
