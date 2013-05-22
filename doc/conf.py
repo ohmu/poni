@@ -49,7 +49,7 @@ copyright = u'2010-2012, Mika Eloranta'
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
-git_version = subprocess.Popen(["git", "describe", "--match=[0-9]*"], stdout=subprocess.PIPE).communicate()[0]
+git_version = subprocess.Popen(["git", "describe", "--long"], stdout=subprocess.PIPE).communicate()[0]
 # The short X.Y version.
 version = git_version.split("-")[0]
 # The full version, including alpha/beta/rc tags.
