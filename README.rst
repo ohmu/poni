@@ -57,9 +57,9 @@ automatically installed from PyPI_:
 
 Installing the following Python libraries will add optional functionality:
 
+* Genshi_ (XML-based templating language)
 * Paramiko_ (Remote node control using SSH)
 * GitPython_ (Version controlling the repository with Git)
-* Genshi_ (XML-based templating)
 * Boto_ (`Amazon EC2`_ virtual machine provisioning)
 * pyvsphere_ (VMWare virtual machine provisioning)
 * libvirt-python_ (libvirt virtual machine provisioning)

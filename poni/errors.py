@@ -27,6 +27,9 @@ class SettingsError(Error):
 class VerifyError(Error):
     """verify error"""
 
+class TemplateError(Error):
+    """template rendering error"""
+
 class CloudError(Error):
     """cloud error"""
 
