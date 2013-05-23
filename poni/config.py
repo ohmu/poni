@@ -573,6 +573,9 @@ class PlugIn:
     def render_cheetah(self, source_path, dest_path, source_text=None):
         return self._render(template.render_cheetah, source_text, source_path, dest_path)
 
+    def render_mako(self, source_path, dest_path, source_text=None):
+        return self._render(template.render_mako, source_text, source_path, dest_path)
+
     def render_genshi_xml(self, source_path, dest_path, source_text=None):
         return self._render(template.render_genshi, source_text, source_path, dest_path)
 

@@ -58,6 +58,7 @@ automatically installed from PyPI_:
 Installing the following Python libraries will add optional functionality:
 
 * Genshi_ (XML-based templating language)
+* Mako_ (text-based templating language)
 * Paramiko_ (Remote node control using SSH)
 * GitPython_ (Version controlling the repository with Git)
 * Boto_ (`Amazon EC2`_ virtual machine provisioning)
@@ -72,6 +73,7 @@ Installing the following Python libraries will add optional functionality:
 .. _Argh: http://pypi.python.org/pypi/argh
 .. _GitPython: http://pypi.python.org/pypi/GitPython
 .. _Cheetah: http://pypi.python.org/pypi/Cheetah
+.. _Mako: http://www.makotemplates.org/
 .. _Genshi: http://pypi.python.org/pypi/Genshi
 .. _Sphinx: http://sphinx.pocoo.org/
 .. _pyvsphere: https://github.com/F-Secure/pyvsphere

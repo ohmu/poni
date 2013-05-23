@@ -35,6 +35,12 @@ except ImportError:
     raise
 
 try:
+    from mako.template import Template as MakoTemplate
+    from mako.exceptions import MakoException
+except ImportError:
+    MakoTemplate = None
+
+try:
     import genshi
     import genshi.template
 except ImportError:
@@ -49,6 +55,13 @@ def render_cheetah(source_text, source_path, vars):
         raise errors.TemplateError("{0}: {1}: {2}".format(source_path, error.__class__.__name__, error))
 
 render_name = render_cheetah
+
+def render_mako(source_text, source_path, vars):
+    assert MakoTemplate, "Mako is not installed"
+    try:
+        return MakoTemplate(text=source_text, filename=source_path).render(**vars)
+    except MakoException as error:
+        raise errors.TemplateError("{0}: {1}: {2}".format(source_path, error.__class__.__name__, error))
 
 def render_genshi(source_text, source_path, vars):
     assert genshi, "Genshi is not installed"
@@ -70,5 +83,7 @@ def render(engine=None, source_text=None, source_path=None, vars=None):
         return render_cheetah(source_text, source_path, vars)
     elif engine in ("genshi", "xml"):
         return render_genshi(source_text, source_path, vars)
+    elif engine == "mako":
+        return render_mako(source_text, source_path, vars)
     else:
         raise errors.TemplateError("unknown rendering engine {0!r}".format(engine))
