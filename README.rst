@@ -52,11 +52,11 @@ NOTE: during installation the following packages and their dependencies are
 automatically installed from PyPI_:
 
 * `path.py`_ (directory and file management)
-* Cheetah_ (text-based templating language)
 * Argh_ (command-line argument parsing)
 
 Installing the following Python libraries will add optional functionality:
 
+* Cheetah_ (text-based templating language)
 * Genshi_ (XML-based templating language)
 * Mako_ (text-based templating language)
 * Paramiko_ (Remote node control using SSH)
