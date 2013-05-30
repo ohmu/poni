@@ -44,8 +44,9 @@ else:
             if self._log_channel is not None:
                 self._transport.set_log_channel(self._log_channel)
             self._transport.start_client()
-            paramiko.resource.ResourceManager.register(self, self._transport) # pylint: disable=E1120
+            paramiko.resource.ResourceManager.register(self, self._transport)  # pylint: disable=E1120
             self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
+
 
 def _do_dns_lookup(req, max_retries=3):
     "Make a DNS lookup and retry on DNS timeouts"
@@ -58,6 +59,7 @@ def _do_dns_lookup(req, max_retries=3):
             time.sleep(1)
             tri += 1
     raise
+
 
 def _lv_dns_lookup(name, qtype):
     """DNS lookup using PyDNS, handles retry over TCP in case of truncation
@@ -80,22 +82,77 @@ def _lv_dns_lookup(name, qtype):
             result.append(a["data"])
     return result
 
+
 def _created_str():
     return "created by poni.cloud_libvirt by {0}@{1} on {2}+00:00".format(
         os.getenv("USER"), socket.gethostname(), datetime.datetime.utcnow().isoformat()[0:19])
 
+
 class LVPError(CloudError):
     """LibvirtProvider error"""
+    def __init__(self, msg, code=None):
+        CloudError.__init__(self, msg)
+        self.code = code
+
+    def get_error_code(self):
+        return self.code
+
+
+def convert_libvirt_errors(method):
+    """Convert libvirt errors to LVPError"""
+    def wrapper(self, *args, **kw):
+        try:
+            return method(self, *args, **kw)
+        except libvirt.libvirtError as ex:
+            code = ex.get_error_code()
+            if code == libvirt.VIR_ERR_NO_DOMAIN_SNAPSHOT:
+                err = "snapshot_not_found"
+                msg = "snapshot {0!r} not found for {1!r}".format(args[0], self.name)
+            elif "domain is already running" in str(ex):
+                # code == libvirt.VIR_ERR_OPERATION_INVALID
+                err = "vm_online"
+                msg = "vm {0!r} is already running".format(self.name)
+            elif "domain is not running" in str(ex):
+                # code == libvirt.VIR_ERR_OPERATION_INVALID
+                err = "vm_offline"
+                msg = "vm {0!r} is not running".format(self.name)
+            elif re.search("snapshot file for disk \S+ already exists", str(ex)) or \
+                 re.search("domain snapshot \S+ already exists", str(ex)):
+                # code == libvirt.VIR_ERR_CONFIG_UNSUPPORTED or libvirt.VIR_ERR_INTERNAL_ERROR
+                err = "snapshot_exists"
+                msg = "snapshot {0!r} already exists for {1!r}".format(args[0], self.name)
+            else:
+                raise LVPError("unexpected libvirt error: {0.__class__.__name__}: {0}".format(ex), code=code)
+
+            if err not in getattr(method, "ignore_libvirt_errors", []):
+                raise LVPError(msg, code=code)
+
+    wrapper.__doc__ = method.__doc__
+    wrapper.__name__ = method.__name__
+    return wrapper
+
+
+def ignore_libvirt_errors(*errs):
+    """Mark various errors to be ignored"""
+    def decorate(method):
+        method.ignore_libvirt_errors = errs
+        return method
+    return decorate
+
 
 class LibvirtProvider(Provider):
     def __init__(self, cloud_prop):
         if MISSING_LIBS:
-            raise CloudError("missing libraries required by libvirt deployment: %s" % (", ".join(MISSING_LIBS)))
+            raise CloudError("missing libraries required by libvirt deployment: " + ", ".join(MISSING_LIBS))
 
-        Provider.__init__(self, 'libvirt', cloud_prop)
+        Provider.__init__(self, "libvirt", cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
         self.ssh_key = None
-        profile = json.load(open(cloud_prop["profile"], "rb"))
+        profile_file = cloud_prop.get("profile")
+        if not profile_file:
+            raise CloudError("required node property 'cloud.profile' pointing to a profile file not defined")
+
+        profile = json.load(open(profile_file, "rb"))
         if "ssh_key" in profile:
             self.ssh_key = os.path.expandvars(os.path.expanduser(profile["ssh_key"]))
 
@@ -143,7 +200,7 @@ class LibvirtProvider(Provider):
                     conn = PoniLVConn(host, keyfile=self.ssh_key, priority=priority, weight=weight)
                     conn.connect()
                     self.hosts_online.append(conn)
-                except libvirt.libvirtError, ex:
+                except (LVPError, libvirt.libvirtError) as ex:
                     self.log.warn("Connection to %r failed: %r", conn.uri, ex)
 
         if not self.hosts_online:
@@ -222,7 +279,7 @@ class LibvirtProvider(Provider):
             ipv6pre = prop.get("ipv6_prefix")
 
             if instance["vm_state"] == "VM_RUNNING":
-                continue # done
+                continue  # done
             elif instance["vm_state"] == "VM_DIRTY":
                 # turn this into an active instance
                 vm = instance["vm_conns"][0].vms[instance["vm_name"]]
@@ -245,7 +302,7 @@ class LibvirtProvider(Provider):
                 vm = conn.clone_vm(instance["vm_name"], prop, overwrite=True)
                 instance["vm_conns"] = [conn]
             else:
-                continue # XXX
+                continue  # XXX
 
             instance["vm_state"] = "VM_RUNNING"
             instance["ipproto"] = prop.get("ipproto", "ipv4")
@@ -266,7 +323,7 @@ class LibvirtProvider(Provider):
         for attempt in xrange(1, 1000):
             elapsed = time.time() - start
             if elapsed > timeout:
-                raise LVPError("Connecting to %r failed" % (failed, ))
+                raise LVPError("Connecting to {0!r} failed".format(failed))
             if attempt > 1:
                 time.sleep(2)
             self.log.info("getting ip addresses: round #%r, time spent=%.02fs", attempt, elapsed)
@@ -294,7 +351,7 @@ class LibvirtProvider(Provider):
                     tunchan = trans.open_channel("direct-tcpip", (instance["ipv6"], 22), ("localhost", 0))
                     client = SSHClientLVP()
                     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    client.connect_socket(tunchan, username = "root", key_filename = instance["ssh_key"])
+                    client.connect_socket(tunchan, username="root", key_filename=instance["ssh_key"])
                     cmdchan = client.get_transport().open_session()
                     cmdchan.set_combine_stderr(True)
                     cmdchan.exec_command('ip -4 addr show scope global')
@@ -310,7 +367,7 @@ class LibvirtProvider(Provider):
 
                     data = cmdchan.recv(1024)
                     objs.extend((tunchan, cmdchan, client))
-                except (socket.error, socket.gaierror, paramiko.SSHException), ex:
+                except (socket.error, socket.gaierror, paramiko.SSHException) as ex:
                     self.log.warning("connecting to %r [%s] failed: %r", instance, instance["ipv6"], ex)
                 else:
                     if data:
@@ -381,7 +438,7 @@ class PoniLVXmlOb(object):
         return self.__tree and 1 or 0
 
     def __repr__(self):
-        return "PoniLVXmlOb(%s)" % (".".join(self.__path))
+        return "PoniLVXmlOb({0})".format(".".join(self.__path))
 
     def __str__(self):
         return self.__tree and self.__tree.firstChild.wholeText.strip()
@@ -389,7 +446,7 @@ class PoniLVXmlOb(object):
     def __getitem__(self, name):
         attr = self.__tree and self.__tree.getAttribute(name)
         if attr is None:
-            raise KeyError("%s attribute not found" % name)
+            raise KeyError("{0!r} attribute not found".format(name))
         return attr
 
     def get(self, name):
@@ -400,12 +457,13 @@ class PoniLVXmlOb(object):
             return PoniLVXmlOb()
         elem = self.__tree.getElementsByTagName(name)
         if elem:
-            return PoniLVXmlOb(tree=elem[0], path=self.__path+[name])
+            return PoniLVXmlOb(tree=elem[0], path=(self.__path + [name]))
         if name.endswith("_list"):
             name = name[:-5]
             elems = self.__tree.getElementsByTagName(name)
-            return [PoniLVXmlOb(tree=elem, path=self.__path+[name]) for elem in elems]
+            return [PoniLVXmlOb(tree=elem, path=(self.__path + [name])) for elem in elems]
         return PoniLVXmlOb()
+
 
 class PoniLVConn(object):
     def __init__(self, host, port=None, uri=None, keyfile=None, priority=None, weight=None):
@@ -435,14 +493,14 @@ class PoniLVConn(object):
         self.info = None
 
     def __repr__(self):
-        return "PoniLVConn(%r)" % (self.host)
+        return "PoniLVConn({0!r})".format(self.host)
 
     @property
     def weight(self):
         """calculate a weight for this node based on its cpus and ram"""
         counters = {
-            "total_mhz": self.vms_online + self.cpus_online/4.0,
-            "memory": self.vms_online + self.ram_online/4096.0,
+            "total_mhz": self.vms_online + self.cpus_online / 4.0,
+            "memory": self.vms_online + self.ram_online / 4096.0,
         }
         load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters.iteritems())
         return load_w * self.srv_weight
@@ -465,15 +523,6 @@ class PoniLVConn(object):
         self.info = node
 
     def refresh_list(self):
-        try:
-            self.__refresh_list()
-        except libvirt.libvirtError, ex:
-            if "Domain not found" not in str(ex):
-                raise
-            # retry
-            self.__refresh_list()
-
-    def __refresh_list(self):
         assert self.conn, "not connected"
         self.vms = {}
         self.vms_online = 0
@@ -481,8 +530,8 @@ class PoniLVConn(object):
         for dom_id in self.conn.listDomainsID():
             try:
                 dom = PoniLVDom(self, self.conn.lookupByID(dom_id))
-            except libvirt.libvirtError as e:
-                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+            except (LVPError, libvirt.libvirtError) as ex:
+                if ex.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
                     continue
                 raise
             self.vms[dom.name] = dom
@@ -490,8 +539,8 @@ class PoniLVConn(object):
         for name in self.conn.listDefinedDomains():
             try:
                 dom = PoniLVDom(self, self.conn.lookupByName(name))
-            except libvirt.libvirtError as e:
-                if e.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
+            except (LVPError, libvirt.libvirtError) as ex:
+                if ex.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
                     continue
                 raise
             self.vms[dom.name] = dom
@@ -502,14 +551,16 @@ class PoniLVConn(object):
             self.pools[name] = pool
         doms = [dom for dom in self.vms.itervalues() if dom.info["cputime"] > 0]
         self.cpus_online = sum(dom.info["cpus"] for dom in doms)
-        self.ram_online = sum(dom.info["maxmem"]/1024 for dom in doms)
+        self.ram_online = sum(dom.info["maxmem"] / 1024 for dom in doms)
 
+    @convert_libvirt_errors
     def delete_vm(self, vm_name):
         if vm_name not in self.vms:
-            raise LVPError("%r is not defined" % (vm_name, ))
+            raise LVPError("{0!r} is not defined".format(vm_name))
         self.vms[vm_name].delete()
         self.refresh_list()
 
+    @convert_libvirt_errors
     def clone_vm(self, name, spec, overwrite=False):
         desc = """
             <domain type='kvm'>
@@ -573,19 +624,21 @@ class PoniLVConn(object):
                 </disk>
                 """
         spec = copy.deepcopy(spec)
+
         def macaddr(index):
             """create a mac address based on the VM name for DHCP predictability"""
             mac_ext = hashlib.md5(name).hexdigest()
-            return "52:54:00:%s:%s:%02x" % (mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16)^index)
+            return "52:54:00:{0}:{1}:{2:02x}".format(mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16) ^ index)
+
         def gethw(prefix):
             """grab all relevant hardware entries from spec"""
-            fp = "hardware."+prefix
+            fp = "hardware." + prefix
             rel = sorted((int(k[len(fp):]), k) for k in spec.iterkeys() if k.startswith(fp))
             return [spec[k] for i, k in rel]
 
         if name in self.vms:
             if not overwrite:
-                raise LVPError("%r vm already exists" % (name, ))
+                raise LVPError("{0!r} vm already exists".format(name))
             self.delete_vm(name)
         spec["name"] = name
         if "desc" not in spec:
@@ -594,7 +647,7 @@ class PoniLVConn(object):
             spec["uuid"] = str(uuid.uuid4())
         if isinstance(spec.get("hardware"), dict):
             for k, v in spec["hardware"].iteritems():
-                spec["hardware.%s" % (k, )] = v
+                spec["hardware." + k] = v
 
         # default to x86_64 system with 1 CPU and 1G RAM
         if "hardware.arch" not in spec:
@@ -614,11 +667,11 @@ class PoniLVConn(object):
             dev_name = "vd" + chr(ord("a") + i)
             if "clone" in item or "create" in item:
                 pool = self.pools[item["pool"]]
-                vol_name = "%s-%s" % (name, dev_name)
+                vol_name = "{0}-{1}".format(name, dev_name)
                 if "clone" in item:
-                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite = overwrite)
+                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite=overwrite)
                 if "create" in item:
-                    vol = pool.create_volume(vol_name, item["size"], overwrite = overwrite)
+                    vol = pool.create_volume(vol_name, item["size"], overwrite=overwrite)
                 disk_path = vol.path
                 disk_type = vol.device
                 driver_type = vol.format
@@ -631,7 +684,7 @@ class PoniLVConn(object):
                 disk_type = "block"
                 driver_type = "raw"
             else:
-                raise LVPError("Unrecognized disk specification %r" % (item, ))
+                raise LVPError("Unrecognized disk specification {0!r}".format(item))
 
             dspec = {
                 "path": disk_path,
@@ -653,7 +706,7 @@ class PoniLVConn(object):
                 "type": item.get("type", "network"),
                 "network": item.get("network", default_network),
             }
-            if "bridge" in item: # support for old style bridge-only defs
+            if "bridge" in item:  # support for old style bridge-only defs
                 ispec["type"] = "bridge"
                 ispec["network"] = item["bridge"]
             spec["interfaces"] += interface_desc % ispec
@@ -683,7 +736,8 @@ class PoniLVConn(object):
                     # timeout
                     raise
 
-                self.log.warning("got possibly transient error '%s' from libvirt, retrying for %.1fs..." % (error, time_left))
+                self.log.warning("got possibly transient error '%s' from libvirt, retrying for %.1fs...",
+                                 error, time_left)
                 time.sleep(1.0)
 
 
@@ -702,6 +756,7 @@ class PoniLVVol(object):
         self.format = tformat or "raw"
         self.device = "block" if xml.volume.source.device else "file"
 
+
 class PoniLVPool(object):
     def __init__(self, pool):
         self.pool = pool
@@ -714,14 +769,14 @@ class PoniLVPool(object):
     def __pool_info(self):
         vals = self.pool.info()
         self.info = {
-            "capacity": vals[1]/(1024*1024),
-            "used": vals[2]/(1024*1024),
-            "free": vals[3]/(1024*1024),
+            "capacity": vals[1] / (1024 * 1024),
+            "used": vals[2] / (1024 * 1024),
+            "free": vals[3] / (1024 * 1024),
         }
 
     def _define_volume(self, target, megabytes, source, overwrite):
         spec = {
-            "name": "auto.%s" % target,
+            "name": "auto." + target,
             "backing": "",
             "size": (megabytes or 0) * 1024 * 1024,
             "format": "qcow2",
@@ -735,9 +790,9 @@ class PoniLVPool(object):
             spec["backing"] = """
                 <backingStore>
                     <format type='qcow2'/>
-                    <path>%s</path>
+                    <path>{0}</path>
                 </backingStore>
-                """ % orig.path()
+                """.format(orig.path())
             if not megabytes:
                 spec["size"] = orig.info()[1]
         spec["fullname"] = "%(name)s%(ext)s" % spec
@@ -754,11 +809,11 @@ class PoniLVPool(object):
 
         try:
             vol = self.pool.createXML(desc, 0)
-        except libvirt.libvirtError, ex:
+        except libvirt.libvirtError as ex:
             if not re.search("storage vol( '.*?')? already exists", str(ex)):
                 raise
             if not overwrite:
-                raise LVPError("%r volume already exists" % (spec["fullname"], ))
+                raise LVPError("{0!r} volume already exists".format(spec["fullname"]))
             self.delete_volume(spec["fullname"])
             vol = self.pool.createXML(desc, 0)
 
@@ -779,44 +834,6 @@ class PoniLVPool(object):
         self.path = str(xml.pool.target.path)
 
 
-def convert_lvdom_errors(method):
-    """Convert libvirt domain errors to LVPError"""
-    def wrapper(self, *args, **kw):
-        try:
-            return method(self, *args, **kw)
-        except libvirt.libvirtError as ex:
-            if "domain is already running" in str(ex):
-                err = "vm_online"
-                msg = "vm {0!r} is already running".format(self.name)
-            elif "domain is not running" in str(ex):
-                err = "vm_offline"
-                msg = "vm {0!r} is not running".format(self.name)
-            elif "snapshot not found" in str(ex):
-                err = "snapshot_not_found"
-                msg = "snapshot {0!r} not found for {1!r}".format(args[0], self.name)
-            elif "no snapshot with matching name" in str(ex):
-                err = "snapshot_not_found"
-                msg = "snapshot {0!r} not found for {1!r}".format(args[0], self.name)
-            elif re.search("snapshot file for disk \S+ already exists", str(ex)) or \
-                 re.search("domain snapshot \S+ already exists", str(ex)):
-                err = "snapshot_exists"
-                msg = "snapshot {0!r} already exists for {1!r}".format(args[0], self.name)
-            else:
-                raise
-            if err not in getattr(method, "ignore_lvdom_errors", []):
-                raise LVPError(msg)
-
-    wrapper.__doc__ = method.__doc__
-    wrapper.__name__ = method.__name__
-    return wrapper
-
-def ignore_lvdom_errors(*errs):
-    """Mark various errors to be ignored"""
-    def decorate(method):
-        method.ignore_lvdom_errors = errs
-        return method
-    return decorate
-
 class PoniLVDom(object):
     def __init__(self, conn, dom):
         self.log = logging.getLogger("poni.libvirt.dom")
@@ -829,13 +846,14 @@ class PoniLVDom(object):
         self.__dom_info()
         self.__read_desc()
 
-    def ipv6_addr(self, prefix = "fe80::"):
+    def ipv6_addr(self, prefix="fe80::"):
         return [mac_to_ipv6(prefix, mac) for mac in self.macs]
 
+    @convert_libvirt_errors
     def delete(self):
         try:
             self.dom.destroy()
-        except libvirt.libvirtError, ex:
+        except libvirt.libvirtError as ex:
             if "domain is not running" not in str(ex):
                 raise
 
@@ -846,9 +864,9 @@ class PoniLVDom(object):
             try:
                 vol = self.conn.conn.storageVolLookupByPath(disk)
                 vol.delete(0)
-            except libvirt.libvirtError, ex:
-                if not "Storage volume not found" in str(ex):
-                    raise LVPError("%r: deletion failed: %r" % (disk, ex))
+            except libvirt.libvirtError as ex:
+                if ex.get_error_code() != libvirt.VIR_ERR_NO_STORAGE_VOL:
+                    raise LVPError("{0!r}: deletion failed: {1!r}".format(disk, ex))
 
         # delete snapshots
         for name in self.dom.snapshotListNames(0):
@@ -868,19 +886,19 @@ class PoniLVDom(object):
             self.macs = [str(iface.mac["address"]) for iface in devs.interface_list]
             self.disks = [str(disk.source.get("file") or disk.source.get("dev")) for disk in devs.disk_list]
 
-    @convert_lvdom_errors
-    @ignore_lvdom_errors("vm_online")
+    @convert_libvirt_errors
+    @ignore_libvirt_errors("vm_online")
     def power_on(self):
         self.log.info("powering on %r", self.name)
         self.dom.create()
 
-    @convert_lvdom_errors
-    @ignore_lvdom_errors("vm_offline")
+    @convert_libvirt_errors
+    @ignore_libvirt_errors("vm_offline")
     def power_off(self):
         self.log.info("powering off %r", self.name)
         self.dom.destroy()
 
-    @convert_lvdom_errors
+    @convert_libvirt_errors
     def create_snapshot(self, name, description=None, memory=False):
         if not name or "/" in name:
             raise LVPError("invalid snapshot name {0!r}".format(name))
@@ -894,14 +912,14 @@ class PoniLVDom(object):
                 <description>{description}</description>
             </domainsnapshot>""".format(name=name, description=description or _created_str()), flags)
 
-    @convert_lvdom_errors
-    @ignore_lvdom_errors("snapshot_not_found")
+    @convert_libvirt_errors
+    @ignore_libvirt_errors("snapshot_not_found")
     def remove_snapshot(self, name):
         self.log.info("removing snapshot %r from %r", name, self.name)
         snap = self.dom.snapshotLookupByName(name, 0)
         snap.delete(0)
 
-    @convert_lvdom_errors
+    @convert_libvirt_errors
     def revert_to_snapshot(self, name):
         self.log.info("reverting %r to %r by force", name, self.name)
         snap = self.dom.snapshotLookupByName(name, 0)
@@ -911,8 +929,8 @@ class PoniLVDom(object):
 def mac_to_ipv6(prefix, mac):
     mp = mac.split(":")
     inv_a = int(mp[0], 16) ^ 2
-    addr = "%s%02x%02x:%02xff:fe%02x:%02x%02x" % \
-        (prefix, inv_a, int(mp[1], 16), int(mp[2], 16),
-         int(mp[3], 16), int(mp[4], 16), int(mp[5], 16))
-    name = socket.getnameinfo((addr, 22), socket.NI_NUMERICSERV|socket.NI_NUMERICHOST)
+    addr = "{0}{1:02x}{2:02x}:{3:02x}ff:fe{4:02x}:{5:02x}{6:02x}" \
+           .format(prefix, inv_a, int(mp[1], 16), int(mp[2], 16),
+                   int(mp[3], 16), int(mp[4], 16), int(mp[5], 16))
+    name = socket.getnameinfo((addr, 22), socket.NI_NUMERICSERV | socket.NI_NUMERICHOST)
     return name[0]

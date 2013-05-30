@@ -14,7 +14,7 @@ def get_project_version(version_file):
         file_ver = None
 
     try:
-        proc = subprocess.Popen(["git", "describe"],
+        proc = subprocess.Popen(["git", "describe", "--long"],
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         proc.stderr.close()

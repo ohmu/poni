@@ -1,7 +1,7 @@
-version = $(shell git describe)
-short_version = $(shell git describe | sed -e 's/-g.*//')
+version = $(shell git describe --long)
+short_version = $(shell git describe --long | sed -e 's/-g.*//')
 major_version = $(shell git describe --abbrev=0)
-minor_version = $(shell git describe | sed -e 's,[^-]*-,,')
+minor_version = $(shell git describe --long | sed -e 's,[^-]*-,,')
 
 path = $(realpath .)
 base = $(shell basename $(path))

@@ -29,7 +29,7 @@ except AttributeError:
     import paramiko
 
 try:
-    from socket import epoll
+    from select import epoll
 except ImportError:
     epoll = None
 
