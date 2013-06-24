@@ -33,6 +33,17 @@ from . import version
 from . import work
 from . import times
 
+try:
+    from argh import expects_obj
+except ImportError:
+    # older argh version
+    expects_obj = lambda m: m
+
+try:
+    from argh import named as argh_named
+except ImportError:
+    from argh import alias as argh_named
+
 
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
@@ -171,7 +182,8 @@ class Tool:
         self.cached_manager = None
         self.collect_cache = {}
 
-    @argh.alias("add-system")
+    @expects_obj
+    @argh_named("add-system")
     @argh.arg('system', type=str, help='system name')
     def handle_add_system(self, arg):
         """add a sub-system"""
@@ -179,13 +191,15 @@ class Tool:
         system_dir = confman.create_system(arg.system)
         self.log.debug("created: %s", system_dir)
 
-    @argh.alias("version")
+    @expects_obj
+    @argh_named("version")
     def handle_version(self, arg):
         """show version information"""
         yield version.__version__
         yield "\n"
 
-    @argh.alias("require")
+    @expects_obj
+    @argh_named("require")
     @arg_verbose
     @argh.arg("req", help="requirement expression (Python)", nargs="+")
     def handle_require(self, arg):
@@ -208,13 +222,15 @@ class Tool:
                 raise errors.RequirementError(
                     "requirement not met: %r" % req)
 
-    @argh.alias("init")
+    @expects_obj
+    @argh_named("init")
     def handle_init(self, arg):
         """init repository"""
         confman = self.get_confman(arg.root_dir, must_exist=False)
         confman.init_repo()
 
-    @argh.alias("import")
+    @expects_obj
+    @argh_named("import")
     @arg_verbose
     @argh.arg('source', type=path, help='source dir/file', nargs="+")
     def handle_import(self, arg):
@@ -246,7 +262,8 @@ class Tool:
 
         return lines
 
-    @argh.alias("script")
+    @expects_obj
+    @argh_named("script")
     @arg_verbose
     @argh.arg('script', metavar="FILE", type=str,
               help='script file path or "-" (a single minus-sign) for stdin')
@@ -311,7 +328,8 @@ class Tool:
                 self.task_times.add_task("L%d" % (i+1), line, start, stop,
                                          args=args)
 
-    @argh.alias("update-config")
+    @expects_obj
+    @argh_named("update-config")
     @arg_verbose
     @argh.arg('config', type=str, help="target config (regexp)")
     @argh.arg('source', type=path, help='source file or directory', nargs="+")
@@ -335,7 +353,8 @@ class Tool:
                     raise errors.UserError("don't know how to handle: %r (cwd: %s)" %
                                            (str(source_path), os.getcwd()))
 
-    @argh.alias("add-config")
+    @expects_obj
+    @argh_named("add-config")
     @arg_verbose
     @arg_full_match
     @arg_target_nodes
@@ -391,7 +410,8 @@ class Tool:
             self.log.info("config %r added to: %s", arg.config,
                           ", ".join(updates))
 
-    @argh.alias("add-library")
+    @expects_obj
+    @argh_named("add-library")
     @arg_verbose
     @arg_full_match
     @argh.arg('-c', '--config', type=str, help='config search pattern')
@@ -434,7 +454,8 @@ class Tool:
         logger = self.log.info if arg.verbose else self.log.debug
         logger("library %r path set: %s", arg.name, str(store_path))
 
-    @argh.alias("control")
+    @expects_obj
+    @argh_named("control")
     @arg_verbose
     @arg_full_match
     @arg_flag("-n", "--no-deps", help="do not run dependency tasks")
@@ -594,7 +615,8 @@ class Tool:
                 "all [%d] control tasks finished successfully (%d skipped)" % (
                     ran_count, skipped_count))
 
-    @argh.alias("exec")
+    @expects_obj
+    @argh_named("exec")
     @arg_verbose
     @arg_quiet
     @arg_output_dir
@@ -623,7 +645,8 @@ class Tool:
             raise errors.RemoteError("remote exec failed with code: %r" % (
                     result,))
 
-    @argh.alias("shell")
+    @expects_obj
+    @argh_named("shell")
     @arg_verbose
     @arg_full_match
     @arg_host_access_method
@@ -663,7 +686,8 @@ class Tool:
 
         return ret
 
-    @argh.alias("init")
+    @expects_obj
+    @argh_named("init")
     def handle_vc_init(self, arg):
         """init version control in repo"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -678,7 +702,8 @@ class Tool:
             raise errors.UserError(
                 "version control not initialized in this repo")
 
-    @argh.alias("diff")
+    @expects_obj
+    @argh_named("diff")
     def handle_vc_diff(self, arg):
         """show repository working status diff"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -686,7 +711,8 @@ class Tool:
         for out in confman.vc.status():
             print out,
 
-    @argh.alias("checkpoint")
+    @expects_obj
+    @argh_named("checkpoint")
     @argh.arg('message', type=str, help='commit message')
     def handle_vc_checkpoint(self, arg):
         """commit all locally added and changed files in the repository"""
@@ -694,7 +720,8 @@ class Tool:
         self.require_vc(confman)
         confman.vc.commit_all(arg.message)
 
-    @argh.alias("terminate")
+    @expects_obj
+    @argh_named("terminate")
     @arg_full_match
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     def handle_cloud_terminate(self, arg):
@@ -716,7 +743,8 @@ class Tool:
             count += len(props)
         self.log.info("%s instances terminated", count)
 
-    @argh.alias("update")
+    @expects_obj
+    @argh_named("update")
     @arg_full_match
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     def handle_cloud_update(self, arg):
@@ -744,7 +772,8 @@ class Tool:
                 self.log.info("%s: updated: %s", node.name, change_str)
                 node.save()
 
-    @argh.alias("wait")
+    @expects_obj
+    @argh_named("wait")
     @arg_full_match
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     @argh.arg('--state', type=str, default="running",
@@ -754,7 +783,8 @@ class Tool:
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         return self.cloud_op(confman, arg, False)
 
-    @argh.alias("init")
+    @expects_obj
+    @argh_named("init")
     @arg_full_match
     @argh.arg("target", type=str, help="target systems/nodes (regexp)")
     @arg_flag("--reinit", dest="reinit", help="re-initialize cloud image")
@@ -764,7 +794,8 @@ class Tool:
         confman = self.get_confman(arg.root_dir)
         return self.cloud_op(confman, arg, True)
 
-    @argh.alias("ip")
+    @expects_obj
+    @argh_named("ip")
     @arg_full_match
     @argh.arg("target", type=str, help="target systems/nodes (regexp)")
     def handle_cloud_ip(self, arg):
@@ -845,7 +876,8 @@ class Tool:
         for provider, props in itertools.groupby(props, lambda prop: self.sky.get_provider(prop)):
             yield provider, props
 
-    @argh.alias("create-snapshot")
+    @expects_obj
+    @argh_named("create-snapshot")
     @arg_full_match
     @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
@@ -856,7 +888,8 @@ class Tool:
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.create_snapshot(props, name=arg.name, description=arg.description, memory=arg.memory)
 
-    @argh.alias("revert-to-snapshot")
+    @expects_obj
+    @argh_named("revert-to-snapshot")
     @arg_full_match
     @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
@@ -865,7 +898,8 @@ class Tool:
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.revert_to_snapshot(props, name=arg.name)
 
-    @argh.alias("remove-snapshot")
+    @expects_obj
+    @argh_named("remove-snapshot")
     @arg_full_match
     @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
@@ -874,7 +908,8 @@ class Tool:
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.remove_snapshot(props, name=arg.name)
 
-    @argh.alias("power-off")
+    @expects_obj
+    @argh_named("power-off")
     @arg_full_match
     @arg_target_nodes
     def handle_cloud_power_off(self, arg):
@@ -882,7 +917,8 @@ class Tool:
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.power_off_instances(props)
 
-    @argh.alias("power-on")
+    @expects_obj
+    @argh_named("power-on")
     @arg_full_match
     @arg_target_nodes
     def handle_cloud_power_on(self, arg):
@@ -890,7 +926,8 @@ class Tool:
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.power_on_instances(props)
 
-    @argh.alias("set")
+    @expects_obj
+    @argh_named("set")
     @arg_verbose
     @arg_full_match
     @arg_nodes_only
@@ -993,7 +1030,8 @@ class Tool:
         stats = manager.verify(callback=target_filter, **verify_options)
         return manager, stats
 
-    @argh.alias("show")
+    @expects_obj
+    @argh_named("show")
     @arg_verbose
     @arg_full_match
     @arg_target_nodes_0_to_n
@@ -1019,7 +1057,8 @@ class Tool:
                 for i, item in enumerate(items):
                     print "%s #%d: %r" % (name, i, item)
 
-    @argh.alias("report")
+    @expects_obj
+    @argh_named("report")
     @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
               help='output file path (default: stdout)')
     def handle_report(self, arg):
@@ -1028,7 +1067,8 @@ class Tool:
         for chunk in self.task_times.iter_report():
             out.write(chunk)
 
-    @argh.alias("deploy")
+    @expects_obj
+    @argh_named("deploy")
     @arg_verbose
     @arg_full_match
     @arg_path_prefix
@@ -1052,7 +1092,8 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", stats.file_count)
 
-    @argh.alias("audit")
+    @expects_obj
+    @argh_named("audit")
     @arg_verbose
     @arg_full_match
     @arg_path_prefix
@@ -1079,7 +1120,8 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", stats.file_count)
 
-    @argh.alias("verify")
+    @expects_obj
+    @argh_named("verify")
     @arg_verbose
     @arg_full_match
     @arg_host_access_method
@@ -1103,7 +1145,8 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", stats.file_count)
 
-    @argh.alias("add-node")
+    @expects_obj
+    @argh_named("add-node")
     @arg_verbose
     @arg_full_match
     @argh.arg('node', type=str,
@@ -1153,7 +1196,8 @@ class Tool:
 
             logger("node added: %s%s", node_name, msg)
 
-    @argh.alias("list")
+    @expects_obj
+    @argh_named("list")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
     @arg_exclude_nodes
@@ -1204,7 +1248,8 @@ class Tool:
         return self.cached_manager
 
 
-    @argh.alias("list")
+    @expects_obj
+    @argh_named("list")
     @arg_full_match
     @arg_flag("-l", "--show-layers", help="show settings layers")
     @argh.arg('pattern', type=str, help='node search pattern', nargs="?")
@@ -1217,7 +1262,8 @@ class Tool:
         for output in list_output.output():
             yield output
 
-    @argh.alias("set")
+    @expects_obj
+    @argh_named("set")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
     @argh.arg('setting', type=str, nargs="+", help="'name=[type:]value'")
