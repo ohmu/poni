@@ -68,7 +68,6 @@ class Runner:
         try:
             task = self.finished_queue.get(timeout=60.0)
         except queue.Empty:
-            started = self.started
             self.log.warning(
                 "tasks taking long to finish: %s and %r tasks waiting to be started",
                 ", ".join(str(task) for task in self.started), len(self.not_started))
@@ -84,4 +83,3 @@ class Runner:
         while self.not_started or self.started:
             self.check()
             self.wait_task_to_finish()
-

@@ -146,12 +146,13 @@ class ControlTask(work.Task):
                                send_output=self.send_output)
             self.log.debug("op %s returns: %r", self.op["name"], ret)
             self.op["result"] = ret
-        except errors.Error, error:
+        except (SystemExit, errors.Error) as error:
+            # SystemExit is what argh produces with invalid args
             self.log.error("%s/%s [%s] failed: %s: %s" % (
                     self.op["node"].name, self.op["config"].name,
                     self.op["name"], error.__class__.__name__, error))
             self.op["result"] = "%s: %s" % (error.__class__.__name__, error)
-        except Exception, error:
+        except BaseException as error:
             self.log.error("%s/%s [%s] failed: %s: %s" % (
                     self.op["node"].name, self.op["config"].name,
                     self.op["name"], error.__class__.__name__, error))
