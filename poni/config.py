@@ -25,6 +25,12 @@ from . import colors
 import Cheetah.Template
 from Cheetah.Template import Template as CheetahTemplate
 
+try:
+    from argh import expects_obj
+except ImportError:
+    # older argh version
+    expects_obj = lambda m: m
+
 
 def _patched_genUniqueModuleName(baseModuleName):
     """
@@ -372,7 +378,7 @@ def control(provides=None, requires=None, optional_requires=None):
         assert isinstance(optional_requires, (list, tuple, type(None)))
         method.poni_control = dict(provides=provides, requires=requires,
                                    optional_requires=optional_requires)
-        return method
+        return expects_obj(method)
 
     return wrap
 
