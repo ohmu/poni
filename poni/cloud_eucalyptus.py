@@ -8,7 +8,6 @@ Copyright (c) 2012-2013 F-Secure
 See LICENSE for details.
 
 """
-from collections import defaultdict
 import copy
 import logging
 import os
@@ -18,18 +17,11 @@ import urlparse
 from . import errors
 from . import cloudbase
 
+from . import cloud_aws
 
 BOTO_REQUIREMENT = "2.5.2"
 EUCALYPTUS = "eucalyptus"
 EUCALYPTUS_API_VERSION = "2013-02-01"
-TAG_NAME = "Name"
-TAG_PONI_STATE = "PoniState"
-TAG_REINIT_RETRY = "PoniReinitRetryCount"
-STATE_ASSIGN_EIP = "assign-eip"
-STATE_ASSIGNED_EIP = "assigned-eip"
-STATE_REINIT = "reinit"
-STATE_INITIALIZED = "initialized"
-STATE_UNINITIALIZED = "uninitialized"
 
 try:
     import boto
@@ -38,209 +30,6 @@ try:
     import boto.exception
 except ImportError:
     boto = None
-
-
-def convert_boto_errors(method):
-    """Convert remote boto errors to errors.CloudError"""
-    def wrapper(self, *args, **kw):
-        try:
-            return method(self, *args, **kw)
-        except boto.exception.BotoServerError, error:
-            raise errors.CloudError("%s: %s" % (error.__class__.__name__,
-                                                error.error_message))
-
-    wrapper.__doc__ = method.__doc__
-    wrapper.__name__ = method.__name__
-
-    return wrapper
-
-
-class InstanceStarter(object):
-    """Babysit launching of a number of instances"""
-    def __init__(self, provider, props):
-        self.log = logging.getLogger(EUCALYPTUS)
-        self.total_instances = len(props)
-        self.provider = provider
-        self.pending = provider._get_instances(props)
-        self.info_by_id = dict((instance.id, dict(start=time.time()))
-                               for instance in self.pending)
-        self.props_by_id = dict((p["instance"], p) for p in props)
-        self.old_instance_id_by_new_id = dict((instance.id, instance.id) for instance in self.pending)
-        self.output = {}
-        self.conn = self.provider._get_conn()
-
-    def get_output_for_instance(self, instance):
-        """Return the correct output dict for the instance"""
-        old_instance_id = self.old_instance_id_by_new_id[instance.id]
-        return self.output.setdefault(old_instance_id, {})
-
-    def check_instance_status(self, instance, wait_state, check_health):
-        """
-        Check if the instance has reached desired state.
-
-        Returns True only in the case instance has reached 'running' state
-        and the EIP has been successfully attached (when applicable).
-        """
-        instance.update()
-
-        if (wait_state is None):
-            # not waiting for any particular state => DONE
-            done = True
-        elif instance.state == wait_state:
-            # reached the desired state => DONE
-            done = True
-        else:
-            done = False
-
-        check_node_health = check_health and self.props_by_id[instance.id].get("check_health", True)
-        if done and check_node_health and not self.provider._instance_status_ok(instance):
-            # instance running but has not yet been reported as healthy
-            self.log.debug("%s instance running but system or instance status check not ok yet", instance.id)
-            done = False
-
-        if not done:
-            return False # try again next time
-
-        dns_name = instance.dns_name or instance.private_ip_address
-        out_props = self.get_output_for_instance(instance)
-        cloud_prop = out_props.setdefault("cloud", self.props_by_id[instance.id].copy())
-        cloud_prop["instance"] = instance.id
-        if "host" not in out_props:
-            out_props["host"] = dns_name
-
-        out_props["private"] = dict(
-            ip=instance.private_ip_address,
-            dns=dns_name)
-
-        eip_mode = cloud_prop.get("eip")
-        if eip_mode:
-            # Attaching EIP may fail due to inconsistent server-side state,
-            # if the previous owner has recently terminated, so we cannot do it
-            # synchronously here. Delegate waiting for the EIP back to the caller.
-            if "public" not in out_props:
-                instance.add_tag(TAG_PONI_STATE, STATE_ASSIGN_EIP)
-                self.log.info("%s: initialized, assigning EIP...", instance.id)
-                return False
-            else:
-                return True
-        else:
-            if instance in self.pending:
-                self.pending.remove(instance)
-
-            return (wait_state == "running")
-
-    def attempt_finalize_eip(self, instance, cloud_prop):
-        """Attempt EIP assignment and instance init finalization"""
-        try:
-            host_eip = self.provider.attach_eip(instance, cloud_prop)
-        except boto.exception.EC2ResponseError as error:
-            if "is in use" in str(error):
-                # service claims the address is still in use, it might take a
-                # while to get the address released, retry next time...
-                self.log.warning("%s: EIP still in use [%s], waiting...", instance.id, error)
-                return
-            else:
-                raise
-
-        if host_eip:
-            # communicate the EIP address properties back to poni
-            self.log.info("%s: EIP %s assigned", instance.id, host_eip)
-            out_prop = self.get_output_for_instance(instance)
-            out_prop["public"] = dict(ip=host_eip, dns=host_eip)
-            out_cloud_prop = out_prop.setdefault("cloud", cloud_prop.copy())
-            out_cloud_prop["instance"] = instance.id
-            if cloud_prop.get("deploy_via_eip"):
-                out_prop["host"] = host_eip
-
-        self.pending.remove(instance)
-        instance.add_tag(TAG_PONI_STATE, STATE_INITIALIZED)
-
-    @convert_boto_errors
-    def wait_instances(self, wait_state="running"):
-        while self.pending:
-            summary = defaultdict(int)
-            for instance in self.pending[:]:
-                instance.update()
-                cloud_prop = self.props_by_id[instance.id]
-                prev_retry_count = int(instance.tags.get(TAG_REINIT_RETRY, 0))
-
-                if instance.tags.get(TAG_PONI_STATE) == STATE_ASSIGN_EIP:
-                    summary[STATE_ASSIGN_EIP] += 1
-                    self.attempt_finalize_eip(instance, cloud_prop)
-                else:
-                    summary[instance.state] += 1
-
-                if instance.state == "stopped":
-                    instance.start()
-                    continue
-                elif instance.state == "terminated":
-                    # instance that had previously failed to start has finally terminated:
-                    # create a new instance and try again...
-                    out_prop = self.provider._init_instance(cloud_prop, ok_states=["pending", "running"])
-                    cloud_prop["instance"] = out_prop["cloud"]["instance"]
-                    new_instances = self.provider._get_instances([cloud_prop])
-                    new_instance = new_instances[0]
-
-                    # replace old instance with the new one
-                    self.pending.append(new_instance)
-                    self.pending.remove(instance)
-                    self.props_by_id[new_instance.id] = cloud_prop
-                    self.provider.configure_new_instance(new_instance, cloud_prop)
-                    self.convert_id_map[new_instance.id] = new_instance.id
-                    self.old_instance_id_by_new_id[new_instance.id] = instance.id
-
-                    # must also provide some output for the new instance ID
-                    self.output[new_instance.id] = self.get_output_for_instance(instance)
-
-                    new_instance.add_tag(TAG_REINIT_RETRY, str(prev_retry_count + 1))
-                    self.log.info("instance %s terminated: created new one: %s",
-                                  instance.id, new_instance.id)
-                    self.info_by_id[new_instance.id] = dict(start=time.time())
-
-                    continue
-
-                # instance exists, check timeout and its state
-                # at this point the state is one of: stopping, shutting-down, pending or running
-                running_time = time.time() - self.info_by_id[instance.id]["start"]
-                default_timeout = float(os.environ.get("PONI_EUCA_INIT_TIMEOUT", 300.0))
-                start_timeout_seconds = cloud_prop.get("init_timeout", default_timeout)
-                if running_time >= start_timeout_seconds:
-                    if instance.state in ["shutting-down", "stopping"]:
-                        raise errors.CloudError(
-                            "Instance %s timeout while waiting to exit transient '%s' state" % (
-                                instance.id, instance.state))
-
-                    if (wait_state == "running") \
-                            and (instance.tags.get(TAG_PONI_STATE) == STATE_UNINITIALIZED):
-                        # Attempt to get a healthy instance by destroying this one and creating a new one.
-                        if prev_retry_count > int(os.environ.get("PONI_EUCA_INIT_RETRY_COUNT", 2)):
-                            raise errors.CloudError(
-                                "Failed to get instance %s to healthy state, retries exhausted: %r" % (
-                                    instance.id, prev_retry_count))
-
-                        instance.add_tag(TAG_PONI_STATE, STATE_REINIT)
-                        instance.terminate()
-                        self.info_by_id[instance.id]["start"] = time.time() # reset timer
-                        self.log.warning("instance %s took too long to reach healthy state: terminating...",
-                                         instance.id)
-                        continue # next iterations will re-init it once it has stopped
-
-                    raise errors.CloudError(
-                        "Instance %s did not reach healthy running state in time (waited %.1f seconds)" % (
-                            instance.id, start_timeout_seconds))
-
-                # instance/system health is only checked if this was a "cloud init"
-                check_health = (instance.tags.get(TAG_PONI_STATE) == STATE_UNINITIALIZED)
-                if self.check_instance_status(instance, wait_state, check_health=check_health):
-                    # instance has reached 'running' state, tag it as initialized
-                    instance.add_tag(TAG_PONI_STATE, STATE_INITIALIZED)
-
-            if self.pending:
-                self.log.info("[%s/%s] instances ready (%s), waiting...",
-                              self.total_instances - len(self.pending), self.total_instances,
-                              ", ".join(("%s: %r" % s) for s in summary.iteritems()))
-                time.sleep(5.0)
-        return self.output
 
 
 class EucalyptusProvider(cloudbase.Provider):
@@ -339,7 +128,7 @@ class EucalyptusProvider(cloudbase.Provider):
         self._instance_cache[instance.id] = instance
         return instance
 
-    @convert_boto_errors
+    @cloud_aws.convert_boto_errors
     def init_instance(self, cloud_prop):
         return self._init_instance(cloud_prop)
 
@@ -367,7 +156,7 @@ class EucalyptusProvider(cloudbase.Provider):
 
         out_prop = copy.deepcopy(cloud_prop)
 
-        instance = self._find_instance_by_tag(TAG_NAME, vm_name, ok_states=ok_states)
+        instance = self._find_instance_by_tag(cloud_aws.TAG_NAME, vm_name, ok_states=ok_states)
         if instance:
             out_prop["instance"] = instance.id
             return dict(cloud=out_prop)
@@ -405,13 +194,13 @@ class EucalyptusProvider(cloudbase.Provider):
         start_time = time.time()
         while True:
             try:
-                instance.add_tag(TAG_NAME, cloud_prop["vm_name"])
+                instance.add_tag(cloud_aws.TAG_NAME, cloud_prop["vm_name"])
                 instance.update()
-                if TAG_PONI_STATE not in instance.tags:
+                if cloud_aws.TAG_PONI_STATE not in instance.tags:
                     # only override the tag if one does not already exist, this
                     # guarantees that "uninitialized" instances are safe to destroy
                     # and reinit in case to failed launch attemps
-                    instance.add_tag(TAG_PONI_STATE, STATE_UNINITIALIZED)
+                    instance.add_tag(cloud_aws.TAG_PONI_STATE, cloud_aws.STATE_UNINITIALIZED)
                 break
             except boto.exception.EC2ResponseError as error:
                 if not "does not exist" in str(error):
@@ -451,7 +240,7 @@ class EucalyptusProvider(cloudbase.Provider):
 
         return disk_map
 
-    @convert_boto_errors
+    @cloud_aws.convert_boto_errors
     def assign_ip(self, props):
         conn = self._get_conn()
         for p in props:
@@ -498,7 +287,7 @@ class EucalyptusProvider(cloudbase.Provider):
             instance_ids=instance_ids) if instance_ids else []
         return [r.instances[0] for r in reservations]
 
-    @convert_boto_errors
+    @cloud_aws.convert_boto_errors
     def get_instance_status(self, prop):
         instances = self._get_instances([prop])
         if instances:
@@ -506,12 +295,12 @@ class EucalyptusProvider(cloudbase.Provider):
         else:
             return None
 
-    @convert_boto_errors
+    @cloud_aws.convert_boto_errors
     def terminate_instances(self, props):
         for instance in self._get_instances(props):
-            instance.remove_tag(TAG_NAME)
-            instance.remove_tag(TAG_PONI_STATE)
-            instance.remove_tag(TAG_REINIT_RETRY)
+            instance.remove_tag(cloud_aws.TAG_NAME)
+            instance.remove_tag(cloud_aws.TAG_PONI_STATE)
+            instance.remove_tag(cloud_aws.TAG_REINIT_RETRY)
             instance.terminate()
 
     def get_all_instances(self, instance_ids=None):
@@ -567,7 +356,7 @@ class EucalyptusProvider(cloudbase.Provider):
         results = conn.get_all_instance_status(instance_ids=[instance.id])
         return (len(results) > 0) and (results[0].system_status.status == "ok") and (results[0].instance_status.status == "ok")
 
-    @convert_boto_errors
+    @cloud_aws.convert_boto_errors
     def wait_instances(self, props, wait_state="running"):
-        starter = InstanceStarter(self, props)
+        starter = cloud_aws.InstanceStarter(self, props)
         return starter.wait_instances(wait_state)
