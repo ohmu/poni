@@ -370,14 +370,18 @@ class Manager:
         self.files.append(kw)
 
 
-def control(provides=None, requires=None, optional_requires=None):
+def control(provides=None, requires=None, optional_requires=None, auto_enable=True):
     """decorate a PlugIn method as a 'poni control' command"""
     def wrap(method):
         assert isinstance(provides, (list, tuple, type(None)))
         assert isinstance(requires, (list, tuple, type(None)))
         assert isinstance(optional_requires, (list, tuple, type(None)))
-        method.poni_control = dict(provides=provides, requires=requires,
-                                   optional_requires=optional_requires)
+        if auto_enable:
+            method.poni_control = dict(provides=provides, requires=requires,
+                                       optional_requires=optional_requires)
+        else:
+            assert not any([provides, requires, optional_requires])
+
         return expects_obj(method)
 
     return wrap
@@ -452,13 +456,13 @@ class PlugIn:
 
         name = name.replace("_", "-")
         self.controls[name] = dict(
-            callback = handle_control,
-            plugin = self,
-            node = self.node,
-            config = self.config,
-            provides = provides or [],
-            requires = requires or [],
-            optional_requires = optional_requires or []
+            callback=handle_control,
+            config=self.config,
+            node=self.node,
+            optional_requires=optional_requires or [],
+            plugin=self,
+            provides=provides or [],
+            requires=requires or [],
             )
 
     def add_all_controls(self):
