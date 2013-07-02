@@ -137,7 +137,7 @@ class InstanceStarter(object):
 
         out_props["private"] = dict(
             ip=instance.private_ip_address,
-            dns=dns_name)
+            dns=instance.private_dns_name)
 
         eip_mode = cloud_prop.get("eip")
         if eip_mode:
