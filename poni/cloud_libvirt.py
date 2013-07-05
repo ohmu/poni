@@ -4,6 +4,10 @@ Copyright (C) 2011-2012 F-Secure Corporation, Helsinki, Finland.
 Author: Oskari Saarenmaa <ext-oskari.saarenmaa@f-secure.com>
 """
 
+from poni import util
+from poni.cloudbase import Provider
+from poni.errors import CloudError
+from xml.dom.minidom import parseString as xmlparse
 import copy
 import datetime
 import getpass
@@ -11,17 +15,14 @@ import hashlib
 import json
 import logging
 import os
+import paramiko
 import random
 import re
 import socket
 import subprocess
+import threading
 import time
 import uuid
-from xml.dom.minidom import parseString as xmlparse
-from poni.cloudbase import Provider
-from poni.errors import CloudError
-from poni import util
-import paramiko
 
 MISSING_LIBS = []
 try:
@@ -225,7 +226,7 @@ class LibvirtProvider(Provider):
 
         def add_vms(conn):
             conn.refresh()
-            for vm_name in conn.vms:
+            for vm_name in conn.dominfo.vms:
                 vms.setdefault(vm_name, []).append(conn)
 
         for conn in self.conns():
@@ -244,7 +245,7 @@ class LibvirtProvider(Provider):
         for instance in self.__get_instances(props):
             for conn in instance['vm_conns']:
                 self.log.debug("found %r from %r", instance['vm_name'], conn)
-                yield conn.vms[instance['vm_name']]
+                yield conn.dominfo.vms[instance['vm_name']]
 
     def init_instance(self, prop):
         """
@@ -327,7 +328,7 @@ class LibvirtProvider(Provider):
                 return  # done
             elif instance["vm_state"] == "VM_DIRTY":
                 # turn this into an active instance
-                vm = instance["vm_conns"][0].vms[instance["vm_name"]]
+                vm = instance["vm_conns"][0].dominfo.vms[instance["vm_name"]]
             elif instance["vm_state"] == "VM_NON_EXISTENT":
                 # Select the best place for this host first filtering out nodes
                 # with zero-weight and ones included in the exclude list or
@@ -518,6 +519,16 @@ class PoniLVXmlOb(object):
         return PoniLVXmlOb()
 
 
+class DomainInfo(dict):
+    def __getattr__(self, name):
+        if name in self.__dict__:
+            return self.__dict__[name]
+        elif name in self:
+            return self[name]
+        else:
+            raise AttributeError(name)
+
+
 class PoniLVConn(object):
     def __init__(self, host, port=None, uri=None, keyfile=None, priority=None, weight=None):
         if ":" in host:
@@ -536,14 +547,10 @@ class PoniLVConn(object):
         self.srv_priority = 1 if priority is None else priority
         self.srv_weight = 1 if weight is None else weight
         self.conn = None
-        self.vms = None
-        self.vms_online = 0
-        self.vms_offline = 0
-        self.cpus_online = 0
-        self.ram_online = 0
-        self.pools = None
         self.node = None
         self.info = None
+        self.dominfo = None
+        self._dominfo_lock = threading.Lock()
 
     def __repr__(self):
         return "PoniLVConn({0!r})".format(self.host)
@@ -552,8 +559,8 @@ class PoniLVConn(object):
     def weight(self):
         """calculate a weight for this node based on its cpus and ram"""
         counters = {
-            "total_mhz": self.vms_online + self.cpus_online / 4.0,
-            "memory": self.vms_online + self.ram_online / 4096.0,
+            "total_mhz": self.dominfo.vms_online + self.dominfo.cpus_online / 4.0,
+            "memory": self.dominfo.vms_online + self.dominfo.ram_online / 4096.0,
         }
         load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters.iteritems())
         return load_w * self.srv_weight
@@ -576,10 +583,21 @@ class PoniLVConn(object):
         self.info = node
 
     def refresh_list(self):
+        """Refresh the domain lists unless someone else is already doing the refresh"""
+        if self._dominfo_lock.acquire(False):
+            try:
+                return self._refresh_list()
+            finally:
+                self._dominfo_lock.release()
+        else:
+            # wait until the refresh done by the other party is complete
+            with self._dominfo_lock:
+                pass
+
+    def _refresh_list(self):
         assert self.conn, "not connected"
-        self.vms = {}
-        self.vms_online = 0
-        self.vms_offline = 0
+        dominfo = DomainInfo(conn=self.conn, pools={}, vms={}, vms_online=0, vms_offline=0)
+
         for dom_id in self.conn.listDomainsID():
             try:
                 dom = PoniLVDom(self, self.conn.lookupByID(dom_id))
@@ -587,8 +605,9 @@ class PoniLVConn(object):
                 if ex.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
                     continue
                 raise
-            self.vms[dom.name] = dom
-            self.vms_online += 1
+            dominfo.vms[dom.name] = dom
+            dominfo["vms_online"] += 1
+
         for name in self.conn.listDefinedDomains():
             try:
                 dom = PoniLVDom(self, self.conn.lookupByName(name))
@@ -596,21 +615,23 @@ class PoniLVConn(object):
                 if ex.get_error_code() == libvirt.VIR_ERR_NO_DOMAIN:
                     continue
                 raise
-            self.vms[dom.name] = dom
-            self.vms_offline += 1
-        self.pools = {}
+            dominfo.vms[dom.name] = dom
+            dominfo["vms_offline"] += 1
+
         for name in self.conn.listStoragePools():
             pool = PoniLVPool(self.conn.storagePoolLookupByName(name))
-            self.pools[name] = pool
-        doms = [dom for dom in self.vms.itervalues() if dom.info["cputime"] > 0]
-        self.cpus_online = sum(dom.info["cpus"] for dom in doms)
-        self.ram_online = sum(dom.info["maxmem"] / 1024 for dom in doms)
+            dominfo.pools[name] = pool
+
+        doms = [dom for dom in dominfo.vms.itervalues() if dom.info["cputime"] > 0]
+        dominfo["cpus_online"] = sum(dom.info["cpus"] for dom in doms)
+        dominfo["ram_online"] = sum(dom.info["maxmem"] / 1024 for dom in doms)
+        self.dominfo = dominfo  # atomic update of all dom info stats
 
     @convert_libvirt_errors
     def delete_vm(self, vm_name):
-        if vm_name not in self.vms:
+        if vm_name not in self.dominfo.vms:
             raise LVPError("{0!r} is not defined".format(vm_name))
-        self.vms[vm_name].delete()
+        self.dominfo.vms[vm_name].delete()
         self.refresh_list()
 
     @convert_libvirt_errors
@@ -689,10 +710,11 @@ class PoniLVConn(object):
             rel = sorted((int(k[len(fp):]), k) for k in spec.iterkeys() if k.startswith(fp))
             return [spec[k] for i, k in rel]
 
-        if name in self.vms:
+        if name in self.dominfo.vms:
             if not overwrite:
                 raise LVPError("{0!r} vm already exists".format(name))
             self.delete_vm(name)
+
         spec["name"] = name
         if "desc" not in spec:
             spec["desc"] = _created_str()
@@ -719,7 +741,12 @@ class PoniLVConn(object):
         for i, item in enumerate(gethw("disk")):
             dev_name = "vd" + chr(ord("a") + i)
             if "clone" in item or "create" in item:
-                pool = self.pools[item["pool"]]
+                try:
+                    pool = self.dominfo.pools[item["pool"]]
+                except KeyError:
+                    raise LVPError("host {0}:{1} does not have pool named '{2}'".format(
+                            self.dominfo.conn.host, self.dominfo.conn.port, item["pool"]))
+
                 vol_name = "{0}-{1}".format(name, dev_name)
                 if "clone" in item:
                     vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite=overwrite)
@@ -769,14 +796,14 @@ class PoniLVConn(object):
         self.libvirt_retry(vm.create)
         for retry in range(1, 10):
             self.refresh_list()
-            if name in self.vms:
+            if name in self.dominfo.vms:
                 break
             time.sleep(2.0)
             self.log.info("waiting for VM {0} to appear in libvirt hosts... retry #{1}".format(name, retry))
         else:
             raise LVPError("VM {0} did not appear in time on libvirt hosts".format(name))
 
-        return self.vms[name]
+        return self.dominfo.vms[name]
 
     def libvirt_retry(self, op):
         """
