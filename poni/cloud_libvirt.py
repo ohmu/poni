@@ -335,9 +335,9 @@ class LibvirtProvider(Provider):
                 # missing from the include list.
                 cands = list(conns)
                 if prop.get("hosts", {}).get("exclude"):
-                    cands = (conn for conn in cands if prop["hosts"]["exclude"] not in conn.host)
+                    cands = [conn for conn in cands if prop["hosts"]["exclude"] not in conn.host]
                 if prop.get("hosts", {}).get("include"):
-                    cands = (conn for conn in cands if prop["hosts"]["include"] in conn.host)
+                    cands = [conn for conn in cands if prop["hosts"]["include"] in conn.host]
 
                 conn = self.weighted_random_choice(cands)
                 self.log.info("cloning %r on %r", instance["vm_name"], conn.host)
