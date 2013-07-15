@@ -128,7 +128,7 @@ class InstanceStarter(object):
         if not done:
             return False # try again next time
 
-        dns_name = instance.dns_name or instance.private_ip_address
+        dns_name = instance.dns_name or instance.private_dns_name or instance.private_ip_address
         out_props = self.get_output_for_instance(instance)
         cloud_prop = out_props.setdefault("cloud", self.props_by_id[instance.id].copy())
         cloud_prop["instance"] = instance.id # changed for spot instances
@@ -137,7 +137,7 @@ class InstanceStarter(object):
 
         out_props["private"] = dict(
             ip=instance.private_ip_address,
-            dns=instance.private_dns_name)
+            dns=dns_name)
 
         eip_mode = cloud_prop.get("eip")
         if eip_mode:
