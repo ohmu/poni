@@ -200,8 +200,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
             """read all the output that is immediately available"""
             while channel.recv_ready():
                 chunk = channel.recv(BS)
-                if chunk:
-                    yield rcontrol.STDOUT, chunk
+                yield rcontrol.STDOUT, chunk
 
         channel.exec_command(cmd)
         channel.shutdown_write()
@@ -231,9 +230,9 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                     next_warn = time.time() + self.warn_timeout
                     yield output
 
-                if (exit_code is not None):
+                if channel.closed and (exit_code is not None):
                     yield rcontrol.DONE, exit_code
-                    break # everything done!
+                    break  # everything done!
 
                 now = time.time()
                 if now > (rx_time + self.terminate_timeout):
