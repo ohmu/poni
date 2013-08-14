@@ -386,6 +386,8 @@ class PlugIn:
         self.node = node
         self.controls = {}
         self.render = self.render_cheetah
+        self._template_cache = {}
+        self._template_cache_reset_counter = 0
 
     def add_actions(self):
         pass
@@ -567,24 +569,51 @@ class PlugIn:
                      plugin=self)
         return names
 
-    def render_name(self, name):
-        return template.render_name(name, None, self.get_names())
+    def cached_template(self, key, renderer):
+        if self.manager.confman._cache_reset_counter != self._template_cache_reset_counter:
+            # conf manager cache has been reset, we need to invalidate our internal cache, too
+            self._template_cache = {}
+            self._template_cache_reset_counter = self.manager.confman._cache_reset_counter
+
+        # see if the template has already been rendered and is in cache
+        cached = self._template_cache.get(key)
+        if cached:
+            return cached
+
+        rendered = renderer()
+        self._template_cache[key] = rendered  # cache result for next time
+        return rendered
+
+    def render_name(self, name, names=None):
+        if ("$" not in name) and ("#" not in name):
+            return name  # skip rendering in trivial cases
+
+        return self.cached_template(("name", hash(name)),
+                                    lambda: template.render_name(name, None, names or self.get_names()))
 
     def render_cheetah(self, source_path, dest_path, source_text=None):
-        return self._render(template.render_cheetah, source_text, source_path, dest_path)
+        if source_text and ("$" not in source_text) and ("#" not in source_text):
+            return (self.render_name(dest_path), source_text)  # skip rendering in trivial cases
+        else:
+            return (self.render_name(dest_path),
+                    self.cached_template(("cheetah", hash(source_text), source_path),
+                                         lambda: self._render(template.render_cheetah, source_text, source_path)))
 
     def render_mako(self, source_path, dest_path, source_text=None):
-        return self._render(template.render_mako, source_text, source_path, dest_path)
+        return (self.render_name(dest_path),
+                self.cached_template(("mako", hash(source_text), source_path),
+                                     lambda: self._render(template.render_mako, source_text, source_path)))
 
     def render_genshi_xml(self, source_path, dest_path, source_text=None):
-        return self._render(template.render_genshi, source_text, source_path, dest_path)
+        return (self.render_name(dest_path),
+                self.cached_template(("genshi", hash(source_text), source_path),
+                                     lambda: self._render(template.render_genshi, source_text, source_path)))
 
-    def _render(self, renderer, source_text, source_path, dest_path):
+    def _render(self, renderer, source_text, source_path):
         names = self.get_names()
-        if dest_path:
-            dest_path = template.render_name(dest_path, None, names)
         if source_text:
             source_path = None
         elif source_path:
-            source_path = template.render_name(source_path, None, names)
-        return dest_path, renderer(source_text, source_path, names)
+            source_path = self.render_name(source_path, names=names)
+
+        return renderer(source_text, source_path, names)

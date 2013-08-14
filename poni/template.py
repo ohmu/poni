@@ -17,6 +17,7 @@ try:
 
     import random
     import sys
+
     def _patched_genUniqueModuleName(baseModuleName):
         """
         Workaround the problem that Cheetah creates conflicting module names due to
@@ -68,6 +69,7 @@ def render_name(source_text, source_path, vars):
         output = output.replace(token, node)
     return output
 
+
 def render_cheetah(source_text, source_path, vars):
     assert CheetahTemplate, "Cheetah is not installed"
     try:
@@ -75,12 +77,14 @@ def render_cheetah(source_text, source_path, vars):
     except (Cheetah.Template.Error, SyntaxError, Cheetah.NameMapper.NotFound) as error:
         raise errors.TemplateError("{0}: {1}: {2}".format(source_path, error.__class__.__name__, error))
 
+
 def render_mako(source_text, source_path, vars):
     assert MakoTemplate, "Mako is not installed"
     try:
         return MakoTemplate(text=source_text, filename=source_path).render(**vars)
     except MakoException as error:
         raise errors.TemplateError("{0}: {1}: {2}".format(source_path, error.__class__.__name__, error))
+
 
 def render_genshi(source_text, source_path, vars):
     assert genshi, "Genshi is not installed"
@@ -94,6 +98,7 @@ def render_genshi(source_text, source_path, vars):
         return stream.render('xml')
     except (genshi.template.TemplateError, IOError) as error:
         raise errors.TemplateError("{0}: {1}: {2}".format(source_path, error.__class__.__name__, error))
+
 
 def render(engine=None, source_text=None, source_path=None, vars=None):
     if engine in ("name", "poni"):

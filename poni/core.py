@@ -32,6 +32,8 @@ DONT_SAVE = set(["index", "sub_count", "depth"])
 
 g_plugin_module_cache = {}
 g_plugin_cache = {}
+g_cache_reset_counter = 0
+
 
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
@@ -192,7 +194,7 @@ class Config(Item):
         return "%s/%s" % (self.node.name, self.name)
 
     full_path = property(get_full_path, doc="get full config path")
-    full_name = full_path # backward compatibility
+    full_name = full_path  # backward compatibility
 
     def __hash__(self):
         return hash(self.full_name)
@@ -279,7 +281,7 @@ class Config(Item):
         plugin = module.PlugIn(manager, self, node, top_config)
         plugin.add_actions()
         plugin.add_all_controls()
-        top_config.plugin = plugin # TODO
+        top_config.plugin = plugin  # TODO
         g_plugin_cache[plugin_key] = plugin
 
     def collect_parents(self, manager, node, top_config=None):
@@ -381,7 +383,7 @@ class Node(Item):
 
         settings_dir = config_dir / SETTINGS_DIR
         if not settings_dir.exists():
-            settings_dir.mkdir() # pre-created so it is there for copying files
+            settings_dir.mkdir()  # pre-created so it is there for copying files
 
     def iter_configs(self):
         config_dir = self.path / CONFIG_DIR
@@ -451,6 +453,7 @@ class ConfigMan:
         self.node_cache = {}
         self.find_cache = {}
         self.find_config_cache = {}
+        self._cache_reset_counter = g_cache_reset_counter
         if must_exist:
             conf = self.load_config()
             self.apply_library_paths(conf.get("libpath", {}))
@@ -468,6 +471,9 @@ class ConfigMan:
         self.node_cache = {}
         self.find_cache = {}
         self.find_config_cache = {}
+        global g_cache_reset_counter
+        g_cache_reset_counter += 1
+        self._cache_reset_counter = g_cache_reset_counter
 
     def apply_library_paths(self, path_dict):
         """add repo's custom library include paths to sys.path"""
@@ -602,7 +608,7 @@ class ConfigMan:
         extra = extra or {}
         node = self.node_cache.get(node_path)
         if not node:
-            name = name or node_path[len(self.system_root)+1:]
+            name = name or node_path[len(self.system_root) + 1:]
             node = Node(self, system, name, node_path, extra=extra)
             self.node_cache[node_path] = node
 
@@ -684,7 +690,7 @@ class ConfigMan:
         match_op = pattern.match if full_match else pattern.search
         current = current or self.system_root
         node_conf_file = current / NODE_CONF_FILE
-        name = current[len(self.system_root)+1:]
+        name = current[len(self.system_root) + 1:]
         ok_depth = (not depth) or (curr_depth in depth)
 
         if node_conf_file.exists():
