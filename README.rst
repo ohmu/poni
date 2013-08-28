@@ -64,6 +64,7 @@ Installing the following Python libraries will add optional functionality:
 * pyvsphere_ (VMWare virtual machine provisioning)
 * libvirt-python_ (libvirt virtual machine provisioning)
 * PyDNS_ (libvirt provisioning dependency)
+* lxml_ (libvirt provisioning dependency)
 
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
 .. _Paramiko: http://pypi.python.org/pypi/paramiko
@@ -77,6 +78,7 @@ Installing the following Python libraries will add optional functionality:
 .. _pyvsphere: https://github.com/F-Secure/pyvsphere
 .. _libvirt-python: http://libvirt.org/python.html
 .. _PyDNS: http://pydns.sourceforge.net/
+.. _lxml: http://lxml.de/
 
 Installation using pip or easy_install
 --------------------------------------
