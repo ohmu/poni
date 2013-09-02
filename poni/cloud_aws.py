@@ -639,17 +639,33 @@ class AwsProvider(cloudbase.Provider):
     @convert_boto_errors
     def terminate_instances(self, props):
         conn = self._get_conn()
+        elastic_ips = []
+        eip_instance_ids = [p["instance"] for p in props if p.get("eip") == "allocate"]
+        eip_instances = []
         for instance in self._get_instances(props):
             if isinstance(instance, basestring):
                 # spot request
                 conn.cancel_spot_instance_requests([instance])
             else:
+                if instance.ip_address is not None and instance.id in eip_instance_ids:
+                    elastic_ips.append(instance.ip_address)
+                    eip_instances.append(instance)
+
                 # VM instance
                 instance.remove_tag(TAG_NAME)
                 instance.remove_tag(TAG_PONI_STATE)
                 instance.remove_tag(TAG_REINIT_RETRY)
                 instance.terminate()
 
+        # release EIPs
+        if elastic_ips:
+            deadline = self._get_deadline()
+            self._wait_until_instances_state(eip_instances, "terminated", deadline)
+
+            # EIPs are still bound to terminated instance_id for a moment
+            time.sleep(5.0)
+            for addr in conn.get_all_addresses(addresses=elastic_ips):
+                addr.release()
 
     def get_all_instances(self, instance_ids=None):
         """Wrapper to workaround the EC2 bogus 'instance ID ... does not exist' errors"""
