@@ -7,7 +7,6 @@ Author: Oskari Saarenmaa <ext-oskari.saarenmaa@f-secure.com>
 from poni import util
 from poni.cloudbase import Provider
 from poni.errors import CloudError
-from xml.dom.minidom import parseString as xmlparse
 import copy
 import datetime
 import getpass
@@ -488,45 +487,6 @@ class LibvirtProvider(Provider):
         return result
 
 
-class PoniLVXmlOb(object):
-    """Libvirt XML tree reader"""
-    def __init__(self, xml=None, tree=None, path=None):
-        self.__path = path or []
-        self.__tree = tree
-        if xml is not None:
-            self.__tree = xmlparse(xml)
-
-    def __len__(self):
-        return self.__tree and 1 or 0
-
-    def __repr__(self):
-        return "PoniLVXmlOb({0})".format(".".join(self.__path))
-
-    def __str__(self):
-        return self.__tree and self.__tree.firstChild.wholeText.strip()
-
-    def __getitem__(self, name):
-        attr = self.__tree and self.__tree.getAttribute(name)
-        if attr is None:
-            raise KeyError("{0!r} attribute not found".format(name))
-        return attr
-
-    def get(self, name):
-        return self.__tree and self.__tree.getAttribute(name)
-
-    def __getattr__(self, name):
-        if not self.__tree:
-            return PoniLVXmlOb()
-        elem = self.__tree.getElementsByTagName(name)
-        if elem:
-            return PoniLVXmlOb(tree=elem[0], path=(self.__path + [name]))
-        if name.endswith("_list"):
-            name = name[:-5]
-            elems = self.__tree.getElementsByTagName(name)
-            return [PoniLVXmlOb(tree=elem, path=(self.__path + [name])) for elem in elems]
-        return PoniLVXmlOb()
-
-
 class DomainInfo(dict):
     def __getattr__(self, name):
         if name in self.__dict__:
@@ -799,10 +759,12 @@ class PoniLVVol(object):
         self.__read_desc()
 
     def __read_desc(self):
-        xml = PoniLVXmlOb(self.vol.XMLDesc(0))
-        tformat = xml.volume.target.format.get("type")
-        self.format = tformat or "raw"
-        self.device = "block" if xml.volume.source.device else "file"
+        xml = etree.fromstring(self.vol.XMLDesc(0))
+        format = xml.find("target").find("format")
+        tformat = format.get("type") if format is not None else None
+        self.format = tformat if tformat is not None else "raw"
+        sdevice = xml.find("source").find("device")
+        self.device = "block" if sdevice is not None else "file"
 
 
 class PoniLVPool(object):
@@ -865,9 +827,10 @@ class PoniLVPool(object):
         self.pool.storageVolLookupByName(name).delete(0)
 
     def __read_desc(self):
-        xml = PoniLVXmlOb(self.pool.XMLDesc(0))
-        self.type = xml.pool["type"]
-        self.path = str(xml.pool.target.path)
+        xml = etree.fromstring(self.pool.XMLDesc(0))
+        self.type = xml.get("type")
+        tpath = xml.find("target").find("path")
+        self.path = tpath.text if tpath is not None else ""
 
 
 class PoniLVDom(object):
@@ -916,11 +879,13 @@ class PoniLVDom(object):
         self.info = dict(zip(keys, vals))
 
     def __read_desc(self):
-        xml = PoniLVXmlOb(self.dom.XMLDesc(0))
-        devs = xml.domain.devices
-        if devs:
-            self.macs = [str(iface.mac["address"]) for iface in devs.interface_list]
-            self.disks = [str(disk.source.get("file") or disk.source.get("dev")) for disk in devs.disk_list]
+        xml = etree.fromstring(self.dom.XMLDesc(0))
+        devs = xml.find("devices")
+        if devs is not None:
+            self.macs = [str(iface.find("mac").get("address"))
+                         for iface in devs.iter("interface")]
+            self.disks = [str(disk.find("source").get("file") or disk.find("source").get("dev"))
+                          for disk in devs.iter("disk")]
 
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_online")
