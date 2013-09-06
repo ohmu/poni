@@ -1,13 +1,12 @@
 """
 LibVirt provider for Poni.
-Copyright (C) 2011-2012 F-Secure Corporation, Helsinki, Finland.
+Copyright (C) 2011-2013 F-Secure Corporation, Helsinki, Finland.
 Author: Oskari Saarenmaa <ext-oskari.saarenmaa@f-secure.com>
 """
 
 from poni import util
 from poni.cloudbase import Provider
 from poni.errors import CloudError
-from xml.dom.minidom import parseString as xmlparse
 import copy
 import datetime
 import getpass
@@ -36,6 +35,14 @@ try:
 except ImportError:
     libvirt = None
     MISSING_LIBS.append("libvirt")
+
+try:
+    from lxml import etree
+    from lxml.builder import E as XMLE
+except ImportError:
+    etree = None
+    XMLE = None
+    MISSING_LIBS.append("lxml")
 
 
 if getattr(paramiko.SSHClient, "connect_socket", None):
@@ -480,45 +487,6 @@ class LibvirtProvider(Provider):
         return result
 
 
-class PoniLVXmlOb(object):
-    """Libvirt XML tree reader"""
-    def __init__(self, xml=None, tree=None, path=None):
-        self.__path = path or []
-        self.__tree = tree
-        if xml is not None:
-            self.__tree = xmlparse(xml)
-
-    def __len__(self):
-        return self.__tree and 1 or 0
-
-    def __repr__(self):
-        return "PoniLVXmlOb({0})".format(".".join(self.__path))
-
-    def __str__(self):
-        return self.__tree and self.__tree.firstChild.wholeText.strip()
-
-    def __getitem__(self, name):
-        attr = self.__tree and self.__tree.getAttribute(name)
-        if attr is None:
-            raise KeyError("{0!r} attribute not found".format(name))
-        return attr
-
-    def get(self, name):
-        return self.__tree and self.__tree.getAttribute(name)
-
-    def __getattr__(self, name):
-        if not self.__tree:
-            return PoniLVXmlOb()
-        elem = self.__tree.getElementsByTagName(name)
-        if elem:
-            return PoniLVXmlOb(tree=elem[0], path=(self.__path + [name]))
-        if name.endswith("_list"):
-            name = name[:-5]
-            elems = self.__tree.getElementsByTagName(name)
-            return [PoniLVXmlOb(tree=elem, path=(self.__path + [name])) for elem in elems]
-        return PoniLVXmlOb()
-
-
 class DomainInfo(dict):
     def __getattr__(self, name):
         if name in self.__dict__:
@@ -636,69 +604,6 @@ class PoniLVConn(object):
 
     @convert_libvirt_errors
     def clone_vm(self, name, spec, overwrite=False):
-        desc = """
-            <domain type='kvm'>
-              <name>%(name)s</name>
-              <description>%(desc)s</description>
-              <uuid>%(uuid)s</uuid>
-              <memory>%(hardware.ram_kb)s</memory>
-              <cpu mode='%(hardware.cpumode)s'></cpu>
-              <vcpu>%(hardware.cpus)s</vcpu>
-              <os>
-                <type arch='%(hardware.arch)s' machine='pc'>hvm</type>
-                <boot dev='hd'/>
-              </os>
-              <features>
-                <acpi/>
-                <apic/>
-                <pae/>
-              </features>
-              <clock offset='utc'/>
-              <on_poweroff>destroy</on_poweroff>
-              <on_reboot>restart</on_reboot>
-              <on_crash>restart</on_crash>
-              <devices>
-                %(disks)s
-                %(interfaces)s
-                <serial type='pty'>
-                  <target port='0'/>
-                  <alias name='serial0'/>
-                </serial>
-                <console type='pty'>
-                  <target type='serial' port='0'/>
-                  <alias name='serial0'/>
-                </console>
-                <input type='tablet' bus='usb'>
-                  <alias name='input0'/>
-                </input>
-                <input type='mouse' bus='ps2'/>
-                <graphics type='vnc' autoport='yes'/>
-                <video>
-                  <model type='cirrus' vram='9216' heads='1'/>
-                  <alias name='video0'/>
-                </video>
-                <memballoon model='virtio'>
-                  <alias name='balloon0'/>
-                </memballoon>
-              </devices>
-            </domain>
-            """
-        interface_desc = """
-                <interface type='%(type)s'>
-                  <model type='virtio'/>
-                  <mac address='%(mac)s'/>
-                  <source %(type)s='%(network)s'/>
-                </interface>
-                """
-        disk_desc = """
-                <disk type='%(disk_type)s' device='disk'>
-                  <driver name='qemu' type='%(driver_type)s' cache='%(cache)s'/>
-                  <source %(source)s='%(path)s'/>
-                  <target dev='%(target_dev)s'/>
-                </disk>
-                """
-        spec = copy.deepcopy(spec)
-
         def macaddr(index):
             """create a mac address based on the VM name for DHCP predictability"""
             mac_ext = hashlib.md5(name).hexdigest()
@@ -715,29 +620,44 @@ class PoniLVConn(object):
                 raise LVPError("{0!r} vm already exists".format(name))
             self.delete_vm(name)
 
-        spec["name"] = name
-        if "desc" not in spec:
-            spec["desc"] = _created_str()
-        if "uuid" not in spec:
-            spec["uuid"] = str(uuid.uuid4())
+        spec = copy.deepcopy(spec)
         if isinstance(spec.get("hardware"), dict):
             for k, v in spec["hardware"].iteritems():
                 spec["hardware." + k] = v
 
-        # default to x86_64 system with 1 CPU and 1G RAM
-        if "hardware.arch" not in spec:
-            spec["hardware.arch"] = "x86_64"
-        if "hardware.cpus" not in spec:
-            spec["hardware.cpus"] = 1
-        if "hardware.cpumode" not in spec:
-            spec["hardware.cpumode"] = "host-model"
         ram_mb = spec.get("hardware.ram_mb", spec.get("hardware.ram", 1024))
         ram_kb = spec.get("hardware.ram_kb", 1024 * ram_mb)
-        spec["hardware.ram_kb"] = ram_kb
-        spec["hardware.ram_mb"] = ram_kb // 1024
+
+        devs = XMLE.devices(
+            XMLE.serial(XMLE.target(port="0"), XMLE.alias(name="serial0"), type="pty"),
+            XMLE.console(XMLE.target(port="0"), XMLE.alias(name="serial0"), type="pty"),
+            XMLE.input(XMLE.alias(name="input0"), type="tablet", bus="usb"),
+            XMLE.input(type="mouse", bus="ps2"),
+            XMLE.graphics(type="vnc", autoport="yes"),
+            XMLE.video(
+                XMLE.model(type="cirrus", vram="9216", heads="1"),
+                XMLE.alias(name="video0")),
+            XMLE.memballoon(XMLE.alias(name="balloon0"), model="virtio"))
+
+        desc = XMLE.domain(
+            XMLE.name(name),
+            XMLE.description(spec.get("desc", _created_str())),
+            XMLE.uuid(spec.get("uuid", str(uuid.uuid4()))),
+            XMLE.clock(offset="utc"),
+            XMLE.on_poweroff("destroy"),
+            XMLE.on_reboot("restart"),
+            XMLE.on_crash("restart"),
+            XMLE.memory(str(ram_kb)),
+            XMLE.vcpu(str(spec.get("hardware.cpus", 1))),
+            XMLE.cpu(mode=spec.get("hardware.cpumode", "host-model")),
+            XMLE.features(XMLE.acpi(), XMLE.apic(), XMLE.pae()),
+            XMLE.os(
+                XMLE.type("hvm", machine="pc", arch=spec.get("hardware.arch", "x86_64")),
+                XMLE.boot(dev="hd")),
+            devs,
+            type="kvm")
 
         # Set up disks - find all hardware.diskX entries in spec
-        spec["disks"] = ""
         for i, item in enumerate(gethw("disk")):
             dev_name = "vd" + chr(ord("a") + i)
             if "clone" in item or "create" in item:
@@ -745,7 +665,7 @@ class PoniLVConn(object):
                     pool = self.dominfo.pools[item["pool"]]
                 except KeyError:
                     raise LVPError("host {0}:{1} does not have pool named '{2}'".format(
-                            self.dominfo.conn.host, self.dominfo.conn.port, item["pool"]))
+                            self.host, self.port, item["pool"]))
 
                 vol_name = "{0}-{1}".format(name, dev_name)
                 if "clone" in item:
@@ -765,33 +685,33 @@ class PoniLVConn(object):
                 driver_type = "raw"
             else:
                 raise LVPError("Unrecognized disk specification {0!r}".format(item))
-
-            dspec = {
-                "path": disk_path,
-                "disk_type": disk_type,
-                "driver_type": driver_type,
-                "cache": item.get("cache", "none"),
-                "source": "dev" if disk_type == "block" else "file",
-                "target_dev": dev_name,
-            }
-            spec["disks"] += disk_desc % dspec
+            if disk_type == "block":
+                dsource = XMLE.source(dev=disk_path)
+            else:
+                dsource = XMLE.source(file=disk_path)
+            devs.append(XMLE.disk(dsource,
+                XMLE.driver(name="qemu", type=driver_type, cache=item.get("cache", "none")),
+                XMLE.target(dev=dev_name)))
 
         # Set up interfaces - any hardware.nicX entries in spec,
         default_network = spec.get("default_network", "default")
-        spec["interfaces"] = ""
         items = gethw("nic") or [{}]
         for i, item in enumerate(items):
-            ispec = {
-                "mac": item.get("mac", macaddr(i)),
-                "type": item.get("type", "network"),
-                "network": item.get("network", default_network),
-            }
             if "bridge" in item:  # support for old style bridge-only defs
-                ispec["type"] = "bridge"
-                ispec["network"] = item["bridge"]
-            spec["interfaces"] += interface_desc % ispec
+                itype = "bridge"
+                inet = item["bridge"]
+            else:
+                itype = item.get("type", "network")
+                inet = item.get("network", default_network)
+            iface = XMLE.interface(XMLE.mac(address=item.get("mac", macaddr(i))), type=itype)
+            iface.append(XMLE.model(type="virtio"))
+            if itype == "network":
+                iface.append(XMLE.source(network=inet))
+            elif itype == "bridge":
+                iface.append(XMLE.source(bridge=inet))
+            devs.append(iface)
 
-        new_desc = desc % spec
+        new_desc = etree.tostring(desc)
         vm = self.conn.defineXML(new_desc)
         self.libvirt_retry(vm.create)
         for retry in range(1, 10):
@@ -839,10 +759,12 @@ class PoniLVVol(object):
         self.__read_desc()
 
     def __read_desc(self):
-        xml = PoniLVXmlOb(self.vol.XMLDesc(0))
-        tformat = xml.volume.target.format.get("type")
-        self.format = tformat or "raw"
-        self.device = "block" if xml.volume.source.device else "file"
+        xml = etree.fromstring(self.vol.XMLDesc(0))
+        format = xml.find("target").find("format")
+        tformat = format.get("type") if format is not None else None
+        self.format = tformat if tformat is not None else "raw"
+        sdevice = xml.find("source").find("device")
+        self.device = "block" if sdevice is not None else "file"
 
 
 class PoniLVPool(object):
@@ -863,47 +785,35 @@ class PoniLVPool(object):
         }
 
     def _define_volume(self, target, megabytes, source, overwrite):
-        spec = {
-            "name": "auto." + target,
-            "backing": "",
-            "size": (megabytes or 0) * 1024 * 1024,
-            "format": "qcow2",
-            "ext": ".qcow2",
-        }
         if self.type == "logical":
-            spec["ext"] = ""
-            spec["format"] = "raw"
+            name = "auto.{0}".format(target)
+            format = "raw"
+        else:
+            name = "auto.{0}.qcow2".format(target)
+            format = "qcow2"
+        voltree = XMLE.volume(
+            XMLE.name(name),
+            XMLE.target(XMLE.format(type=format)))
+        bytes = (megabytes or 0) * 1024 * 1024
         if source:
             orig = self.pool.storageVolLookupByName(source)
-            spec["backing"] = """
-                <backingStore>
-                    <format type='qcow2'/>
-                    <path>{0}</path>
-                </backingStore>
-                """.format(orig.path())
-            if not megabytes:
-                spec["size"] = orig.info()[1]
-        spec["fullname"] = "%(name)s%(ext)s" % spec
-        desc = """
-            <volume>
-                <name>%(fullname)s</name>
-                <capacity>%(size)s</capacity>
-                <target>
-                    <format type='%(format)s'/>
-                </target>
-                %(backing)s
-            </volume>
-            """ % spec
+            if not bytes:
+                bytes = orig.info()[1]
+            voltree.append(XMLE.backingStore(
+                    XMLE.format(type="qcow2"),
+                    XMLE.path(orig.path())))
+        voltree.append(XMLE.capacity(str(bytes)))
+        volxml = etree.tostring(voltree)
 
         try:
-            vol = self.pool.createXML(desc, 0)
+            vol = self.pool.createXML(volxml, 0)
         except libvirt.libvirtError as ex:
             if not re.search("storage vol( '.*?')? already exists", str(ex)):
                 raise
             if not overwrite:
-                raise LVPError("{0!r} volume already exists".format(spec["fullname"]))
-            self.delete_volume(spec["fullname"])
-            vol = self.pool.createXML(desc, 0)
+                raise LVPError("{0!r} volume already exists".format(name))
+            self.delete_volume(name)
+            vol = self.pool.createXML(volxml, 0)
 
         return PoniLVVol(vol, self)
 
@@ -917,9 +827,10 @@ class PoniLVPool(object):
         self.pool.storageVolLookupByName(name).delete(0)
 
     def __read_desc(self):
-        xml = PoniLVXmlOb(self.pool.XMLDesc(0))
-        self.type = xml.pool["type"]
-        self.path = str(xml.pool.target.path)
+        xml = etree.fromstring(self.pool.XMLDesc(0))
+        self.type = xml.get("type")
+        tpath = xml.find("target").find("path")
+        self.path = tpath.text if tpath is not None else ""
 
 
 class PoniLVDom(object):
@@ -968,11 +879,13 @@ class PoniLVDom(object):
         self.info = dict(zip(keys, vals))
 
     def __read_desc(self):
-        xml = PoniLVXmlOb(self.dom.XMLDesc(0))
-        devs = xml.domain.devices
-        if devs:
-            self.macs = [str(iface.mac["address"]) for iface in devs.interface_list]
-            self.disks = [str(disk.source.get("file") or disk.source.get("dev")) for disk in devs.disk_list]
+        xml = etree.fromstring(self.dom.XMLDesc(0))
+        devs = xml.find("devices")
+        if devs is not None:
+            self.macs = [str(iface.find("mac").get("address"))
+                         for iface in devs.iter("interface")]
+            self.disks = [str(disk.find("source").get("file") or disk.find("source").get("dev"))
+                          for disk in devs.iter("disk")]
 
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_online")
@@ -995,10 +908,10 @@ class PoniLVDom(object):
             raise LVPError("disk-only snapshots are not supported in libvirt vms at the moment")
         self.log.info("creating %s snapshot %r for %r", "memory" if memory else "disk-only", name, self.name)
         flags = 0 if memory else libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
-        self.dom.snapshotCreateXML("""<domainsnapshot>
-                <name>{name}</name>
-                <description>{description}</description>
-            </domainsnapshot>""".format(name=name, description=description or _created_str()), flags)
+        snapxml = etree.tostring(XMLE.domainsnapshot(
+            XMLE.name(name),
+            XMLE.description(description or _created_str())))
+        self.dom.snapshotCreateXML(snapxml, flags)
 
     @convert_libvirt_errors
     @ignore_libvirt_errors("snapshot_not_found")
