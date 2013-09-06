@@ -13,13 +13,14 @@ import logging
 import os
 import time
 import urlparse
+from distutils.version import LooseVersion
 
 from . import errors
 from . import cloudbase
 
 from . import cloud_aws
 
-BOTO_REQUIREMENT = "2.5.2"
+BOTO_REQUIREMENT = LooseVersion("2.5.2")
 EUCALYPTUS = "eucalyptus"
 EUCALYPTUS_API_VERSION = "2013-02-01"
 
@@ -45,7 +46,7 @@ class EucalyptusProvider(cloudbase.Provider):
 
     def __init__(self, cloud_prop):
         assert boto, "boto is not installed, cannot access Eucalyptus"
-        assert boto.Version >= BOTO_REQUIREMENT, "boto version is too old, cannot access Eucalyptus"
+        assert LooseVersion(boto.Version) >= BOTO_REQUIREMENT, "boto version is too old, cannot access Eucalyptus"
         cloudbase.Provider.__init__(self, EUCALYPTUS, cloud_prop)
         self.log = logging.getLogger(EUCALYPTUS)
         self._conn = None

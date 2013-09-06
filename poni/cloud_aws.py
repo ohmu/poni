@@ -11,12 +11,13 @@ import logging
 import os
 import re
 import time
+from distutils.version import LooseVersion
 
 from . import errors
 from . import cloudbase
 
 
-BOTO_REQUIREMENT = "2.5.2"
+BOTO_REQUIREMENT = LooseVersion("2.5.2")
 AWS_EC2 = "aws-ec2"
 TAG_NAME = "Name"
 TAG_PONI_STATE = "PoniState"
@@ -291,7 +292,7 @@ class AwsProvider(cloudbase.Provider):
 
     def __init__(self, cloud_prop):
         assert boto, "boto is not installed, cannot access AWS"
-        assert boto.Version >= BOTO_REQUIREMENT, "boto version is too old, cannot access AWS"
+        assert LooseVersion(boto.Version) >= BOTO_REQUIREMENT, "boto version is too old, cannot access AWS"
         cloudbase.Provider.__init__(self, AWS_EC2, cloud_prop)
         self.log = logging.getLogger(AWS_EC2)
         self.region = cloud_prop["region"]
