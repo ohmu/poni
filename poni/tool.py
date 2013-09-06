@@ -31,6 +31,7 @@ from . import listout
 from . import colors
 from . import version
 from . import work
+from . import template
 from . import times
 
 try:
@@ -44,9 +45,6 @@ try:
 except ImportError:
     from argh import alias as argh_named
 
-
-import Cheetah.Template
-from Cheetah.Template import Template as CheetahTemplate
 
 TOOL_NAME = "poni"
 
@@ -281,14 +279,10 @@ class Tool:
 
         variables = dict(util.parse_prop(var) for var in arg.variable)
         variables['current_script_dir'] = os.path.dirname(arg.script)
-        try:
-            script_text = str(CheetahTemplate(script_text,
-                                              searchList=[variables]))
-        except (Cheetah.Template.Error, SyntaxError,
-                Cheetah.NameMapper.NotFound), error:
-            raise errors.Error("script error: %s: %s" % (
-                    error.__class__.__name__, error))
 
+        match = re.search(r"^\s*#\s+poni\.template\s*:\s*(\w+)", script_text, re.MULTILINE)
+        engine = match.group(1) if match else "cheetah"
+        script_text = template.render(engine=engine, source_text=script_text, vars=variables)
         lines = script_text.splitlines()
 
         def wrap(args):

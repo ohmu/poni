@@ -13,47 +13,21 @@ import datetime
 import difflib
 import itertools
 import logging
-import random
 import re
 import sys
 import time
 
-from . import errors
-from . import util
 from . import colors
+from . import errors
+from . import template
+from . import util
 
-import Cheetah.Template
-from Cheetah.Template import Template as CheetahTemplate
 
 try:
     from argh import expects_obj
 except ImportError:
     # older argh version
     expects_obj = lambda m: m
-
-
-def _patched_genUniqueModuleName(baseModuleName):
-    """
-    Workaround the problem that Cheetah creates conflicting module names due to
-    a poor module generator function. Monkey-patch the module with a workaround.
-
-    Fixes failures that look like this:
-
-      File "cheetah_DynamicallyCompiledCheetahTemplate_1336479589_95_84044.py", line 58, in _init_
-      TypeError: super() argument 1 must be type, not None
-    """
-    if baseModuleName not in sys.modules:
-        return baseModuleName
-    else:
-        return 'cheetah_%s_%x' % (baseModuleName, random.getrandbits(128))
-
-Cheetah.Template._genUniqueModuleName = _patched_genUniqueModuleName
-
-try:
-    import genshi
-    import genshi.template
-except ImportError:
-    genshi = None
 
 
 class Manager:
@@ -411,6 +385,7 @@ class PlugIn:
         self.top_config = top_config
         self.node = node
         self.controls = {}
+        self.render = self.render_cheetah
 
     def add_actions(self):
         pass
@@ -428,7 +403,7 @@ class PlugIn:
         if isinstance(script_path, (list, tuple)):
             script_path = " ".join(script_path)
 
-        rendered_path = self._render_cheetah(script_path)
+        rendered_path = self.render_name(script_path)
         remote = arg.node.get_remote(override=arg.method)
         lines = [] if yield_stdout else None
         color = colors.Output(sys.stdout, color=arg.color).color
@@ -520,7 +495,7 @@ class PlugIn:
                  dest_bucket=None, owner=None, group=None,
                  render=None, report=False, post_process=None, mode=None,
                  auto_override=False, tags=None):
-        render = render or self.render_cheetah
+        render = render or self.render
         if auto_override:
             source_path = self.get_override_config_path(source_path)
         return self.manager.add_file(node=self.node, config=self.config,
@@ -534,7 +509,7 @@ class PlugIn:
                                      mode=mode, tags=tags)
 
     def add_dir(self, source_path, dest_path, render=None, tags=None):
-        render = render or self.render_cheetah
+        render = render or self.render
         return self.manager.add_file(type="dir", node=self.node,
                                      config=self.config, dest_path=dest_path,
                                      source_path=source_path, render=render,
@@ -560,7 +535,7 @@ class PlugIn:
     def render_text(self, source_path, dest_path, source_text=None):
         try:
             # paths are always rendered as templates
-            dest_path = self.render_cheetah(None, dest_path)[0]
+            dest_path = self.render_name(dest_path)
             text = source_text if (source_text is not None) else file(source_path, "rb").read()
             return dest_path, text
         except (IOError, OSError), error:
@@ -592,46 +567,24 @@ class PlugIn:
                      plugin=self)
         return names
 
-    def _render_cheetah(self, source=None, file=None):
-        """helper to render a text or a file with Cheetah into a str"""
-        names = self.get_names()
-        return str(CheetahTemplate(source=source, file=file, searchList=[names]))
+    def render_name(self, name):
+        return template.render_name(name, None, self.get_names())
 
     def render_cheetah(self, source_path, dest_path, source_text=None):
-        try:
-            if source_path:
-                source_path = self._render_cheetah(source_path)
+        return self._render(template.render_cheetah, source_text, source_path, dest_path)
 
-            if source_text:
-                text = self._render_cheetah(source_text)
-            elif source_path is not None:
-                text = self._render_cheetah(file=source_path)
-            else:
-                text = None
-
-            if dest_path:
-                dest_path = self._render_cheetah(dest_path)
-
-            return dest_path, text
-        except (Cheetah.Template.Error, SyntaxError,
-                Cheetah.NameMapper.NotFound) as error:
-            raise errors.VerifyError("%s: %s: %s" % (
-                source_path, error.__class__.__name__, error))
+    def render_mako(self, source_path, dest_path, source_text=None):
+        return self._render(template.render_mako, source_text, source_path, dest_path)
 
     def render_genshi_xml(self, source_path, dest_path, source_text=None):
-        assert genshi, "Genshi is not installed"
-        assert not source_text, "genshi rendering from source_text not implemented yet"
+        return self._render(template.render_genshi, source_text, source_path, dest_path)
+
+    def _render(self, renderer, source_text, source_path, dest_path):
         names = self.get_names()
         if dest_path:
-            dest_path = self._render_cheetah(dest_path)
-
-        try:
-            tmpl = genshi.template.MarkupTemplate(file(source_path),
-                                                  filepath=source_path)
-            stream = tmpl.generate(**names)
-            output = stream.render('xml')
-            return dest_path, output
-        except (errors.Error,
-                genshi.template.TemplateError,
-                IOError), error:
-            raise errors.VerifyError(source_path, error)
+            dest_path = template.render_name(dest_path, None, names)
+        if source_text:
+            source_path = None
+        elif source_path:
+            source_path = template.render_name(source_path, None, names)
+        return dest_path, renderer(source_text, source_path, names)
