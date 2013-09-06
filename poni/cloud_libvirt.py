@@ -163,6 +163,7 @@ class LibvirtProvider(Provider):
             raise CloudError("required node property 'cloud.profile' pointing to a profile file not defined")
 
         profile = json.load(open(profile_file, "rb"))
+        self.hypervisor = profile.get("hypervisor", "kvm")
         if "ssh_key" in profile:
             self.ssh_key = os.path.expandvars(os.path.expanduser(profile["ssh_key"]))
 
@@ -208,7 +209,8 @@ class LibvirtProvider(Provider):
 
             def lv_connect(host, priority, weight):
                 try:
-                    conn = PoniLVConn(host, keyfile=self.ssh_key, priority=priority, weight=weight)
+                    conn = PoniLVConn(host, hypervisor=self.hypervisor, keyfile=self.ssh_key,
+                                      priority=priority, weight=weight)
                     conn.connect()
                     self.hosts_online.append(conn)
                 except (LVPError, libvirt.libvirtError) as ex:
@@ -289,7 +291,7 @@ class LibvirtProvider(Provider):
                          if conn.srv_priority == lowest_priority),
                         reverse=True)
         if not result:
-            raise LVPError("No connection available for cloning {0}".format(instance["vm_name"]))
+            raise LVPError("No connection available for cloning")
 
         total_weight = sum(e[0] for e in result)
         random_pos = random.random() * total_weight
@@ -438,7 +440,10 @@ class LibvirtProvider(Provider):
                     self.log.info("Got address %r for %s", ipv4, instance["vm_name"])
                     instance['ipv4'] = ipv4
                     addr = instance[instance['ipproto']]
-                    result[instance_id] = dict(host=addr, private=dict(ip=addr, dns=addr))
+                    result[instance_id] = dict(
+                        host=addr,
+                        private=dict(ip=addr, dns=addr),
+                        hypervisor=self.hypervisor)
 
             if not failed:
                 break
@@ -498,19 +503,25 @@ class DomainInfo(dict):
 
 
 class PoniLVConn(object):
-    def __init__(self, host, port=None, uri=None, keyfile=None, priority=None, weight=None):
+    def __init__(self, host, port=None, hypervisor=None, uri=None, keyfile=None, priority=None, weight=None):
         if ":" in host:
             host, _, port = host.rpartition(":")
         port = int(port or 22)
+        if not hypervisor or hypervisor == "qemu":
+            hypervisor = "kvm"
         if not uri:
-            uri = "qemu+ssh://root@{0}:{1}/system?no_tty=1&no_verify=1&keyfile={2}".\
-                  format(host, port, keyfile or "")
+            uri = "{hypervisor}+ssh://root@{host}:{port}/{path}" \
+                  "?no_tty=1&no_verify=1&keyfile={keyfile}" \
+                  .format(host=host, port=port, keyfile=keyfile or "",
+                          hypervisor="qemu" if hypervisor == "kvm" else hypervisor,
+                          path="system" if hypervisor == "kvm" else "")
         m = re.search("://(.+?)@", uri)
         self.log = logging.getLogger("ponilvconn")
         self.username = m and m.group(1)
         self.keyfile = keyfile
         self.host = host
         self.port = port
+        self.hypervisor = hypervisor
         self.uri = uri
         self.srv_priority = 1 if priority is None else priority
         self.srv_weight = 1 if weight is None else weight
@@ -625,19 +636,30 @@ class PoniLVConn(object):
             for k, v in spec["hardware"].iteritems():
                 spec["hardware." + k] = v
 
+        hypervisor = spec.get("hypervisor", self.hypervisor)
         ram_mb = spec.get("hardware.ram_mb", spec.get("hardware.ram", 1024))
         ram_kb = spec.get("hardware.ram_kb", 1024 * ram_mb)
 
-        devs = XMLE.devices(
-            XMLE.serial(XMLE.target(port="0"), XMLE.alias(name="serial0"), type="pty"),
-            XMLE.console(XMLE.target(port="0"), XMLE.alias(name="serial0"), type="pty"),
-            XMLE.input(XMLE.alias(name="input0"), type="tablet", bus="usb"),
-            XMLE.input(type="mouse", bus="ps2"),
-            XMLE.graphics(type="vnc", autoport="yes"),
-            XMLE.video(
-                XMLE.model(type="cirrus", vram="9216", heads="1"),
-                XMLE.alias(name="video0")),
-            XMLE.memballoon(XMLE.alias(name="balloon0"), model="virtio"))
+        if hypervisor == "kvm":
+            devs = XMLE.devices(
+                XMLE.serial(XMLE.target(port="0"), XMLE.alias(name="serial0"), type="pty"),
+                XMLE.console(XMLE.target(port="0"), XMLE.alias(name="serial0"), type="pty"),
+                XMLE.input(XMLE.alias(name="input0"), type="tablet", bus="usb"),
+                XMLE.input(type="mouse", bus="ps2"),
+                XMLE.graphics(type="vnc", autoport="yes"),
+                XMLE.video(
+                    XMLE.model(type="cirrus", vram="9216", heads="1"),
+                    XMLE.alias(name="video0")),
+                XMLE.memballoon(XMLE.alias(name="balloon0"), model="virtio"))
+            extra = [
+                XMLE.cpu(mode=spec.get("hardware.cpumode", "host-model")),
+                XMLE.features(XMLE.acpi(), XMLE.apic(), XMLE.pae()),
+                XMLE.os(
+                    XMLE.type("hvm", machine="pc", arch=spec.get("hardware.arch", "x86_64")),
+                    XMLE.boot(dev="hd")),
+                ]
+        else:
+            raise LVPError("unknown hypervisor type {0!r}".format(hypervisor))
 
         desc = XMLE.domain(
             XMLE.name(name),
@@ -649,13 +671,8 @@ class PoniLVConn(object):
             XMLE.on_crash("restart"),
             XMLE.memory(str(ram_kb)),
             XMLE.vcpu(str(spec.get("hardware.cpus", 1))),
-            XMLE.cpu(mode=spec.get("hardware.cpumode", "host-model")),
-            XMLE.features(XMLE.acpi(), XMLE.apic(), XMLE.pae()),
-            XMLE.os(
-                XMLE.type("hvm", machine="pc", arch=spec.get("hardware.arch", "x86_64")),
-                XMLE.boot(dev="hd")),
-            devs,
-            type="kvm")
+            devs, *extra,
+            type=hypervisor)
 
         # Set up disks - find all hardware.diskX entries in spec
         for i, item in enumerate(gethw("disk")):
@@ -704,7 +721,8 @@ class PoniLVConn(object):
                 itype = item.get("type", "network")
                 inet = item.get("network", default_network)
             iface = XMLE.interface(XMLE.mac(address=item.get("mac", macaddr(i))), type=itype)
-            iface.append(XMLE.model(type="virtio"))
+            if hypervisor == "kvm":
+                iface.append(XMLE.model(type="virtio"))
             if itype == "network":
                 iface.append(XMLE.source(network=inet))
             elif itype == "bridge":
