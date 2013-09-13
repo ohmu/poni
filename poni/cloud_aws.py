@@ -451,12 +451,14 @@ class AwsProvider(cloudbase.Provider):
         instance = self._find_instance_by_tag(TAG_NAME, vm_name, ok_states=ok_states)
         if instance:
             out_prop["instance"] = instance.id
+            self.log.info("Instance %s already exists as %s", vm_name, instance.id)
             return dict(cloud=out_prop)
 
         spot_req = self._find_spot_req_by_tag(TAG_NAME, vm_name)
         if spot_req:
             # there's already a spot request about this vm_name, return it
             out_prop["instance"] = spot_req.id
+            self.log.info("Spot-Instance %s already exists as %s", vm_name. spot_req.id)
             return dict(cloud=out_prop)
 
         launch_kwargs = dict(
@@ -477,6 +479,7 @@ class AwsProvider(cloudbase.Provider):
             "private_ip_address": ("private_ip_address", str),
             "tenancy": ("tenancy", str),
             "instance_profile_name": ("instance_profile_name", str),
+            "user_data": ("user_data", str),
             }
         for arg_name, (key_name, arg_type) in optional_args.iteritems():
             arg_value = cloud_prop.get(key_name)
@@ -487,6 +490,8 @@ class AwsProvider(cloudbase.Provider):
                     raise errors.CloudError("invalid AWS cloud property '%s' value %r: %s: %s" % (
                             arg_name, arg_value, error.__class__.__name__, error))
 
+        self.log.info("Instance not found. Starting up new one with: %s", launch_kwargs)
+
         billing_type = cloud_prop.get("billing", "on-demand")
         if billing_type == "on-demand":
             launch_kwargs["security_group_ids"] = security_group_ids
@@ -494,7 +499,7 @@ class AwsProvider(cloudbase.Provider):
             self.configure_new_instance(instance, cloud_prop)
             out_prop["instance"] = instance.id
         elif billing_type == "spot":
-            launch_kwargs["security_groups"] = security_groups
+            launch_kwargs["security_group_ids"] = security_group_ids
             max_price = cloud_prop.get("spot", {}).get("max_price")
             if not isinstance(max_price, float):
                 raise errors.CloudError(

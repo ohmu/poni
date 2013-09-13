@@ -29,6 +29,9 @@ examples/db-cluster/README.html: examples/db-cluster/README.rst
 clean: deb-clean
 	rm -rf dist/ build/ poni.egg-info/ poni/*.pyc cover/ examples/puppet/README.html examples/db-cluster/README.html README.html README.txt *.pyc
 	(cd doc && make clean)
+	rm -f /tmp/poni_$(shell git describe).diff.*
+	rm -f ../poni?$(shell git describe)*
+	rm -f ../poni?$(shell git describe --abbrev=0)-*.tar.gz
 
 build-dep:
 	apt-get --yes install python-setuptools python-docutils lynx
