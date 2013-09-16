@@ -33,7 +33,7 @@ deb-clean:
 	rm -rf debian/
 
 deb: debian
-	dpkg-buildpackage -S -us -uc
+	dpkg-buildpackage -A -us -uc
 
 .PHONY: debian
 
