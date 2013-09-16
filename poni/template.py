@@ -49,14 +49,23 @@ except ImportError:
     genshi = None
 
 
+_name_re = re.compile(r"(\\*\$(?:\{.+?\}|[._a-zA-Z0-9]+))")
 def render_name(source_text, source_path, vars):
     """simplified filename rendering with dollar-variable substitution only"""
     if source_path:
         source_text = open(source_path).read()
-    output = source_text
-    for token in re.findall(r"(\$(?:\{.+?\}|[._a-zA-Z0-9]+))", source_text):
+    def sub(match):
+        token = match.group(1)
+        escapes = 0
+        while token[escapes] == '\\':
+            escapes += 1
+        if escapes % 2:
+            return token
+        token = token[escapes+1:]
+        if token[0] == '{' and token[-1] == '}':
+            token = token[1:-1]
         node = vars
-        tpath, _, targs = token.strip("${}").partition("(")
+        tpath, _, targs = token.partition("(")
         for part in tpath.split("."):
             if isinstance(node, dict) and part in node:
                 node = node[part]
@@ -66,8 +75,8 @@ def render_name(source_text, source_path, vars):
             node = node(*eval("(" + targs)) if targs else node()
         if not isinstance(node, basestring):
             node = str(node)
-        output = output.replace(token, node)
-    return output
+        return node
+    return _name_re.sub(sub, source_text)
 
 
 def render_cheetah(source_text, source_path, vars):
