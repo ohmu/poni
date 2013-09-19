@@ -585,7 +585,7 @@ class PlugIn:
         return rendered
 
     def render_name(self, name, names=None):
-        if ("$" not in name) and ("#" not in name):
+        if not name or (("$" not in name) and ("#" not in name)):
             return name  # skip rendering in trivial cases
 
         return self.cached_template(("name", hash(name)),
