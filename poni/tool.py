@@ -1270,7 +1270,7 @@ class Tool:
     @expects_obj
     @argh_named("set")
     @arg_full_match
-    @argh.arg('pattern', type=str, help='search pattern', nargs="?")
+    @argh.arg('pattern', type=str, help='search pattern')
     @argh.arg('setting', type=str, nargs="+", help="'name=[type:]value'")
     def handle_settings_set(self, arg):
         """override settings values"""
