@@ -1,3 +1,4 @@
+from poni import template
 from poni import tool
 from helper import *
 
@@ -15,6 +16,16 @@ genshi_xml_template = """\
   <foo py:content="node.host"/>
 </test>
 """
+
+class objectvar(object):
+    val1 = "object variable 1"
+    val2 = {"key": "dict in object variable 2"}
+
+g_vars = {
+    "text": "dummy text variable",
+    "object": objectvar,
+    "dict": {"key": "dummy value in a dict"},
+    }
 
 class TestTemplates(Helper):
     def test_xml_template(self):
@@ -50,3 +61,27 @@ class TestTemplates(Helper):
         output = output_file.bytes()
         print output
         assert "<foo>baz</foo>" in output
+
+    name_tests = {
+        "foo": "foo",
+        "foo [$text]": "foo [dummy text variable]",
+        "foo ${dict.key}bar": "foo dummy value in a dictbar",
+        "foo \\${dict.key}bar": "foo ${dict.key}bar",
+        "foo \\$1": "foo $1",
+        "foo \\\\$object.val1": "foo \\$object.val1",
+        "foo \\$object.val1": "foo $object.val1",
+        "foo $object.val1": "foo object variable 1",
+        "$object.val2.key: x": "dict in object variable 2: x",
+        }
+
+    def test_render_name(self):
+        for tmpl, exp in self.name_tests.iteritems():
+            res = template.render_name(tmpl, None, g_vars)
+            assert exp == res, \
+                "template {0!r}, expected {1!r}, got {2!r}".format(tmpl, exp, res)
+
+    def test_render_cheetah(self):
+        for tmpl, exp in self.name_tests.iteritems():
+            res = template.render_cheetah(tmpl, None, g_vars)
+            assert exp == res, \
+                "template {0!r}, expected {1!r}, got {2!r}".format(tmpl, exp, res)

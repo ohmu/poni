@@ -30,3 +30,7 @@ def get_project_version(version_file):
                         % version_file)
 
     return file_ver
+
+if __name__ == "__main__":
+    import sys
+    get_project_version(sys.argv[1])

@@ -9,10 +9,8 @@ base = $(shell basename $(path))
 export DEBFULLNAME := Mika Eloranta
 export DEBEMAIL := mika.eloranta@gmail.com
 
-rpm:
-	echo "__version__ = '$(version)'" > poni/version.py
+rpm: poni/version.py
 	cd .. ; tar -zcv --exclude=*~ --exclude=.git -f $(base)-$(version).tar.gz $(base)
-	$(RM) poni/version.py
 	rpmbuild -ta ../$(base)-$(version).tar.gz \
 		--define 'full_version $(version)' \
 		--define 'major_version $(major_version)' \
@@ -30,10 +28,9 @@ deb-debuild: debian
 	debuild -us -uc
 
 deb-clean:
-	rm -rf debian/
+	$(RM) -r debian/
 
 deb: debian
 	dpkg-buildpackage -A -us -uc
 
 .PHONY: debian
-
