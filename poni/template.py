@@ -49,21 +49,19 @@ except ImportError:
     genshi = None
 
 
-_name_re = re.compile(r"(\\*\$(?:\{.+?\}|[._a-zA-Z0-9]+))")
+_name_re = re.compile(r"(\\?\$(?:\{.+?\}|[._a-zA-Z0-9]+))")
 def render_name(source_text, source_path, vars):
     """simplified filename rendering with dollar-variable substitution only"""
     if source_path:
         source_text = open(source_path).read()
     def sub(match):
         token = match.group(1)
-        escapes = 0
-        while token[escapes] == '\\':
-            escapes += 1
-        if escapes % 2:
-            return token
-        token = token[escapes+1:]
-        if token[0] == '{' and token[-1] == '}':
-            token = token[1:-1]
+        if token[0] == '\\':
+            return token[1:]  # strip escape
+        if token[1] == '{' and token[-1] == '}':
+            token = token[2:-1]  # strip ${}
+        else:
+            token = token[1:]  # strip $
         node = vars
         tpath, _, targs = token.partition("(")
         for part in tpath.split("."):
