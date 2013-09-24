@@ -1,8 +1,11 @@
 rst2html=rst2html
 
-all: dist doc readme example-doc
+all: poni/version.py dist doc readme example-doc
 
 include package.mk
+
+poni/version.py: version.py
+	python $< $@
 
 dist: doc readme
 	python setup.py sdist
@@ -27,11 +30,12 @@ examples/db-cluster/README.html: examples/db-cluster/README.rst
 	$(rst2html) $< $@
 
 clean: deb-clean
-	rm -rf dist/ build/ poni.egg-info/ poni/*.pyc cover/ examples/puppet/README.html examples/db-cluster/README.html README.html README.txt *.pyc
-	(cd doc && make clean)
-	rm -f /tmp/poni_$(shell git describe).diff.*
-	rm -f ../poni?$(shell git describe)*
-	rm -f ../poni?$(shell git describe --abbrev=0)-*.tar.gz
+	$(RM) -r dist/ build/ poni.egg-info/ cover/
+	$(RM) poni/version.py poni/*.pyc tests/*.pyc *.pyc README.html README.txt \
+		examples/puppet/README.html examples/db-cluster/README.html
+	$(RM) ../poni?$(shell git describe)* \
+		../poni?$(shell git describe --abbrev=0)-*.tar.gz
+	$(MAKE) -C doc clean
 
 build-dep:
 	apt-get --yes install python-setuptools python-docutils lynx
