@@ -701,6 +701,7 @@ class AwsProvider(cloudbase.Provider):
 
     def attach_eip(self, instance, cloud_prop):
         """Create and attach an Elastic IP address to the instance"""
+        retries = 8
         eip_mode = cloud_prop.get("eip")
         if not eip_mode:
             return None
@@ -723,11 +724,24 @@ class AwsProvider(cloudbase.Provider):
             assert False, "'eip' mode %r not supported" % (eip_mode,)
 
         host_eip = conn.allocate_address(domain=domain)
-        if instance.subnet_id:
-            # This works for VPC only
-            conn.associate_address(instance_id=instance.id, allocation_id=host_eip.allocation_id)
-        else:
-            host_eip.associate(instance_id=instance.id)
+
+        for n in range (retries):
+            try:
+                if instance.subnet_id:
+                    # This works for VPC only
+                    conn.associate_address(instance_id=instance.id, allocation_id=host_eip.allocation_id)
+                else:
+                    host_eip.associate(instance_id=instance.id)
+            except boto.exception.EC2ResponseError as error:
+                if not "does not exist" in str(error):
+                    raise
+                else:
+                    retries_left = retries - n
+                    if retries_left > 0:
+                        backoff = 2**n
+                        self.log.warning("Can't associate EIP %s to instance %s, still retrying %d times after sleeping for %.1fs",
+                                 host_eip, instance.id, retries_left, backoff)
+                        time.sleep(backoff)
 
         return host_eip.public_ip
 
