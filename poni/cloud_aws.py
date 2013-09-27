@@ -60,11 +60,18 @@ class InstanceStarter(object):
         self.total_instances = len(props)
         self.provider = provider
         self.pending = provider._get_instances(props)
+
+        self.log.debug("Currently Pending: %s", self.pending)
+        self.log.debug("Props: %s", props)
+        self.log.debug("Provider: %s", provider)
+
         self.info_by_id = dict((instance.id, dict(start=time.time()))
                                for instance in self.pending
                                if not isinstance(instance, basestring))
         self.props_by_id = dict((p["instance"], p) for p in props)
-        self.old_instance_id_by_new_id = dict((instance.id, instance.id) for instance in self.pending)
+        self.old_instance_id_by_new_id = dict((instance.id, instance.id)
+                                              for instance in self.pending
+                                              if not isinstance(instance, basestring))
         self.convert_id_map = {}
         self.output = {}
         self.conn = self.provider._get_conn()
@@ -83,11 +90,13 @@ class InstanceStarter(object):
 
             # start waiting for the instance to boot up
             instance = reservations[0].instances[0]
+            self.log.info("Spot request (%s) fulfilled. Adding instance (%s) to pending list and configuring it. (Currently pending: %s)", spot_req.id, instance.id, self.pending)
             self.pending.append(instance)
             self.info_by_id[instance.id] = dict(start=time.time())
             self.props_by_id[instance.id] = self.props_by_id[op]
             self.provider.configure_new_instance(instance, self.props_by_id[op])
             self.convert_id_map[instance.id] = op
+            self.old_instance_id_by_new_id[instance.id] = spot_req.id
         elif spot_req.state == "open":
             # spot request not handled yet, wait some more...
             pass
@@ -99,6 +108,8 @@ class InstanceStarter(object):
 
     def get_output_for_instance(self, instance):
         """Return the correct output dict for the instance"""
+        self.log.debug("new:old instance map: %s", self.old_instance_id_by_new_id)
+        self.log.debug("requested instance: %s", instance)
         old_instance_id = self.old_instance_id_by_new_id[instance.id]
         return self.output.setdefault(old_instance_id, {})
 
@@ -154,6 +165,7 @@ class InstanceStarter(object):
         else:
             if instance in self.pending:
                 self.pending.remove(instance)
+                self.log.debug("Removed %s from pending list (Currently pending %s)", instance, self.pending)
 
             return (wait_state == "running")
 
@@ -179,6 +191,10 @@ class InstanceStarter(object):
             out_cloud_prop["instance"] = instance.id
             if cloud_prop.get("deploy_via_eip"):
                 out_prop["host"] = host_eip
+
+        self.log.debug("Pending: %s", str(self.pending))
+        self.log.debug("Instance %s ", str(instance))
+        self.log.debug("Props %s", str(out_prop))
 
         self.pending.remove(instance)
         instance.add_tag(TAG_PONI_STATE, STATE_INITIALIZED)
@@ -276,6 +292,8 @@ class InstanceStarter(object):
                               self.total_instances - len(self.pending), self.total_instances,
                               ", ".join(("%s: %r" % s) for s in summary.iteritems()))
                 time.sleep(5.0)
+
+        self.log.info("Instances ready. Return %s ", self.output)
         return self.output
 
 
@@ -397,16 +415,19 @@ class AwsProvider(cloudbase.Provider):
         raise errors.CloudError(
             "subnet with ID or name %r does not exist" % (id_or_name,))
 
-    def add_extra_tags(self, instance, cloud_prop):
+    def add_extra_tags(self, resource, cloud_prop):
         """Add extra tag values specified by the user to an instance"""
+        conn = self._get_conn()
         extra_tags = cloud_prop.get("extra_tags", {})
         if (not isinstance(extra_tags, dict) or
             any((not isinstance(k, basestring) or not isinstance(v, basestring)) for k, v in extra_tags.iteritems())):
             raise errors.CloudError(
                 "invalid 'extra_tags' value %r: dict containing str:str mapping required" % (extra_tags,))
 
-        for key, value in extra_tags.iteritems():
-            instance.add_tag(key, value)
+        # Perhaps check that existing tags are not overwritten? (or maybe only Name and PoniState should be safe?)
+        if len(extra_tags) > 0:
+            conn.create_tags([resource.id], extra_tags)
+            self.log.info("Assigned tags to instance %s (%s)", resource.id, extra_tags)
 
     def _run_instance(self, launch_kwargs):
         """Launch a new instance and record it in the internal cache"""
@@ -448,17 +469,23 @@ class AwsProvider(cloudbase.Provider):
 
         out_prop = copy.deepcopy(cloud_prop)
 
+        # Name and ponistate values should not be altered by extra
+        # tags. However we will always update the resource with the
+        # extra tags even if it exists alreary
+
         instance = self._find_instance_by_tag(TAG_NAME, vm_name, ok_states=ok_states)
         if instance:
             out_prop["instance"] = instance.id
             self.log.info("Instance %s already exists as %s", vm_name, instance.id)
+            self.add_extra_tags(instance, cloud_prop)
             return dict(cloud=out_prop)
 
         spot_req = self._find_spot_req_by_tag(TAG_NAME, vm_name)
         if spot_req:
             # there's already a spot request about this vm_name, return it
             out_prop["instance"] = spot_req.id
-            self.log.info("Spot-Instance %s already exists as %s", vm_name. spot_req.id)
+            self.log.info("Spot-Instance %s already exists as %s", vm_name, spot_req.id)
+            self.add_extra_tags(spot_req, cloud_prop)
             return dict(cloud=out_prop)
 
         launch_kwargs = dict(
@@ -495,9 +522,9 @@ class AwsProvider(cloudbase.Provider):
         billing_type = cloud_prop.get("billing", "on-demand")
         if billing_type == "on-demand":
             launch_kwargs["security_group_ids"] = security_group_ids
-            instance = self._run_instance(launch_kwargs)
-            self.configure_new_instance(instance, cloud_prop)
-            out_prop["instance"] = instance.id
+            resource = self._run_instance(launch_kwargs)
+            self.configure_new_instance(resource, cloud_prop)
+            out_prop["instance"] = resource.id
         elif billing_type == "spot":
             launch_kwargs["security_group_ids"] = security_group_ids
             max_price = cloud_prop.get("spot", {}).get("max_price")
@@ -509,12 +536,28 @@ class AwsProvider(cloudbase.Provider):
             if not max_price:
                 raise errors.CloudError("'cloud.spot.max_price' required but not defined")
 
+            # Change the 'on-demand' to operate similarly?
+            if launch_kwargs.get('private_ip_address', None):
+                ip_addr = launch_kwargs.pop('private_ip_address')
+
+                interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(
+                    device_index=0,
+                    subnet_id=launch_kwargs.pop("subnet_id"),  # "EC2ResponseError: Network interfaces and an instance-level subnet ID may not be specified on the same request"
+                    groups=launch_kwargs.pop("security_group_ids"),  # "EC2ResponseError: Network interfaces and an instance-level security groups may not be specified on the same request"
+                    private_ip_address=ip_addr,
+                    description="Preset private ip of deployment node",
+                    delete_on_termination=True)
+
+                launch_kwargs['network_interfaces'] = boto.ec2.networkinterface.NetworkInterfaceCollection(interface)
+
             spot_reqs = conn.request_spot_instances(max_price, **launch_kwargs)
-            spot_reqs[0].add_tag(TAG_NAME, vm_name)
-            out_prop["instance"] = spot_reqs[0].id
+            resource = spot_reqs[0]
+            resource.add_tag(TAG_NAME, vm_name)
+            out_prop["instance"] = resource.id
             # Workaround the problem that spot request are not immediately visible in
             # full listing...
             self._spot_req_cache.append(spot_reqs[0])
+            self.add_extra_tags(resource, cloud_prop)
         else:
             raise errors.CloudError("unsupported cloud.billing: %r" % billing_type)
 
@@ -725,7 +768,7 @@ class AwsProvider(cloudbase.Provider):
 
         host_eip = conn.allocate_address(domain=domain)
 
-        for n in range (retries):
+        for n in range(retries):
             try:
                 if instance.subnet_id:
                     # This works for VPC only
@@ -738,7 +781,7 @@ class AwsProvider(cloudbase.Provider):
                 else:
                     retries_left = retries - n
                     if retries_left > 0:
-                        backoff = 2**n
+                        backoff = 2 ** n
                         self.log.warning("Can't associate EIP %s to instance %s, still retrying %d times after sleeping for %.1fs",
                                  host_eip, instance.id, retries_left, backoff)
                         time.sleep(backoff)

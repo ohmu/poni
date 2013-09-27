@@ -859,17 +859,19 @@ class Tool:
                                 node.name))
 
                     update = updates.get(instance_id)
+
+                    self.log.info("Check node: %s (id:%s) (upd:%s)", node, instance_id, update)
                     if not update:
                         raise errors.CloudError(
-                            "cloud provider failed to return updated properties for node '{0}'".format(
-                                node.name))
+                            "cloud provider failed to return updated properties for node '{0}' (id:{1})".format(
+                                node.name, instance_id))
 
                     changes = node.log_update(update)
                     if changes:
                         change_str = ", ".join(
                             ("%s=%r (from %r)" % (c[0], c[2], c[1]))
                             for c in changes)
-                        self.log.info("%s: updated: %s", node.name, change_str)
+                        self.log.info("%s: set: %s", node.name, change_str)
                         node.save()
 
     def _get_cloud_hosts_from_args(self, arg):
