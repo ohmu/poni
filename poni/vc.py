@@ -7,6 +7,7 @@ See LICENSE for details.
 """
 
 from path import path
+import re
 
 try:
     import git
@@ -43,9 +44,20 @@ class GitVersionControl(VersionControl):
         self.git.index.add([".gitignore"])
         self.commit_all("initial commit")
 
+    def get_deleted_files(self):
+        """get a list deleted files that are not yet staged for commit"""
+        status = self.git.git.status()
+        not_staged = "\n# Changes not staged for commit"
+        idx = status.find(not_staged)
+        if not idx:
+            return []
+        return re.findall(r"^#\s+deleted:\s+(.+)$", status[idx:], re.MULTILINE)
+
     def commit_all(self, message):
-        #self.git.index.add(self.git.untracked_files)
         self.git.index.add(["*"])
+        deleted = self.get_deleted_files()
+        if deleted:
+            self.git.index.remove(deleted)
         self.git.index.commit(message)
 
     def status(self):
