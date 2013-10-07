@@ -385,6 +385,14 @@ class Node(Item):
         if not settings_dir.exists():
             settings_dir.mkdir()  # pre-created so it is there for copying files
 
+    def remove_config(self, config):
+        config_dir = self.path / CONFIG_DIR / config
+        if not config_dir.exists():
+            raise errors.UserError(
+                "%s: config %r doest not exist" % (self.name, config))
+
+        shutil.rmtree(config_dir)
+
     def iter_configs(self):
         config_dir = self.path / CONFIG_DIR
         if config_dir.exists():
