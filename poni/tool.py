@@ -349,6 +349,37 @@ class Tool:
                                            (str(source_path), os.getcwd()))
 
     @expects_obj
+    @argh_named("remove-config")
+    @arg_verbose
+    @arg_full_match
+    @arg_target_nodes
+    @argh.arg('config', type=str, help='name of the config')
+    @arg_flag("-e", "--skip-non-existing", help="do nothing if the config does not exist")
+    def handle_remove_config(self, arg):
+        """remove config from node(s)"""
+        alog = self.log.info if arg.verbose else self.log.debug
+        deletes = []
+        confman = self.get_confman(arg.root_dir)
+        nodes = confman.find(arg.nodes, full_match=arg.full_match, exclude=arg.exclude)
+        for node in nodes:
+            existing = list(c for c in node.iter_configs()
+                            if c.name == arg.config)
+            deletes.append("%s/%s" % (node.name, arg.config))
+            if not existing:
+                if arg.skip_non_existing:
+                    self.log.info("config '%s/%s' does not exist, skipped",
+                                  node.name, arg.config)
+                    continue
+                raise errors.UserError("config '%s/%s' does not exist"
+                                       % (node.name, arg.config))
+
+            node.remove_config(arg.config)
+            alog("removed config %r from %s", arg.config, node.path)
+
+        if not deletes and not arg.skip_non_existing:
+            raise errors.UserError("no matching nodes found")
+
+    @expects_obj
     @argh_named("add-config")
     @arg_verbose
     @arg_full_match
@@ -362,6 +393,7 @@ class Tool:
     @arg_flag("-e", "--skip-existing", help="do nothing if the config already exists")
     def handle_add_config(self, arg):
         """add a config to node(s)"""
+        alog = self.log.info if arg.verbose else self.log.debug
         confman = self.get_confman(arg.root_dir)
         if arg.inherit_config:
             conf_node, conf = list(confman.get_config(arg.inherit_config))
@@ -395,15 +427,11 @@ class Tool:
 
             node.add_config(arg.config, parent=parent_config_name,
                             copy_dir=arg.copy_dir)
-            # TODO: verbose output
-            self.log.debug("added config %r to %s, parent=%r", arg.config,
-                           node.path, parent_config_name)
+            alog("added config %r to %s, parent=%r",
+                 arg.config, node.path, parent_config_name)
 
         if not updates:
             raise errors.UserError("no matching nodes found")
-        elif arg.verbose:
-            self.log.info("config %r added to: %s", arg.config,
-                          ", ".join(updates))
 
     @expects_obj
     @argh_named("add-library")
@@ -1358,11 +1386,11 @@ class Tool:
         commands = [
             self.handle_list, self.handle_add_system, self.handle_init,
             self.handle_import, self.handle_script, self.handle_add_config,
-            self.handle_update_config, self.handle_version,
+            self.handle_update_config, self.handle_remove_config,
             self.handle_control, self.handle_require, self.handle_add_library,
             self.handle_set, self.handle_show, self.handle_deploy,
             self.handle_audit, self.handle_verify, self.handle_add_node,
-            self.handle_report,
+            self.handle_report, self.handle_version,
             ]
         commands.sort(key=lambda func: func.__name__)
         parser.add_commands(commands)
