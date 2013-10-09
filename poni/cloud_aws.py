@@ -507,6 +507,7 @@ class AwsProvider(cloudbase.Provider):
             "tenancy": ("tenancy", str),
             "instance_profile_name": ("instance_profile_name", str),
             "user_data": ("user_data", str),
+            "ebs_optimized": ("ebs_optimized", bool),
             }
         for arg_name, (key_name, arg_type) in optional_args.iteritems():
             arg_value = cloud_prop.get(key_name)
@@ -622,6 +623,23 @@ class AwsProvider(cloudbase.Provider):
             dev.delete_on_termination = disk.get("delete_on_termination", True)
             if disk.get("snapshot"):
                 dev.snapshot_id = disk.get("snapshot")
+
+            if disk.get("iops"):
+                # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumes.html
+                if dev.size < 10:
+                    # A Provisioned IOPS volume must be at least 10 GB in size. (20131017)
+                    raise errors.CloudError(
+                        "%s: invalid AWS EBS disk size %r for provisioned IOPS. Must be 10GB or greater" % (
+                            vm_name, disk["size"]))
+
+                dev.volume_type = "io1"
+                dev.iops = disk.get("iops")
+
+                if dev.iops > dev.size * 30:
+                    # For example, a volume with 3000 IOPS must be at least 100 GB in size. (20131017)
+                    raise errors.CloudError(
+                        "%s: The ratio of IOPS provisioned to the volume size requested can be a maximum of 30. Asked size %r asked IOPS %r" % (
+                            vm_name, disk.size, dev.iops))
 
             self.log.info("%s: device %s type %s", cloud_prop.get("vm_name"), device, disk.get("type"))
 
