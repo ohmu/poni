@@ -429,6 +429,14 @@ class AwsProvider(cloudbase.Provider):
             conn.create_tags([resource.id], extra_tags)
             self.log.info("Assigned tags to instance %s (%s)", resource.id, extra_tags)
 
+    def tag_instance_volumes(self, instance):
+        for key, dev in instance.block_device_mapping.iteritems():
+            extra_tags = {
+                'Name': instance.tags['Name'] + ":" + key,
+                TAG_PONI_STATE: 'created',
+                }
+            self._get_conn().create_tags([dev.volume_id], extra_tags)
+
     def _run_instance(self, launch_kwargs):
         """Launch a new instance and record it in the internal cache"""
         conn = self._get_conn()
@@ -478,6 +486,7 @@ class AwsProvider(cloudbase.Provider):
             out_prop["instance"] = instance.id
             self.log.info("Instance %s already exists as %s", vm_name, instance.id)
             self.add_extra_tags(instance, cloud_prop)
+            self.tag_instance_volumes(instance)
             return dict(cloud=out_prop)
 
         spot_req = self._find_spot_req_by_tag(TAG_NAME, vm_name)
@@ -507,6 +516,7 @@ class AwsProvider(cloudbase.Provider):
             "tenancy": ("tenancy", str),
             "instance_profile_name": ("instance_profile_name", str),
             "user_data": ("user_data", str),
+            "ebs_optimized": ("ebs_optimized", bool),
             }
         for arg_name, (key_name, arg_type) in optional_args.iteritems():
             arg_value = cloud_prop.get(key_name)
@@ -585,6 +595,7 @@ class AwsProvider(cloudbase.Provider):
             time.sleep(1.0)
 
         self.add_extra_tags(instance, cloud_prop)
+        self.tag_instance_volumes(instance)
 
     def create_disk_map(self, cloud_prop):
         """return a boto block_device_map created form the cloud properties"""
@@ -622,6 +633,23 @@ class AwsProvider(cloudbase.Provider):
             dev.delete_on_termination = disk.get("delete_on_termination", True)
             if disk.get("snapshot"):
                 dev.snapshot_id = disk.get("snapshot")
+
+            if disk.get("iops"):
+                # http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSVolumes.html
+                if dev.size < 10:
+                    # A Provisioned IOPS volume must be at least 10 GB in size. (20131017)
+                    raise errors.CloudError(
+                        "%s: invalid AWS EBS disk size %r for provisioned IOPS. Must be 10GB or greater" % (
+                            vm_name, disk["size"]))
+
+                dev.volume_type = "io1"
+                dev.iops = disk.get("iops")
+
+                if dev.iops > dev.size * 30:
+                    # For example, a volume with 3000 IOPS must be at least 100 GB in size. (20131017)
+                    raise errors.CloudError(
+                        "%s: The ratio of IOPS provisioned to the volume size requested can be a maximum of 30. Asked size %r asked IOPS %r" % (
+                            vm_name, disk.size, dev.iops))
 
             self.log.info("%s: device %s type %s", cloud_prop.get("vm_name"), device, disk.get("type"))
 
