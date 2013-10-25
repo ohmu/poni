@@ -30,6 +30,23 @@ except ImportError:
     expects_obj = lambda m: m
 
 
+class RenderContext(object):
+    """Log information about the template upon rendering errors"""
+    def __init__(self, entry, target):
+        self.entry = entry
+        self.target = target
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, ex_type, ex_value, tb):
+        if tb:
+            logging.fatal("template render failed: %s: %s: node=%s, config=%s, source=%s, dest=%s, target=%s",
+                          ex_type, ex_value,
+                          self.entry["node"].name, self.entry["config"].name,
+                          self.entry["source_path"], self.entry["dest_path"], self.target)
+
+
 class Manager:
     def __init__(self, confman):
         self.log = logging.getLogger("manager")
@@ -131,8 +148,10 @@ class Manager:
                     # ignore
                     continue
 
-                source_path = entry["config"].plugin.render_name(entry["source_path"])
-                dest_path = entry["config"].plugin.render_name(entry["dest_path"])
+                with RenderContext(entry, "source_path"):
+                    source_path = entry["config"].plugin.render_name(entry["source_path"])
+                with RenderContext(entry, "dest_path"):
+                    dest_path = entry["config"].plugin.render_name(entry["dest_path"])
                 if deploy:
                     # copy a directory recursively
                     remote = entry["node"].get_remote(override=access_method)
@@ -170,7 +189,8 @@ class Manager:
                 if raw:
                     dest_path, output = dest_path, source_path.bytes()
                 else:
-                    dest_path, output = render(source_path, dest_path, source_text=entry["source_text"])
+                    with RenderContext(entry, "template"):
+                        dest_path, output = render(source_path, dest_path, source_text=entry["source_text"])
 
                 if dest_path:
                     dest_path = path(item_path_prefix + dest_path).normpath()
