@@ -54,20 +54,20 @@ class Manager:
                          error.__class__.__name__, error)
         self.error_count += 1
 
-    def copy_tree(self, entry, remote, path_prefix="", verbose=False):
+    def copy_tree(self, source_path, dest_path, remote, path_prefix="", verbose=False):
         def progress(copied, total, ctx={}):
             ctx.setdefault("last", time.time())
             if (copied == total) or (time.time() - ctx["last"]) > 1.0:
                 sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
                 ctx["last"] = time.time()
 
-        dest_dir = path(path_prefix + entry["dest_path"])
+        dest_dir = path(path_prefix + dest_path)
         try:
             remote.stat(dest_dir)
         except errors.RemoteError:
             remote.makedirs(dest_dir)
 
-        for file_path in path(entry["source_path"]).files():
+        for file_path in path(source_path).files():
             dest_path = dest_dir / file_path.basename()
             lstat = file_path.stat()
             try:
@@ -129,24 +129,27 @@ class Manager:
             if entry["type"] == "dir":
                 if filtered_out:
                     # ignore
-                    pass
-                elif deploy:
+                    continue
+
+                source_path = entry["config"].plugin.render_name(entry["source_path"])
+                dest_path = entry["config"].plugin.render_name(entry["dest_path"])
+                if deploy:
                     # copy a directory recursively
                     remote = entry["node"].get_remote(override=access_method)
-                    self.copy_tree(entry, remote, path_prefix=item_path_prefix,
+                    self.copy_tree(source_path, dest_path, remote, path_prefix=item_path_prefix,
                                    verbose=verbose)
                 else:
                     # verify
                     try:
-                        dir_stats = util.dir_stats(entry["source_path"])
+                        dir_stats = util.dir_stats(source_path)
                     except (OSError, IOError), error:
                         raise errors.VerifyError(
                             "cannot copy files from '%s': %s: %s" % (
-                                entry["source_path"], error.__class__.__name__, error))
+                                source_path, error.__class__.__name__, error))
 
                     if dir_stats["file_count"] == 0:
                         self.log.warning("source directory '%s' is empty" % (
-                                entry["source_path"]))
+                                source_path))
                     elif verbose:
                         self.log.info(
                             "[OK] copy source directory '%(path)s' has "
