@@ -115,19 +115,20 @@ def convert_libvirt_errors(method):
             return method(self, *args, **kw)
         except libvirt.libvirtError as ex:
             code = ex.get_error_code()
+            exstr = str(ex).lower()
             if code == libvirt.VIR_ERR_NO_DOMAIN_SNAPSHOT:
                 err = "snapshot_not_found"
                 msg = "snapshot {0!r} not found for {1!r}".format(args[0], self.name)
-            elif "domain is already running" in str(ex):
+            elif "domain is already running" in exstr:
                 # code == libvirt.VIR_ERR_OPERATION_INVALID
                 err = "vm_online"
                 msg = "vm {0!r} is already running".format(self.name)
-            elif "domain is not running" in str(ex):
+            elif "domain is not running" in exstr:
                 # code == libvirt.VIR_ERR_OPERATION_INVALID
                 err = "vm_offline"
                 msg = "vm {0!r} is not running".format(self.name)
-            elif re.search("snapshot file for disk \S+ already exists", str(ex)) or \
-                 re.search("domain snapshot \S+ already exists", str(ex)):
+            elif re.search("snapshot file for disk \S+ already exists", exstr) or \
+                 re.search("domain snapshot \S+ already exists", exstr):
                 # code == libvirt.VIR_ERR_CONFIG_UNSUPPORTED or libvirt.VIR_ERR_INTERNAL_ERROR
                 err = "snapshot_exists"
                 msg = "snapshot {0!r} already exists for {1!r}".format(args[0], self.name)
@@ -522,6 +523,7 @@ class PoniLVConn(object):
         self.host = host
         self.port = port
         self.hypervisor = hypervisor
+        self.emulator = None  # the executable launched by lxc guests
         self.uri = uri
         self.srv_priority = 1 if priority is None else priority
         self.srv_weight = 1 if weight is None else weight
@@ -547,6 +549,9 @@ class PoniLVConn(object):
     def connect(self):
         self.conn = libvirt.open(self.uri)
         self.refresh()
+        if self.hypervisor == "lxc":
+            caps = etree.fromstring(self.conn.getCapabilities())
+            self.emulator = caps.find("guest").find("arch").find("emulator").text
 
     def refresh(self):
         self.refresh_list()
@@ -658,6 +663,20 @@ class PoniLVConn(object):
                     XMLE.type("hvm", machine="pc", arch=spec.get("hardware.arch", "x86_64")),
                     XMLE.boot(dev="hd")),
                 ]
+        elif hypervisor == "lxc":
+            devs = XMLE.devices(
+                XMLE.emulator(self.emulator),
+                XMLE.console(
+                    XMLE.target(type="lxc", port="0"),
+                    XMLE.alias(name="console0"),
+                    type="pty"))
+            extra = [
+                XMLE.resource(XMLE.partition("/machine")),
+                XMLE.os(
+                    XMLE.type("exe", arch=spec.get("hardware.arch", "x86_64")),
+                    XMLE.init(spec.get("init", "/sbin/init"))),
+                XMLE.seclabel(type="none"),
+                ]
         else:
             raise LVPError("unknown hypervisor type {0!r}".format(hypervisor))
 
@@ -676,7 +695,15 @@ class PoniLVConn(object):
 
         # Set up disks - find all hardware.diskX entries in spec
         for i, item in enumerate(gethw("disk")):
-            dev_name = "vd" + chr(ord("a") + i)
+            # we want to name the devices/files created on the host sides with names the kvm guests
+            # will see (ie vda, vdb, etc) but lxc hosts don't really see devices, instead we just
+            # have target directories
+            if hypervisor == "lxc":
+                dev_name = str(i)
+                target_dir = item.get("target")
+            else:
+                dev_name = "vd" + chr(ord("a") + i)
+                target_dir = None
             if "clone" in item or "create" in item:
                 try:
                     pool = self.dominfo.pools[item["pool"]]
@@ -686,29 +713,39 @@ class PoniLVConn(object):
 
                 vol_name = "{0}-{1}".format(name, dev_name)
                 if "clone" in item:
-                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite=overwrite)
+                    vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite=overwrite, voltype=item.get("type"))
                 if "create" in item:
-                    vol = pool.create_volume(vol_name, item["size"], overwrite=overwrite)
+                    vol = pool.create_volume(vol_name, item["size"], overwrite=overwrite, voltype=item.get("type"))
                 disk_path = vol.path
                 disk_type = vol.device
                 driver_type = vol.format
-            elif "file" in item:
-                disk_path = item["file"]
-                disk_type = "file"
-                driver_type = item.get("driver", "qcow2")
             elif "dev" in item:
                 disk_path = item["dev"]
                 disk_type = "block"
                 driver_type = "raw"
+            elif "file" in item and hypervisor == "kvm":
+                disk_path = item["file"]
+                disk_type = "file"
+                driver_type = item.get("driver", "qcow2")
+            elif "source" in item and hypervisor == "lxc":
+                disk_path = item["source"]
             else:
                 raise LVPError("Unrecognized disk specification {0!r}".format(item))
             if disk_type == "block":
                 dsource = XMLE.source(dev=disk_path)
             else:
                 dsource = XMLE.source(file=disk_path)
-            devs.append(XMLE.disk(dsource,
-                XMLE.driver(name="qemu", type=driver_type, cache=item.get("cache", "none")),
-                XMLE.target(dev=dev_name)))
+            if disk_type == "block" or hypervisor == "kvm":
+                devs.append(XMLE.disk(dsource,
+                    XMLE.driver(name="qemu", type=driver_type, cache=item.get("cache", "none")),
+                    XMLE.target(dev=dev_name)))
+            elif hypervisor == "lxc":
+                if not target_dir:
+                    target_dir = "/" if i == 0 else "/disk{0}".format(i)
+                devs.append(XMLE.filesystem(
+                    XMLE.source(dir=disk_path),
+                    XMLE.target(dir=target_dir),
+                    type="mount", accessmode="passthrough"))
 
         # Set up interfaces - any hardware.nicX entries in spec,
         default_network = spec.get("default_network", "default")
@@ -745,15 +782,23 @@ class PoniLVConn(object):
 
     def libvirt_retry(self, op):
         """
-        Workaround "libvirt.libvirtError: Unable to read from monitor: Connection reset by peer"
-        random, recoverable errors produced by libvirt.
+        Workaround transient recoverable errors produced by libvirt.
         """
         end_time = time.time() + 30.0
+        ignore = [
+            # libvirt connection closed for some reason, just retry
+            "Unable to read from monitor: Connection reset by peer",
+            # lxc container starting often fails as they're started
+            # simultaneously with the same device names, use a unique
+            # name to work around it.
+            # http://www.redhat.com/archives/libvir-list/2013-August/msg01475.html
+            "RTNETLINK answers: File exists",
+            ]
         while True:
             try:
                 return op()
             except libvirt.libvirtError as error:
-                if "Unable to read from monitor: Connection reset by peer" not in str(error):
+                if not any(ignorable in str(error) for ignorable in ignore):
                     # some other error, raise immediately
                     raise
 
@@ -802,24 +847,37 @@ class PoniLVPool(object):
             "free": vals[3] / (1024 * 1024),
         }
 
-    def _define_volume(self, target, megabytes, source, overwrite):
-        if self.type == "logical":
-            name = "auto.{0}".format(target)
-            format = "raw"
+    def _define_volume(self, target, megabytes, source, overwrite, voltype):
+        name = "auto.{0}".format(target)
+        # get source volume and its type if any
+        if source:
+            srcvol = self.pool.storageVolLookupByName(source)
+            srctree = etree.fromstring(srcvol.XMLDesc(0))
+            srctype = srctree.find("target").find("format").get("type")
         else:
-            name = "auto.{0}.qcow2".format(target)
-            format = "qcow2"
+            srcvol = None
+            srctype = None
+        # default to the same format as source or raw volumes on lvm and qcow2 elsewhere
+        if not voltype:
+            if srcvol:
+                voltype = srctype
+            elif self.type == "logical":
+                voltype = "raw"
+            else:
+                voltype = "qcow2"
+        # add a type suffix to file based volumes
+        if self.type == "dir" and voltype in ("raw", "qcow2"):
+            name = "{0}.{1}".format(name, voltype)
         voltree = XMLE.volume(
             XMLE.name(name),
-            XMLE.target(XMLE.format(type=format)))
+            XMLE.target(XMLE.format(type=voltype)))
         bytes = (megabytes or 0) * 1024 * 1024
-        if source:
-            orig = self.pool.storageVolLookupByName(source)
+        if srcvol:
             if not bytes:
-                bytes = orig.info()[1]
+                bytes = srcvol.info()[1]
             voltree.append(XMLE.backingStore(
-                    XMLE.format(type="qcow2"),
-                    XMLE.path(orig.path())))
+                    XMLE.format(type=srctype),
+                    XMLE.path(srcvol.path())))
         voltree.append(XMLE.capacity(str(bytes)))
         volxml = etree.tostring(voltree)
 
@@ -835,11 +893,11 @@ class PoniLVPool(object):
 
         return PoniLVVol(vol, self)
 
-    def create_volume(self, target, megabytes, overwrite=False):
-        return self._define_volume(target, megabytes, None, overwrite)
+    def create_volume(self, target, megabytes, overwrite=False, voltype=None):
+        return self._define_volume(target, megabytes, None, overwrite, voltype)
 
-    def clone_volume(self, source, target, megabytes=None, overwrite=False):
-        return self._define_volume(target, megabytes, source, overwrite)
+    def clone_volume(self, source, target, megabytes=None, overwrite=False, voltype=None):
+        return self._define_volume(target, megabytes, source, overwrite, voltype)
 
     def delete_volume(self, name):
         self.pool.storageVolLookupByName(name).delete(0)
@@ -859,6 +917,7 @@ class PoniLVDom(object):
         self.name = dom.name()
         self.macs = []
         self.disks = []
+        self.fss = []
         self.info = {}
         self.__dom_info()
         self.__read_desc()
@@ -871,7 +930,7 @@ class PoniLVDom(object):
         try:
             self.dom.destroy()
         except libvirt.libvirtError as ex:
-            if "domain is not running" not in str(ex):
+            if "domain is not running" not in str(ex).lower():
                 raise
 
         # lookup and delete storage
@@ -885,9 +944,19 @@ class PoniLVDom(object):
                 if ex.get_error_code() != libvirt.VIR_ERR_NO_STORAGE_VOL:
                     raise LVPError("{0!r}: deletion failed: {1!r}".format(disk, ex))
 
+        # delete filesystems that come from known storage pools
+        if self.fss:
+            pools = [("/{0}/".format(pool.path.strip("/")), pool)
+                     for pool in self.conn.dominfo.pools.itervalues()]
+            for fs in self.fss:
+                for pool_path, pool in pools:
+                    if fs.startswith(pool_path):
+                        pool.delete_volume(fs[len(pool_path):])
+
         # delete snapshots
-        for name in self.dom.snapshotListNames(0):
-            self.remove_snapshot(name)
+        if self.conn.hypervisor != "lxc":
+            for name in self.dom.snapshotListNames(0):
+                self.remove_snapshot(name)
 
         self.dom.undefine()
 
@@ -904,6 +973,8 @@ class PoniLVDom(object):
                          for iface in devs.iter("interface")]
             self.disks = [str(disk.find("source").get("file") or disk.find("source").get("dev"))
                           for disk in devs.iter("disk")]
+            self.fss = [str(fs.find("source").get("dir"))
+                        for fs in devs.iter("filesystem")]
 
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_online")
