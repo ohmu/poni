@@ -933,25 +933,15 @@ class PoniLVDom(object):
             if "domain is not running" not in str(ex).lower():
                 raise
 
-        # lookup and delete storage
-        for disk in self.disks:
-            delete_ok = False
-            delete_ex = []
+        # lookup and delete storage volumes, both assigned block devices
+        # and passed filesystems
+        for disk in self.disks + self.fss:
             try:
                 vol = self.conn.conn.storageVolLookupByPath(disk)
                 vol.delete(0)
             except libvirt.libvirtError as ex:
                 if ex.get_error_code() != libvirt.VIR_ERR_NO_STORAGE_VOL:
                     raise LVPError("{0!r}: deletion failed: {1!r}".format(disk, ex))
-
-        # delete filesystems that come from known storage pools
-        if self.fss:
-            pools = [("/{0}/".format(pool.path.strip("/")), pool)
-                     for pool in self.conn.dominfo.pools.itervalues()]
-            for fs in self.fss:
-                for pool_path, pool in pools:
-                    if fs.startswith(pool_path):
-                        pool.delete_volume(fs[len(pool_path):])
 
         # delete snapshots
         if self.conn.hypervisor != "lxc":
