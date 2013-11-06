@@ -732,6 +732,7 @@ class AwsProvider(cloudbase.Provider):
                     conn.associate_address(instance_id=instance.id, allocation_id=host_eip.allocation_id)
                 else:
                     host_eip.associate(instance_id=instance.id)
+                return host_eip.public_ip
             except boto.exception.EC2ResponseError as error:
                 if not "does not exist" in str(error):
                     raise
