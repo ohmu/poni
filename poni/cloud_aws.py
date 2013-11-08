@@ -809,13 +809,15 @@ class AwsProvider(cloudbase.Provider):
                     raise
                 else:
                     retries_left = retries - n
-                    if retries_left > 0:
+                    if retries_left > 1:
                         backoff = 2 ** n
                         self.log.warning("Can't associate EIP %s to instance %s, still retrying %d times after sleeping for %.1fs",
                                  host_eip, instance.id, retries_left, backoff)
                         time.sleep(backoff)
 
-        return host_eip.public_ip
+        raise errors.CloudError("EIP %s could not be associated to instance %s after %s retries due to %s",
+                                host_eip, instance.id, retries, str(error))
+
 
     def _instance_status_ok(self, instance):
         """Return True unless system or instance status check report non-ok"""
