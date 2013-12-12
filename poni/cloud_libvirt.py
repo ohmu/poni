@@ -127,8 +127,8 @@ def convert_libvirt_errors(method):
                 # code == libvirt.VIR_ERR_OPERATION_INVALID
                 err = "vm_offline"
                 msg = "vm {0!r} is not running".format(self.name)
-            elif re.search("snapshot file for disk \S+ already exists", exstr) or \
-                 re.search("domain snapshot \S+ already exists", exstr):
+            elif re.search(r"snapshot file for disk \S+ already exists", exstr) or \
+                 re.search(r"domain snapshot \S+ already exists", exstr):
                 # code == libvirt.VIR_ERR_CONFIG_UNSUPPORTED or libvirt.VIR_ERR_INTERNAL_ERROR
                 err = "snapshot_exists"
                 msg = "snapshot {0!r} already exists for {1!r}".format(args[0], self.name)
