@@ -35,7 +35,7 @@ class DebImporter(Importer):
     def import_to(self, confman):
         try:
             return self.__import_to(confman)
-        except (OSError, IOError), error:
+        except (OSError, IOError) as error:
             raise errors.ImporterError("importing from '%s' failed: %s: %s" % (
                 self.source, error.__class__.__name__, error))
 

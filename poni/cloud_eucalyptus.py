@@ -260,7 +260,7 @@ class EucalyptusProvider(cloudbase.Provider):
         address = None
         try:
             address = conn.get_all_addresses([eip])
-        except boto.exception.BotoServerError, error:
+        except boto.exception.BotoServerError as error:
             self.log.error("The given elastic ip [%s] was invalid"
                            " or not found: %s: %s",
                            eip, error.__class__.__name__, error)

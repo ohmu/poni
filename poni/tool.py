@@ -213,7 +213,7 @@ class Tool:
                 result = eval(req, {}, props)
                 if arg.verbose:
                     self.log.info("requirement OK: %r", req)
-            except Exception, error:
+            except Exception as error:
                 raise errors.RequirementError("%s: %s: %s" % (
                         req, error.__class__.__name__, error))
 
@@ -274,7 +274,7 @@ class Tool:
                 script_text = file(arg.script).read()
             else:
                 script_text = sys.stdin.read()
-        except (OSError, IOError), error:
+        except (OSError, IOError) as error:
             raise errors.Error("%s: %s" % (error.__class__.__name__, error))
 
         variables = dict(util.parse_prop(var) for var in arg.variable)
@@ -703,7 +703,7 @@ class Tool:
                 exit_code = op(arg, node, remote)
                 if (not ret) and exit_code:
                     ret = exit_code
-            except errors.RemoteError, error:
+            except errors.RemoteError as error:
                 self.log.error("failed: %s", error)
                 ret = -1
 
@@ -1496,7 +1496,7 @@ class Tool:
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
             return -1
-        except errors.Error, error:
+        except errors.Error as error:
             self.log.error("%s: %s", error.__class__.__name__, error)
             return -1
         finally:

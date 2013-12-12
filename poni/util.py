@@ -108,7 +108,7 @@ def parse_prop(prop_str, converters=None):
             codec = recode.Codec("-ascii")
 
         out = name, codec.process(value)
-    except (ValueError, recode.Error), error:
+    except (ValueError, recode.Error) as error:
         raise errors.InvalidProperty("%s: %s" % (error.__class__.__name__,
                                                  error))
 

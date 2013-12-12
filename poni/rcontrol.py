@@ -118,7 +118,7 @@ class RemoteControl:
                         else:
                             result = color(output, "op_error")
                         return output
-        except Exception, error:
+        except Exception as error:
             result = color("%s: %s" % (error.__class__.__name__, error),
                            "op_error")
             raise
@@ -166,13 +166,13 @@ def convert_local_errors(method):
     def wrapper(self, *args, **kw):
         try:
             return method(self, *args, **kw)
-        except IOError, error:
+        except IOError as error:
             if error.errno == errno.ENOENT:
                 raise errors.RemoteFileDoesNotExist(str(error))
             else:
                 raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                      error))
-        except OSError, error:
+        except OSError as error:
             raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                  error))
 

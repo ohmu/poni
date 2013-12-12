@@ -226,7 +226,7 @@ class VSphereProvider(cloudbase.Provider):
                         ipv4 = self.instances[instance_id]['ipv4']
                         private = dict(ip=ipv4, dns=ipv4)
                         updated_props[instance_id] = dict(host=ipv4, private=private)
-                    except Exception, err:
+                    except Exception as err:
                         self.log.error("%s failed: %s", instance_id, err)
                         del tasks[instance_id]
                         del jobs[instance_id]

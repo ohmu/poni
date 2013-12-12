@@ -161,7 +161,7 @@ class Manager:
                     # verify
                     try:
                         dir_stats = util.dir_stats(source_path)
-                    except (OSError, IOError), error:
+                    except (OSError, IOError) as error:
                         raise errors.VerifyError(
                             "cannot copy files from '%s': %s: %s" % (
                                 source_path, error.__class__.__name__, error))
@@ -198,7 +198,7 @@ class Manager:
                 if (not audit and not deploy) and verbose:
                     # plain verify mode
                     self.log.info("OK: %s: %s", node_name, dest_path)
-            except (IOError, errors.Error), error:
+            except (IOError, errors.Error) as error:
                 self.emit_error(entry["node"], source_path, error)
                 output = util.format_error(error)
                 failed = True
@@ -262,13 +262,13 @@ class Manager:
                             stat.st_mtime)
                     else:
                         active_time = ""
-                except errors.RemoteFileDoesNotExist, error:
+                except errors.RemoteFileDoesNotExist as error:
                     active_text = None
                     if audit:
                         self.log.error("%s: %s: %s: %s", node_name, dest_path,
                                        error.__class__.__name__, error)
                         stats["error_count"] += 1
-                except errors.RemoteError, error:
+                except errors.RemoteError as error:
                     failed = True
                     if audit or deploy:
                         self.log.error("%s: %s: %s: %s", node_name, dest_path,
@@ -296,7 +296,7 @@ class Manager:
                                      mode=entry.get("mode"),
                                      owner=entry.get("owner"),
                                      group=entry.get("group"))
-                except errors.RemoteError, error:
+                except errors.RemoteError as error:
                     stats["error_count"] += 1
                     self.log.error("%s: %s: %s", node_name, dest_path, error)
                     # NOTE: continuing
@@ -563,7 +563,7 @@ class PlugIn:
             dest_path = self.render_name(dest_path)
             text = source_text if (source_text is not None) else file(source_path, "rb").read()
             return dest_path, text
-        except (IOError, OSError), error:
+        except (IOError, OSError) as error:
             raise errors.VerifyError(source_path, error)
 
     def add_edge(self, bucket_name, dest_node, dest_config, **kwargs):

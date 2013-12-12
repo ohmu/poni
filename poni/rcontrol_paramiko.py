@@ -39,13 +39,13 @@ def convert_paramiko_errors(method):
     def wrapper(self, *args, **kw):
         try:
             return method(self, *args, **kw)
-        except IOError, error:
+        except IOError as error:
             if error.errno == errno.ENOENT:
                 raise errors.RemoteFileDoesNotExist(str(error))
             else:
                 raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                      error))
-        except (socket.error, paramiko.SSHException, EOFError), error:
+        except (socket.error, paramiko.SSHException, EOFError) as error:
             raise errors.RemoteError("%s: %s" % (error.__class__.__name__,
                                                  error))
 
@@ -163,7 +163,7 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
                     ssh.connect(host, port=port, username=user, key_filename=key_file, password=password)
                     self._ssh = ssh
                 return action(self._ssh) if action else self._ssh
-            except (socket.error, paramiko.SSHException), error:
+            except (socket.error, paramiko.SSHException) as error:
                 remaining = max(0, end_time - time.time())
                 self.log.warning("%s: ssh connection to %s failed: %s: %s, "
                                  "retry time remaining=%.0fs" % (

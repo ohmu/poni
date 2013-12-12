@@ -101,7 +101,7 @@ def from_env(value):
 def resolve_ip(name, family):
     try:
         addresses = socket.getaddrinfo(name, None, family)
-    except (socket.error, socket.gaierror), error:
+    except (socket.error, socket.gaierror) as error:
         raise EncodeError("resolving %r failed: %s: %s" % (
             name, error.__class__.__name__, error))
 
@@ -200,7 +200,7 @@ class Codec:
         try:
             codec_func = get_func(codec_name)
             return lambda value: codec_func(value)[0]
-        except LookupError, error:
+        except LookupError as error:
             raise InvalidCodecDefinition(error[0])
 
     def add_to_chain(self, codec_name, direction):
@@ -222,7 +222,7 @@ class Codec:
         for direction, codec_name, coder in self.chain:
             try:
                 result = coder(result)
-            except Exception, error:
+            except Exception as error:
                 if direction == ENCODE:
                     format_str = "converting value %r to %r failed: %s"
                 else:

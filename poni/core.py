@@ -368,7 +368,7 @@ class Node(Item):
         if copy_dir:
             try:
                 shutil.copytree(copy_dir, config_dir, symlinks=True)
-            except (IOError, OSError), error:
+            except (IOError, OSError) as error:
                 raise errors.Error("copying config files failed: %s: %s" % (
                         error.__class__.__name__, error))
         else:
@@ -534,7 +534,7 @@ class ConfigMan:
             9GXhoKj2JGeKK56MXo+Ii1G/nKVO9rM+/u0NfuNWxPcxro0vd1z79u2r+/Tp9/6t
             /fXL9uuXz58+//bHF/r09cuf/eXlb2jrYlE="""
             .decode("base64").decode("zlib"))
-        except (OSError, IOError), error:
+        except (OSError, IOError) as error:
             raise errors.RepoError("repository '%s' init failed: %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
 
@@ -558,7 +558,7 @@ class ConfigMan:
     def load_config(self):
         try:
             return json.load(file(self.config_path))
-        except Exception, error:
+        except Exception as error:
             raise errors.RepoError(
                 "%s: not a valid repo (hint: 'init'-command): %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))

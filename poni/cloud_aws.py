@@ -43,7 +43,7 @@ def convert_boto_errors(method):
     def wrapper(self, *args, **kw):
         try:
             return method(self, *args, **kw)
-        except boto.exception.BotoServerError, error:
+        except boto.exception.BotoServerError as error:
             raise errors.CloudError("%s: %s" % (error.__class__.__name__,
                                                 error.error_message))
 
@@ -676,7 +676,7 @@ class AwsProvider(cloudbase.Provider):
         address = None
         try:
             address = conn.get_all_addresses([eip])
-        except boto.exception.BotoServerError, error:
+        except boto.exception.BotoServerError as error:
             self.log.error("The given elastic ip [%s] was invalid"
                            " or not found in region '%s': %s: %s",
                            eip, self.region, error.__class__.__name__, error)

@@ -40,7 +40,7 @@ class Config(dict):
         for sort_key, layer_name, file_path in self.layers:
             try:
                 config_dict = json.load(file(file_path, "rb"))
-            except ValueError, error:
+            except ValueError as error:
                 raise errors.SettingsError("%s: %s: %s" % (
                         file_path, error.__class__.__name__, error))
 
