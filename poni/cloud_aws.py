@@ -815,8 +815,8 @@ class AwsProvider(cloudbase.Provider):
                                  host_eip, instance.id, retries_left, backoff)
                         time.sleep(backoff)
 
-        raise errors.CloudError("EIP %s could not be associated to instance %s after %s retries due to %s",
-                                host_eip, instance.id, retries, str(error))
+        raise errors.CloudError("EIP %s could not be associated to instance %s after %s retries due to %s"
+                                % (host_eip, instance.id, retries, str(error)))
 
 
     def _instance_status_ok(self, instance):
@@ -890,9 +890,9 @@ class AwsProvider(cloudbase.Provider):
         """
         while not end_condition(*args):
             if time.time() > deadline:
-                raise errors.CloudError("Timeout (%d) when %s",
-                                        self._get_timeout_value(),
-                                        timeout_message)
+                raise errors.CloudError("Timeout (%d) when %s"
+                                        % (self._get_timeout_value(),
+                                           timeout_message))
             time.sleep(5.0)
 
     def _all_instances_in_state(self, instances, state):
@@ -1016,7 +1016,7 @@ class AwsProvider(cloudbase.Provider):
                     failed_snaps += 1
 
             if failed_snaps != 0:
-                raise errors.CloudError("%d snapshots failed", failed_snaps)
+                raise errors.CloudError("%d snapshots failed" % failed_snaps)
 
             return True
 
