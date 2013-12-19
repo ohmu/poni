@@ -437,10 +437,23 @@ class AwsProvider(cloudbase.Provider):
                 }
             self._get_conn().create_tags([dev.volume_id], extra_tags)
 
-    def _run_instance(self, launch_kwargs):
+    def _run_instance(self, launch_kwargs, instance_types):
         """Launch a new instance and record it in the internal cache"""
         conn = self._get_conn()
-        reservation = conn.run_instances(**launch_kwargs)
+        for preferred_type in instance_types:
+            try:
+                reservation = conn.run_instances(instance_type=preferred_type, **launch_kwargs)
+            except boto.exception.BotoServerError as error:
+                if not "capacity" in str(error):
+                    raise
+                self.log.info("Instance %s could not be launched due to lack of capacity: %s", launch_kwargs,
+                              str(error))
+                continue
+            break
+        else:
+            raise errors.CloudError("Insufficient capacity for all instance types %s. Instance %s could not be started"
+                                   % (instance_types, launch_kwargs))
+
         instance = reservation.instances[0]
         self._instance_cache[instance.id] = instance
         return instance
@@ -497,10 +510,15 @@ class AwsProvider(cloudbase.Provider):
             self.add_extra_tags(spot_req, cloud_prop)
             return dict(cloud=out_prop)
 
+        instance_types = cloud_prop.get("type")
+        if not isinstance(instance_types, (basestring, list, tuple, set)):
+            raise errors.CloudError("Invalid type for instance types expecting basestring, list, tuple or set")
+        if instance_types and isinstance(instance_types, basestring):
+            instance_types = [instance_types]
+
         launch_kwargs = dict(
             image_id=image_id,
             key_name=key_name,
-            instance_type=cloud_prop.get("type"),
             block_device_map=self.create_disk_map(cloud_prop),
             )
 
@@ -527,12 +545,12 @@ class AwsProvider(cloudbase.Provider):
                     raise errors.CloudError("invalid AWS cloud property '%s' value %r: %s: %s" % (
                             arg_name, arg_value, error.__class__.__name__, error))
 
-        self.log.info("Instance not found. Starting up new one with: %s", launch_kwargs)
+        self.log.info("Instance not found. Starting up new one with: %s %s", launch_kwargs, instance_types)
 
         billing_type = cloud_prop.get("billing", "on-demand")
         if billing_type == "on-demand":
             launch_kwargs["security_group_ids"] = security_group_ids
-            resource = self._run_instance(launch_kwargs)
+            resource = self._run_instance(launch_kwargs, instance_types)
             self.configure_new_instance(resource, cloud_prop)
             out_prop["instance"] = resource.id
         elif billing_type == "spot":
