@@ -168,6 +168,7 @@ class TaskPool(ThreadPool):
     def __init__(self, task_count=10):
         ThreadPool.__init__(self, task_count)
         self.log = logging.getLogger("taskpool")
+        self.applied = 0
 
     def _call_wrapper(self, method, method_args, method_kwargs=None):
         try:
@@ -181,6 +182,7 @@ class TaskPool(ThreadPool):
 
     def apply_async(self, method, args):
         ThreadPool.apply_async(self, self._call_wrapper, [method, args])
+        self.applied += 1
 
     def wait_all(self):
         self.close()
