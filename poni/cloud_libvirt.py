@@ -491,6 +491,10 @@ class LibvirtProvider(Provider):
             result[vm.name] = {}
         return result
 
+    def find_instances(self, match_function):
+        vms = self.__get_all_vms()
+        return [{"vm_name": vm_name} for vm_name in vms if match_function(vm_name)]
+
 
 class DomainInfo(dict):
     def __getattr__(self, name):

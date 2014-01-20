@@ -124,3 +124,11 @@ class Provider(object):
         Returns a dict {instance_id: dict(<updated properties>)}
         """
         raise NoProviderMethod(self, "power_on_instances")
+
+    def find_instances(self, match_function):
+        """
+        Look up instances which have a name matching match_function.
+
+        Returns a list [{vm_name: "vm_name", ...}, ...]
+        """
+        raise NoProviderMethod(self, "find_instances")
