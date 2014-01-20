@@ -6,7 +6,14 @@ See LICENSE for details.
 
 """
 
-class Provider:
+
+class NoProviderMethod(NotImplementedError):
+    def __init__(self, obj, func):
+        name = (obj if isinstance(obj, type) else obj.__class__).__name__
+        NotImplementedError.__init__(self,
+            "{0} does not implement {1}".format(name, func))
+
+class Provider(object):
     """Abstract base-class for cloud-specific cloud provider logic"""
     def __init__(self, provider_id, cloud_prop):
         self.provider_id = provider_id
@@ -39,7 +46,7 @@ class Provider:
         cloud Provider. Can be e.g. (provider_type, data_center_id), like
         with AWS-EC2. The return value also needs to be hash()able.
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(cls, "get_provider_key")
 
     def init_instance(self, cloud_prop):
         """
@@ -47,27 +54,27 @@ class Provider:
 
         Returns node properties that are changed.
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "init_instance")
 
     def assign_ip(self, props):
         """
         Assign the ip's to the instances based on the given properties.
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "assign_ip")
 
     def get_instance_status(self, prop):
         """
         Return instance status string for the instance specified in the given
         cloud properties dict.
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "get_instance_status")
 
     def terminate_instances(self, props):
         """
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "terminate_instances")
 
     def wait_instances(self, props, wait_state="running"):
         """
@@ -76,7 +83,7 @@ class Provider:
 
         Returns a dict {instance_id: dict(<updated properties>)}
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "wait_instances")
 
     def create_snapshot(self, props, name=None, description=None, memory=False):
         """
@@ -84,7 +91,7 @@ class Provider:
 
         Returns a dict {instance_id: dict(<updated properties>)}
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "create_snapshot")
 
     def revert_to_snapshot(self, props, name=None):
         """
@@ -92,7 +99,7 @@ class Provider:
 
         Returns a dict {instance_id: dict(<updated properties>)}
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "revert_to_snapshot")
 
     def remove_snapshot(self, props, name):
         """
@@ -100,7 +107,7 @@ class Provider:
 
         Returns a dict {instance_id: dict(<updated properties>)}
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "remove_snapshot")
 
     def power_off_instances(self, props):
         """
@@ -108,7 +115,7 @@ class Provider:
 
         Returns a dict {instance_id: dict(<updated properties>)}
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "power_off_instances")
 
     def power_on_instances(self, props):
         """
@@ -116,4 +123,4 @@ class Provider:
 
         Returns a dict {instance_id: dict(<updated properties>)}
         """
-        assert 0, "implement in sub-class"
+        raise NoProviderMethod(self, "power_on_instances")
