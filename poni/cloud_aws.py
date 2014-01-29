@@ -316,15 +316,18 @@ class AwsProvider(cloudbase.Provider):
         self.region = cloud_prop["region"]
         self._conn = None
         self._vpc_conn = None
-        self._spot_req_cache = [] # spot requests created by us during this session
-        self._instance_cache = {} # instances created by us during this session
+        self._spot_req_cache = []  # spot requests created by us during this session
+        self._instance_cache = {}  # instances created by us during this session
 
     def _prepare_conn(self):
         required_env = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
         for env_key in required_env:
             if not os.environ.get(env_key):
-                raise errors.CloudError("%r environment variable must be set"
-                                        % env_key)
+                self.log.warning("Could not find %s environment variable. "
+                                 "This might be prove problematic unless have "
+                                 "other ways to authenticate yourself "
+                                 "(instance profile, credentials file, ...)",
+                                 env_key)
 
         region = boto.ec2.get_region(self.region)
         if not region:

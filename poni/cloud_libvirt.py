@@ -1,6 +1,6 @@
 """
 LibVirt provider for Poni.
-Copyright (C) 2011-2013 F-Secure Corporation, Helsinki, Finland.
+Copyright (C) 2011-2014 F-Secure Corporation, Helsinki, Finland.
 Author: Oskari Saarenmaa <ext-oskari.saarenmaa@f-secure.com>
 """
 
@@ -192,7 +192,10 @@ class LibvirtProvider(Provider):
         """
         Return a cloud Provider object for the given cloud properties.
         """
-        return "PONILV"
+        profile_file = cloud_prop.get("profile")
+        if not profile_file:
+            raise CloudError("required node property 'cloud.profile' pointing to a profile file not defined")
+        return ("PONILV", profile_file)
 
     def conns(self):
         if self.hosts_online is None:
@@ -230,7 +233,7 @@ class LibvirtProvider(Provider):
     def disconnect(self):
         self.hosts_online = None
 
-    def __get_instances(self, props, non_existent=False):
+    def __get_all_vms(self):
         vms = {}
         tasks = util.TaskPool()
 
@@ -243,19 +246,15 @@ class LibvirtProvider(Provider):
             tasks.apply_async(add_vms, [conn])
 
         tasks.wait_all()
-
-        props = dict((prop["vm_name"], prop) for prop in props)
-        for vm_name, prop in props.iteritems():
-            if vm_name in vms:
-                yield dict(vm_name=vm_name, vm_state="VM_DIRTY", vm_conns=vms[vm_name], prop=prop)
-            elif non_existent:
-                yield dict(vm_name=vm_name, vm_state="VM_NON_EXISTENT", vm_conns=[], prop=prop)
+        return vms
 
     def __get_vms(self, props):
-        for instance in self.__get_instances(props):
-            for conn in instance['vm_conns']:
-                self.log.debug("found %r from %r", instance['vm_name'], conn)
-                yield conn.dominfo.vms[instance['vm_name']]
+        vms = self.__get_all_vms()
+        names = set(prop["vm_name"] for prop in props).intersection(vms)
+        for vm_name in names:
+            for conn in vms[vm_name]:
+                self.log.debug("found %r from %r", vm_name, conn)
+                yield conn.dominfo.vms[vm_name]
 
     def init_instance(self, prop):
         """
@@ -267,21 +266,14 @@ class LibvirtProvider(Provider):
         out_prop["instance"] = prop["vm_name"]
         return dict(cloud=out_prop)
 
-    def delete_vm(self, conn, instance):
-        """Delete a VM instance"""
-        self.log.info("deleting %r on %r", instance["vm_name"], conn.host)
-        conn.delete_vm(instance["vm_name"])
-
     def terminate_instances(self, props):
         """
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
         tasks = util.TaskPool()
-        for instance in self.__get_instances(props):
-            for conn in instance["vm_conns"]:
-                tasks.apply_async(self.delete_vm, [conn, instance])
-
+        for vm in self.__get_vms(props):
+            tasks.apply_async(vm.delete, [])
         tasks.wait_all()
 
     def weighted_random_choice(self, cands):
@@ -313,22 +305,22 @@ class LibvirtProvider(Provider):
         """
         assert wait_state == "running", "libvirt only handles running stuff"
         home = os.getenv("HOME")
-        # collapse props to one entry per vm_name
-        props = dict((prop["vm_name"], prop) for prop in props).values()
+        # turn props to a dict with one entry per vm_name
+        props = dict((prop["vm_name"], prop) for prop in props)
 
-        instances = self.__get_instances(props)
         self.log.info("deleting existing VM instances")
         delete_started = time.time()
         tasks = util.TaskPool()
-        for instance in instances:
+        vms = self.__get_all_vms()
+        for vm_name, prop in props.iteritems():
             # Delete any existing instances if required to reinit (the
             # default) or if the same VM was found from multiple hosts.
-            if instance["prop"].get("reinit", True) or len(instance["vm_conns"]) > 1:
-                for conn in instance["vm_conns"]:
-                    tasks.apply_async(self.delete_vm, [conn, instance])
-
-        tasks.wait_all()
-        cloning_started = time.time()
+            if vm_name in vms:
+                if prop.get("reinit", True) or len(vms[vm_name]) > 1:
+                    for conn in vms[vm_name]:
+                        tasks.apply_async(conn.dominfo.vms[vm_name].delete, [])
+        if tasks.applied:
+            tasks.wait_all()
 
         def clone_instance(instance):
             prop = instance["prop"]
@@ -363,12 +355,19 @@ class LibvirtProvider(Provider):
             instances.append(instance)
 
         self.log.info("cloning VM instances")
+        cloning_started = time.time()
+        # only create a new task pool and refresh vms if we deleted something
+        if tasks.applied:
+            vms = self.__get_all_vms()
+            tasks = util.TaskPool()
         instances = []
         conns = [conn for conn in self.conns() if conn.srv_weight > 0]
-        tasks = util.TaskPool()
-        for instance in self.__get_instances(props, non_existent=True):
+        for vm_name, prop in props.iteritems():
+            if vm_name in vms:
+                instance = dict(vm_name=vm_name, vm_state="VM_DIRTY", vm_conns=vms[vm_name], prop=prop)
+            else:
+                instance = dict(vm_name=vm_name, vm_state="VM_NON_EXISTENT", vm_conns=[], prop=prop)
             tasks.apply_async(clone_instance, [instance])
-
         tasks.wait_all()
         boot_started = time.time()
 
@@ -492,6 +491,10 @@ class LibvirtProvider(Provider):
             result[vm.name] = {}
         return result
 
+    def find_instances(self, match_function):
+        vms = self.__get_all_vms()
+        return [{"vm_name": vm_name} for vm_name in vms if match_function(vm_name)]
+
 
 class DomainInfo(dict):
     def __getattr__(self, name):
@@ -612,13 +615,6 @@ class PoniLVConn(object):
         self.dominfo = dominfo  # atomic update of all dom info stats
 
     @convert_libvirt_errors
-    def delete_vm(self, vm_name):
-        if vm_name not in self.dominfo.vms:
-            raise LVPError("{0!r} is not defined".format(vm_name))
-        self.dominfo.vms[vm_name].delete()
-        self.refresh_list()
-
-    @convert_libvirt_errors
     def clone_vm(self, name, spec, overwrite=False):
         def macaddr(index):
             """create a mac address based on the VM name for DHCP predictability"""
@@ -634,7 +630,7 @@ class PoniLVConn(object):
         if name in self.dominfo.vms:
             if not overwrite:
                 raise LVPError("{0!r} vm already exists".format(name))
-            self.delete_vm(name)
+            self.dominfo.vms[name].delete()
 
         spec = copy.deepcopy(spec)
         if isinstance(spec.get("hardware"), dict):
@@ -927,31 +923,23 @@ class PoniLVDom(object):
 
     @convert_libvirt_errors
     def delete(self):
+        self.log.info("deleting %r on %r", self.name, self.conn.host)
+
         try:
             self.dom.destroy()
         except libvirt.libvirtError as ex:
             if "domain is not running" not in str(ex).lower():
                 raise
 
-        # lookup and delete storage
-        for disk in self.disks:
-            delete_ok = False
-            delete_ex = []
+        # lookup and delete storage volumes, both assigned block devices
+        # and passed filesystems
+        for disk in self.disks + self.fss:
             try:
                 vol = self.conn.conn.storageVolLookupByPath(disk)
                 vol.delete(0)
             except libvirt.libvirtError as ex:
                 if ex.get_error_code() != libvirt.VIR_ERR_NO_STORAGE_VOL:
                     raise LVPError("{0!r}: deletion failed: {1!r}".format(disk, ex))
-
-        # delete filesystems that come from known storage pools
-        if self.fss:
-            pools = [("/{0}/".format(pool.path.strip("/")), pool)
-                     for pool in self.conn.dominfo.pools.itervalues()]
-            for fs in self.fss:
-                for pool_path, pool in pools:
-                    if fs.startswith(pool_path):
-                        pool.delete_volume(fs[len(pool_path):])
 
         # delete snapshots
         if self.conn.hypervisor != "lxc":
@@ -979,13 +967,13 @@ class PoniLVDom(object):
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_online")
     def power_on(self):
-        self.log.info("powering on %r", self.name)
+        self.log.info("powering on %r on %r", self.name, self.conn.host)
         self.dom.create()
 
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_offline")
     def power_off(self):
-        self.log.info("powering off %r", self.name)
+        self.log.info("powering off %r on %r", self.name, self.conn.host)
         self.dom.destroy()
 
     @convert_libvirt_errors
@@ -995,7 +983,8 @@ class PoniLVDom(object):
         # XXX: libvirt can't (at version 0.9.12) remove disk-only snapshots at all so let's not create them
         if not memory:
             raise LVPError("disk-only snapshots are not supported in libvirt vms at the moment")
-        self.log.info("creating %s snapshot %r for %r", "memory" if memory else "disk-only", name, self.name)
+        self.log.info("creating %s snapshot %r for %r on %r",
+                      "memory" if memory else "disk-only", name, self.name, self.conn.host)
         flags = 0 if memory else libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
         snapxml = etree.tostring(XMLE.domainsnapshot(
             XMLE.name(name),
@@ -1005,13 +994,13 @@ class PoniLVDom(object):
     @convert_libvirt_errors
     @ignore_libvirt_errors("snapshot_not_found")
     def remove_snapshot(self, name):
-        self.log.info("removing snapshot %r from %r", name, self.name)
+        self.log.info("removing snapshot %r from %r on %r", name, self.name, self.conn.host)
         snap = self.dom.snapshotLookupByName(name, 0)
         snap.delete(0)
 
     @convert_libvirt_errors
     def revert_to_snapshot(self, name):
-        self.log.info("reverting %r to %r by force", name, self.name)
+        self.log.info("reverting %r to %r by force on %r", name, self.name, self.conn.host)
         snap = self.dom.snapshotLookupByName(name, 0)
         self.dom.revertToSnapshot(snap, libvirt.VIR_DOMAIN_SNAPSHOT_REVERT_FORCE)
 
