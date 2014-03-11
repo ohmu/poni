@@ -54,7 +54,7 @@ class Runner:
 
     def check(self):
         for task in list(self.not_started):
-            if self.max_jobs and (len(self.started) > self.max_jobs):
+            if self.max_jobs and (len(self.started) >= self.max_jobs):
                 continue
 
             if not task.can_start():
