@@ -869,15 +869,15 @@ class Tool:
             wait_state = arg.state
 
         if wait and nodes:
-            props = [n["cloud"] for n in nodes]
+            # get unique "cloud" dicts from nodes
+            uniq_props = set(util.hashed_dict(n["cloud"]) for n in nodes)
             providers = {}
-            for cloud_prop in props:
+            for cloud_prop in uniq_props:
                 provider = self.sky.get_provider(cloud_prop)
-                prop_list = providers.setdefault(provider, [])
-                prop_list.append(cloud_prop)
+                providers.setdefault(provider, []).append(cloud_prop)
 
             for provider, prop_list in providers.iteritems():
-                updates = provider.wait_instances(props, wait_state=wait_state)
+                updates = provider.wait_instances(prop_list, wait_state=wait_state)
 
                 for node in nodes:
                     instance_id = node.get("cloud", {}).get("instance")
