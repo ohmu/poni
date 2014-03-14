@@ -256,6 +256,15 @@ class LibvirtProvider(Provider):
                 self.log.debug("found %r from %r", vm_name, conn)
                 yield conn.dominfo.vms[vm_name]
 
+    def __vm_async_apply(self, props, op, *args):
+        result = {}
+        tasks = util.TaskPool()
+        for vm in self.__get_vms(props):
+            tasks.apply_async(getattr(vm, op), args)
+            result[vm.name] = {}
+        tasks.wait_all()
+        return result
+
     def init_instance(self, prop):
         """
         Create a new instance with the given properties.
@@ -271,10 +280,7 @@ class LibvirtProvider(Provider):
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
-        tasks = util.TaskPool()
-        for vm in self.__get_vms(props):
-            tasks.apply_async(vm.delete, [])
-        tasks.wait_all()
+        self.__vm_async_apply(props, 'delete')
 
     def weighted_random_choice(self, cands):
         """Weighted random selection of a single target host from a list of candidates"""
@@ -457,39 +463,25 @@ class LibvirtProvider(Provider):
         return result
 
     def power_on_instances(self, props):
-        result = {}
-        for vm in self.__get_vms(props):
-            vm.power_on()
-            result[vm.name] = {'power': 'on'}
+        result = self.__vm_async_apply(props, 'power_on')
+        for v in result.itervalues():
+            v['power'] = 'on'
         return result
 
     def power_off_instances(self, props):
-        result = {}
-        for vm in self.__get_vms(props):
-            vm.power_off()
-            result[vm.name] = {'power': 'off'}
+        result = self.__vm_async_apply(props, 'power_off')
+        for v in result.itervalues():
+            v['power'] = 'off'
         return result
 
     def create_snapshot(self, props, name, description=None, memory=False):
-        result = {}
-        for vm in self.__get_vms(props):
-            vm.create_snapshot(name, description, memory)
-            result[vm.name] = {}
-        return result
+        return self.__vm_async_apply(props, 'create_snapshot', name, description, memory)
 
     def remove_snapshot(self, props, name):
-        result = {}
-        for vm in self.__get_vms(props):
-            vm.remove_snapshot(name)
-            result[vm.name] = {}
-        return result
+        return self.__vm_async_apply(props, 'remove_snapshot', name)
 
     def revert_to_snapshot(self, props, name=None):
-        result = {}
-        for vm in self.__get_vms(props):
-            vm.revert_to_snapshot(name)
-            result[vm.name] = {}
-        return result
+        return self.__vm_async_apply(props, 'revert_to_snapshot', name)
 
     def find_instances(self, match_function):
         vms = self.__get_all_vms()
