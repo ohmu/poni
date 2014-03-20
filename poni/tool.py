@@ -181,26 +181,26 @@ class Tool:
         self.cached_manager = None
         self.collect_cache = {}
 
-    @expects_obj
     @argh_named("add-system")
     @argh.arg('system', type=str, help='system name')
+    @expects_obj
     def handle_add_system(self, arg):
         """add a sub-system"""
         confman = self.get_confman(arg.root_dir)
         system_dir = confman.create_system(arg.system)
         self.log.debug("created: %s", system_dir)
 
-    @expects_obj
     @argh_named("version")
+    @expects_obj
     def handle_version(self, arg):
         """show version information"""
         yield version.__version__
         yield "\n"
 
-    @expects_obj
     @argh_named("require")
     @arg_verbose
     @argh.arg("req", help="requirement expression (Python)", nargs="+")
+    @expects_obj
     def handle_require(self, arg):
         """
         validate requirement expressions
@@ -221,17 +221,17 @@ class Tool:
                 raise errors.RequirementError(
                     "requirement not met: %r" % req)
 
-    @expects_obj
     @argh_named("init")
+    @expects_obj
     def handle_init(self, arg):
         """init repository"""
         confman = self.get_confman(arg.root_dir, must_exist=False)
         confman.init_repo()
 
-    @expects_obj
     @argh_named("import")
     @arg_verbose
     @argh.arg('source', type=path, help='source dir/file', nargs="+")
+    @expects_obj
     def handle_import(self, arg):
         """import nodes/configs"""
         confman = self.get_confman(arg.root_dir)
@@ -261,12 +261,12 @@ class Tool:
 
         return lines
 
-    @expects_obj
     @argh_named("script")
     @arg_verbose
     @argh.arg('script', metavar="FILE", type=str,
               help='script file path or "-" (a single minus-sign) for stdin')
     @argh.arg('variable', type=str, nargs="*", help="'name=[type:]value'")
+    @expects_obj
     def handle_script(self, arg):
         """run commands from a script file"""
         try:
@@ -323,11 +323,11 @@ class Tool:
                 self.task_times.add_task("L%d" % (i+1), line, start, stop,
                                          args=args)
 
-    @expects_obj
     @argh_named("update-config")
     @arg_verbose
     @argh.arg('config', type=str, help="target config (regexp)")
     @argh.arg('source', type=path, help='source file or directory', nargs="+")
+    @expects_obj
     def handle_update_config(self, arg):
         """update files to a config"""
         confman = self.get_confman(arg.root_dir)
@@ -348,13 +348,13 @@ class Tool:
                     raise errors.UserError("don't know how to handle: %r (cwd: %s)" %
                                            (str(source_path), os.getcwd()))
 
-    @expects_obj
     @argh_named("remove-config")
     @arg_verbose
     @arg_full_match
     @arg_target_nodes
     @argh.arg('config', type=str, help='name of the config')
     @arg_flag("-e", "--skip-non-existing", help="do nothing if the config does not exist")
+    @expects_obj
     def handle_remove_config(self, arg):
         """remove config from node(s)"""
         alog = self.log.info if arg.verbose else self.log.debug
@@ -379,7 +379,6 @@ class Tool:
         if not deletes and not arg.skip_non_existing:
             raise errors.UserError("no matching nodes found")
 
-    @expects_obj
     @argh_named("add-config")
     @arg_verbose
     @arg_full_match
@@ -391,6 +390,7 @@ class Tool:
               dest="copy_dir", help="copy config files from DIR")
     @arg_flag("-c", "--create-node", help="create node if it does not exist")
     @arg_flag("-e", "--skip-existing", help="do nothing if the config already exists")
+    @expects_obj
     def handle_add_config(self, arg):
         """add a config to node(s)"""
         alog = self.log.info if arg.verbose else self.log.debug
@@ -433,13 +433,13 @@ class Tool:
         if not updates:
             raise errors.UserError("no matching nodes found")
 
-    @expects_obj
     @argh_named("add-library")
     @arg_verbose
     @arg_full_match
     @argh.arg('-c', '--config', type=str, help='config search pattern')
     @argh.arg('name', type=str, help='library name')
     @argh.arg('path', type=path, help='library path within config')
+    @expects_obj
     def handle_add_library(self, arg):
         """add a Python library from a config to PYTHONPATH"""
         confman = self.get_confman(arg.root_dir)
@@ -477,7 +477,6 @@ class Tool:
         logger = self.log.info if arg.verbose else self.log.debug
         logger("library %r path set: %s", arg.name, str(store_path))
 
-    @expects_obj
     @argh_named("control")
     @arg_verbose
     @arg_full_match
@@ -493,6 +492,7 @@ class Tool:
     @argh.arg('pattern', type=str, help='config search pattern')
     @arg_host_access_method
     @argh.arg('operation', type=str, help='operation to execute')
+    @expects_obj
     def handle_control(self, arg):
         """config control operation"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -638,7 +638,6 @@ class Tool:
                 "all [%d] control tasks finished successfully (%d skipped)" % (
                     ran_count, skipped_count))
 
-    @expects_obj
     @argh_named("exec")
     @arg_verbose
     @arg_quiet
@@ -647,6 +646,7 @@ class Tool:
     @arg_target_nodes
     @arg_host_access_method
     @argh.arg('cmd', type=str, help='command to execute')
+    @expects_obj
     def handle_remote_exec(self, arg):
         """run a shell-command"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -668,12 +668,12 @@ class Tool:
             raise errors.RemoteError("remote exec failed with code: %r" % (
                     result,))
 
-    @expects_obj
     @argh_named("shell")
     @arg_verbose
     @arg_full_match
     @arg_host_access_method
     @arg_target_nodes
+    @expects_obj
     def handle_remote_shell(self, arg):
         """start an interactive shell session"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -709,8 +709,8 @@ class Tool:
 
         return ret
 
-    @expects_obj
     @argh_named("init")
+    @expects_obj
     def handle_vc_init(self, arg):
         """init version control in repo"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -725,8 +725,8 @@ class Tool:
             raise errors.UserError(
                 "version control not initialized in this repo")
 
-    @expects_obj
     @argh_named("diff")
+    @expects_obj
     def handle_vc_diff(self, arg):
         """show repository working status diff"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -734,19 +734,19 @@ class Tool:
         for out in confman.vc.status():
             print out,
 
-    @expects_obj
     @argh_named("checkpoint")
     @argh.arg('message', type=str, help='commit message')
+    @expects_obj
     def handle_vc_checkpoint(self, arg):
         """commit all locally added and changed files in the repository"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         self.require_vc(confman)
         confman.vc.commit_all(arg.message)
 
-    @expects_obj
     @argh_named("terminate")
     @arg_full_match
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
+    @expects_obj
     def handle_cloud_terminate(self, arg):
         """terminate cloud instances"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -766,10 +766,10 @@ class Tool:
             count += len(props)
         self.log.info("%s instances terminated", count)
 
-    @expects_obj
     @argh_named("update")
     @arg_full_match
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
+    @expects_obj
     def handle_cloud_update(self, arg):
         """update node cloud instance properties"""
         confman = self.get_confman(arg.root_dir)
@@ -795,32 +795,32 @@ class Tool:
                 self.log.info("%s: updated: %s", node.name, change_str)
                 node.save()
 
-    @expects_obj
     @argh_named("wait")
     @arg_full_match
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     @argh.arg('--state', type=str, default="running",
               help="target instance state, default: 'running'")
+    @expects_obj
     def handle_cloud_wait(self, arg):
         """wait cloud instances to reach a specific running state"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         return self.cloud_op(confman, arg, False)
 
-    @expects_obj
     @argh_named("init")
     @arg_full_match
     @argh.arg("target", type=str, help="target systems/nodes (regexp)")
     @arg_flag("--reinit", dest="reinit", help="re-initialize cloud image")
     @arg_flag("--wait", dest="wait", help="wait for instance to start")
+    @expects_obj
     def handle_cloud_init(self, arg):
         """reserve and start a cloud instance for nodes"""
         confman = self.get_confman(arg.root_dir)
         return self.cloud_op(confman, arg, True)
 
-    @expects_obj
     @argh_named("ip")
     @arg_full_match
     @argh.arg("target", type=str, help="target systems/nodes (regexp)")
+    @expects_obj
     def handle_cloud_ip(self, arg):
         """assign ips to instances based on properties"""
         confman = core.ConfigMan(arg.root_dir)
@@ -869,15 +869,15 @@ class Tool:
             wait_state = arg.state
 
         if wait and nodes:
-            props = [n["cloud"] for n in nodes]
+            # get unique "cloud" dicts from nodes
+            uniq_props = set(util.hashed_dict(n["cloud"]) for n in nodes)
             providers = {}
-            for cloud_prop in props:
+            for cloud_prop in uniq_props:
                 provider = self.sky.get_provider(cloud_prop)
-                prop_list = providers.setdefault(provider, [])
-                prop_list.append(cloud_prop)
+                providers.setdefault(provider, []).append(cloud_prop)
 
             for provider, prop_list in providers.iteritems():
-                updates = provider.wait_instances(props, wait_state=wait_state)
+                updates = provider.wait_instances(prop_list, wait_state=wait_state)
 
                 for node in nodes:
                     instance_id = node.get("cloud", {}).get("instance")
@@ -911,57 +911,56 @@ class Tool:
         for provider, props in itertools.groupby(props, lambda prop: self.sky.get_provider(prop)):
             yield provider, props
 
-    @expects_obj
     @argh_named("create-snapshot")
     @arg_full_match
     @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
     @argh.arg("--description", type=str, dest="description", default="", help="optional description of the snapshot")
     @arg_flag("--memory", dest="memory", help="include memory in the snapshot")
+    @expects_obj
     def handle_cloud_create_snapshot(self, arg):
         """create a named snapshot for nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.create_snapshot(props, name=arg.name, description=arg.description, memory=arg.memory)
 
-    @expects_obj
     @argh_named("revert-to-snapshot")
     @arg_full_match
     @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
+    @expects_obj
     def handle_cloud_revert_to_snapshot(self, arg):
         """revert the nodes to a named snapshot"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.revert_to_snapshot(props, name=arg.name)
 
-    @expects_obj
     @argh_named("remove-snapshot")
     @arg_full_match
     @arg_target_nodes
     @argh.arg("name", type=str, help="snapshot name")
+    @expects_obj
     def handle_cloud_remove_snapshot(self, arg):
         """remove a named snapshot from nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.remove_snapshot(props, name=arg.name)
 
-    @expects_obj
     @argh_named("power-off")
     @arg_full_match
     @arg_target_nodes
+    @expects_obj
     def handle_cloud_power_off(self, arg):
         """Power off nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.power_off_instances(props)
 
-    @expects_obj
     @argh_named("power-on")
     @arg_full_match
     @arg_target_nodes
+    @expects_obj
     def handle_cloud_power_on(self, arg):
         """Power on nodes"""
         for provider, props in self._get_cloud_hosts_from_args(arg):
             provider.power_on_instances(props)
 
-    @expects_obj
     @argh_named("set")
     @arg_verbose
     @arg_full_match
@@ -969,6 +968,7 @@ class Tool:
     @arg_systems_only
     @argh.arg('target', type=str, help='target systems/nodes (regexp)')
     @argh.arg('property', type=str, nargs="+", help="'name=[type:]value'")
+    @expects_obj
     def handle_set(self, arg):
         """set system/node properties"""
         confman = self.get_confman(arg.root_dir)
@@ -1065,7 +1065,6 @@ class Tool:
         stats = manager.verify(callback=target_filter, **verify_options)
         return manager, stats
 
-    @expects_obj
     @argh_named("show")
     @arg_verbose
     @arg_full_match
@@ -1077,6 +1076,7 @@ class Tool:
               help="show raw template vs. rendered output diff")
     @arg_config_pattern
     @arg_tag
+    @expects_obj
     def handle_show(self, arg):
         """render and show node config files"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1092,17 +1092,16 @@ class Tool:
                 for i, item in enumerate(items):
                     print "%s #%d: %r" % (name, i, item)
 
-    @expects_obj
     @argh_named("report")
     @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
               help='output file path (default: stdout)')
+    @expects_obj
     def handle_report(self, arg):
         """show command execution timeline report"""
         out = file(arg.output_file, "w") if arg.output_file else sys.stdout
         for chunk in self.task_times.iter_report():
             out.write(chunk)
 
-    @expects_obj
     @argh_named("deploy")
     @arg_verbose
     @arg_full_match
@@ -1111,6 +1110,7 @@ class Tool:
     @arg_host_access_method
     @arg_config_pattern
     @arg_tag
+    @expects_obj
     def handle_deploy(self, arg):
         """deploy node configs"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1127,7 +1127,6 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", stats.file_count)
 
-    @expects_obj
     @argh_named("audit")
     @arg_verbose
     @arg_full_match
@@ -1137,6 +1136,7 @@ class Tool:
     @arg_flag("-d", "--diff", dest="show_diff", help="show config diffs")
     @arg_config_pattern
     @arg_tag
+    @expects_obj
     def handle_audit(self, arg):
         """audit active node configs"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1155,7 +1155,6 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", stats.file_count)
 
-    @expects_obj
     @argh_named("verify")
     @arg_verbose
     @arg_full_match
@@ -1163,6 +1162,7 @@ class Tool:
     @arg_config_pattern
     @arg_tag
     @arg_target_nodes_0_to_n
+    @expects_obj
     def handle_verify(self, arg):
         """verify local node configs"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1180,7 +1180,6 @@ class Tool:
         else:
             self.log.info("all [%d] files ok", stats.file_count)
 
-    @expects_obj
     @argh_named("add-node")
     @arg_verbose
     @arg_full_match
@@ -1193,6 +1192,7 @@ class Tool:
     @argh.arg("-i", "--inherit-node", metavar="NODE", type=str, default="",
               dest="inherit_node", help="inherit from node (regexp)")
     @arg_flag("-c", "--copy-props", help="copy parent node's properties")
+    @expects_obj
     def handle_add_node(self, arg):
         """add a new node"""
         confman = self.get_confman(arg.root_dir)
@@ -1231,7 +1231,6 @@ class Tool:
 
             logger("node added: %s%s", node_name, msg)
 
-    @expects_obj
     @argh_named("list")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern', nargs="?")
@@ -1253,6 +1252,7 @@ class Tool:
               help="show node and config inheritances")
     @arg_flag("-l", "--line-per-prop", dest="list_props",
               help="one line per property")
+    @expects_obj
     def handle_list(self, arg):
         """list systems and nodes"""
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1283,11 +1283,11 @@ class Tool:
         return self.cached_manager
 
 
-    @expects_obj
     @argh_named("list")
     @arg_full_match
     @arg_flag("-l", "--show-layers", help="show settings layers")
     @argh.arg('pattern', type=str, help='node search pattern', nargs="?")
+    @expects_obj
     def handle_settings_list(self, arg):
         """list settings"""
         pattern = arg.pattern or "."
@@ -1297,11 +1297,11 @@ class Tool:
         for output in list_output.output():
             yield output
 
-    @expects_obj
     @argh_named("set")
     @arg_full_match
     @argh.arg('pattern', type=str, help='search pattern')
     @argh.arg('setting', type=str, nargs="+", help="'name=[type:]value'")
+    @expects_obj
     def handle_settings_set(self, arg):
         """override settings values"""
         pattern = arg.pattern or "."

@@ -159,6 +159,19 @@ def path_iter_dict(dict_obj, prefix=None):
             yield ".".join(location), value
 
 
+def hash_any(ob):
+    if isinstance(ob, (list, set, tuple)):
+        ob = tuple(hash_any(v) for v in ob)
+    elif isinstance(ob, dict):
+        ob = tuple((hash_any(k), hash_any(v)) for k, v in ob.items())
+    return hash(ob)
+
+
+class hashed_dict(dict):
+    def __hash__(self):
+        return hash_any(self)
+
+
 class PropDict(dict):
     def __getattr__(self, name):
         return self.get(name, None)
