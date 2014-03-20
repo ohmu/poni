@@ -7,7 +7,7 @@ See LICENSE for details.
 """
 
 CODES = {
-    'reset': '\033[1;m',
+    'reset': '\033[0;m',
     'gray' : '\033[1;30m',
     'red' : '\033[1;31m',
     'green' : '\033[1;32m',
