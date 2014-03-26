@@ -151,6 +151,24 @@ def ignore_libvirt_errors(*errs):
     return decorate
 
 
+def parse_ip_addr(output, macs, deploy_if_name=None):
+    """Parse addresses from 'ip addr' output"""
+    # 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
+    #     link/ether 52:54:00:a0:b9:b6 brd ff:ff:ff:ff:ff:ff
+    #     inet 10.133.58.56/20 brd 10.133.63.255 scope global eth0
+    priv_ipv4 = None
+    deploy_addr = None
+    addrs = re.findall("^[0-9]+: ([a-z0-9]+):.+\n +link/ether ([0-9a-f:]+).*\n +inet ([0-9.]+)/", output, re.MULTILINE)
+    for name, mac, ipv4 in addrs:
+        if not priv_ipv4 and mac == macs[0]:
+            priv_ipv4 = ipv4  # the first interface is always the one used as the 'private.ip'
+
+        if name == deploy_if_name:
+            deploy_addr = ipv4
+
+    return deploy_addr, priv_ipv4
+
+
 class LibvirtProvider(Provider):
     def __init__(self, cloud_prop):
         if MISSING_LIBS:
@@ -356,6 +374,7 @@ class LibvirtProvider(Provider):
 
             instance["vm_state"] = "VM_RUNNING"
             instance["ipproto"] = prop.get("ipproto", "ipv4")
+            instance["macs"] = vm.macs
             instance["ipv6"] = vm.ipv6_addr(ipv6pre)[0]
             instance["ssh_key"] = "{0}/.ssh/{1}".format(home, prop["ssh_key"])
             instances.append(instance)
@@ -419,7 +438,7 @@ class LibvirtProvider(Provider):
                     client.connect_socket(tunchan, username="root", key_filename=instance["ssh_key"])
                     cmdchan = client.get_transport().open_session()
                     cmdchan.set_combine_stderr(True)
-                    cmdchan.exec_command('ip -4 addr show scope global')
+                    cmdchan.exec_command('ip addr show scope global')
                     cmdchan.shutdown_write()
                     exec_start = time.time()
                     while (not cmdchan.exit_status_ready()) and ((time.time() - exec_start) < 10.0):
@@ -436,18 +455,25 @@ class LibvirtProvider(Provider):
                     self.log.warning("connecting to %r [%s] failed: %r", instance, instance["ipv6"], ex)
                 else:
                     if data:
-                        ipv4 = data.partition(" inet ")[2].partition("/")[0]
+                        deploy_if = instance["prop"].get("deploy_if")
+                        deploy_addr, ipv4 = parse_ip_addr(data, instance["macs"], deploy_if_name=deploy_if)
+                        if not ipv4:
+                            self.log.warning("no ipv4 yet available from: %s", instance)
+                        elif deploy_if and not deploy_addr:
+                            self.log.warning("no deploy address (%s) yet available for: %s", deploy_if, instance)
+                            ipv4 = None
                     else:
                         self.log.warning("no data received from: %r", instance)
 
                 if not ipv4:
                     failed.append(instance)
                 else:
-                    self.log.info("Got address %r for %s", ipv4, instance["vm_name"])
+                    deploy_addr_str = " (deploy address: {0})".format(deploy_addr) if deploy_addr else ""
+                    self.log.info("Got address %r for %s%s", ipv4, instance["vm_name"], deploy_addr_str)
                     instance['ipv4'] = ipv4
                     addr = instance[instance['ipproto']]
                     result[instance_id] = dict(
-                        host=addr,
+                        host=deploy_addr or ipv4,
                         private=dict(ip=addr, dns=addr),
                         hypervisor=self.hypervisor)
 
