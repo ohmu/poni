@@ -4,7 +4,7 @@ Cloud-provider implementation: Eucalyptus
 Author: Heikki Nousiainen, based on cloud_aws
 
 Copyright (c) 2010-2013 Mika Eloranta
-Copyright (c) 2012-2013 F-Secure
+Copyright (c) 2012-2014 F-Secure
 See LICENSE for details.
 
 """
@@ -36,10 +36,10 @@ except ImportError:
 class EucalyptusProvider(cloudbase.Provider):
     @classmethod
     def get_provider_key(cls, cloud_prop):
-        endpoint_url = os.environ.get('EUCA_URL')
+        endpoint_url = os.environ.get('EC2_URL')
         if not endpoint_url:
             raise errors.CloudError(
-                "EUCA_URL must be set for Eucalyptus provider")
+                "EC2_URL must be set for Eucalyptus provider")
 
         # ("eucalyptus", endpoint) uniquely identifies the DC we are talking to
         return (EUCALYPTUS, endpoint_url)
@@ -56,20 +56,20 @@ class EucalyptusProvider(cloudbase.Provider):
         if self._conn:
             return self._conn
 
-        required_env = ["EUCA_ACCESS_KEY", "EUCA_SECRET_KEY", "EUCA_URL"]
+        required_env = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "EC2_URL"]
         for env_key in required_env:
             if not os.environ.get(env_key):
                 raise errors.CloudError("%r environment variable must be set"
                                         % env_key)
 
         try:
-            parsed_url = urlparse.urlsplit(os.environ.get("EUCA_URL"))
+            parsed_url = urlparse.urlsplit(os.environ.get("EC2_URL"))
             host, port = parsed_url.netloc.split(':', 1)
             port = int(port)
         except (ValueError, AttributeError):
-            raise errors.CloudError("Failed to parse EUCA_URL environmental variable")
+            raise errors.CloudError("Failed to parse EC2_URL environmental variable")
 
-        self._conn = boto.connect_euca(aws_access_key_id=os.environ['EUCA_ACCESS_KEY'], aws_secret_access_key=os.environ['EUCA_SECRET_KEY'],
+        self._conn = boto.connect_euca(aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'], aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                                        host=host,
                                        port=port,
                                        path='/services/Eucalyptus',
