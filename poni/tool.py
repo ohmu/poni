@@ -1372,6 +1372,8 @@ class Tool:
                             / "default")
 
         parser = argh.ArghParser()
+        parser.add_argument("-E", "--pass-thru-exceptions", default=False,
+                            action="store_true", help="do not suppress exceptions with user-friendly error messages")
         parser.add_argument("-D", "--debug", dest="debug", default=False,
                             action="store_true", help="enable debug output")
         parser.add_argument("-L", "--time-log", metavar="FILE", type=path,
@@ -1499,9 +1501,13 @@ class Tool:
                 self.task_times.add_task("C", op_name, start, stop, args=args)
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
+            if namespace.pass_thru_exceptions:
+                raise
             return -1
         except errors.Error as error:
             self.log.error("%s: %s", error.__class__.__name__, error)
+            if namespace.pass_thru_exceptions:
+                raise
             return -1
         finally:
             if namespace.time_log:
