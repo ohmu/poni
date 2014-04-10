@@ -1262,7 +1262,8 @@ class Tool:
         confman = self.get_confman(arg.root_dir, reset_cache=False)
 
         manager = self.get_manager(confman)
-        self.collect_all(manager)  # TODO: needed by "list -C"
+        if arg.show_controls:
+            self.collect_all(manager)
 
         list_output = listout.ListOutput(self, confman, **arg.__dict__)
         for output in list_output.output():
