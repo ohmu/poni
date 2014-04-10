@@ -6,18 +6,19 @@ See LICENSE for details.
 
 """
 
+from . import errors
+from . import newconfig
+from . import rcontrol_all
+from . import util
+from . import vc
+from .util import json
+from path import path
+import errno
+import imp
 import os
 import re
-import sys
-import imp
 import shutil
-from path import path
-from .util import json
-from . import newconfig
-from . import errors
-from . import util
-from . import rcontrol_all
-from . import vc
+import sys
 
 NODE_CONF_FILE = "node.json"
 SYSTEM_CONF_FILE = "system.json"
@@ -395,14 +396,21 @@ class Node(Item):
 
     def iter_configs(self):
         config_dir = self.path / CONFIG_DIR
-        if config_dir.exists():
-            for config_path in config_dir.dirs():
-                conf = self.config_cache.get(config_path)
-                if conf is None:
-                    conf = Config(self, config_path.basename(), config_path)
-                    self.config_cache[config_path] = conf
+        try:
+            dirs = config_dir.dirs()
+        except OSError as error:
+            if error.errno == errno.ENOENT:
+                return
+            else:
+                raise
 
-                yield conf
+        for config_path in dirs:
+            conf = self.config_cache.get(config_path)
+            if conf is None:
+                conf = Config(self, config_path.basename(), config_path)
+                self.config_cache[config_path] = conf
+
+            yield conf
 
     def iter_all_configs(self, handled=None):
         handled = handled or set()
