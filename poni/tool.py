@@ -830,9 +830,8 @@ class Tool:
         """assign ips to instances based on properties"""
         confman = core.ConfigMan(arg.root_dir)
         props = [node["cloud"]
-                    for node in confman.find(arg.target,
-                                    full_match=arg.full_match)
-                    if node.get("cloud", None)]
+                 for node in confman.find(arg.target, full_match=arg.full_match)
+                 if node.get("cloud", None)]
         for provider, props in itertools.groupby(props, self.sky.get_provider):
             provider.assign_ip(props)
 
@@ -1126,7 +1125,7 @@ class Tool:
             exclude=arg.exclude, config_patterns=arg.config, tag=arg.tag)
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
-                           stats.error_count, stats.file_count))
+                    stats.error_count, stats.file_count))
         elif not stats.file_count:
             self.log.info("no files to deploy")
         else:
@@ -1154,7 +1153,7 @@ class Tool:
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
-                           stats.error_count, stats.file_count))
+                    stats.error_count, stats.file_count))
         elif not stats.file_count:
             self.log.info("no files to audit")
         else:
@@ -1179,7 +1178,7 @@ class Tool:
 
         if stats.error_count:
             raise errors.VerifyError("failed: files with errors: [%d/%d]" % (
-                           stats.error_count, stats.file_count))
+                    stats.error_count, stats.file_count))
         elif not stats.file_count:
             self.log.info("no files to verify")
         else:
@@ -1263,7 +1262,7 @@ class Tool:
         confman = self.get_confman(arg.root_dir, reset_cache=False)
 
         manager = self.get_manager(confman)
-        self.collect_all(manager) # TODO: needed by "list -C"
+        self.collect_all(manager)  # TODO: needed by "list -C"
 
         list_output = listout.ListOutput(self, confman, **arg.__dict__)
         for output in list_output.output():
@@ -1286,7 +1285,6 @@ class Tool:
             self.cached_manager = config.Manager(confman)
 
         return self.cached_manager
-
 
     @argh_named("list")
     @arg_full_match
