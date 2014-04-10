@@ -57,7 +57,11 @@ class GitVersionControl(VersionControl):
         self.git.index.add(["*"])
         deleted = self.get_deleted_files()
         if deleted:
-            self.git.index.remove(deleted)
+            # must delete in batches in order to avoid "OSError: [Errno 7] Argument list too long"
+            BATCH = 1000
+            deleted = list(deleted)
+            for i in range(0, len(deleted), BATCH):
+                self.git.index.remove(deleted[i:i + BATCH])
         self.git.index.commit(message)
 
     def status(self):
