@@ -19,7 +19,7 @@ rpm: poni/version.py
 debian:
 	python setup.py sdist -d ..
 	cp "../poni-$(version).tar.gz" "../poni_$(short_version).orig.tar.gz"
-	echo | dh_make -b -i -p "poni_$(version)" -c blank -f "../poni-$(version).tar.gz"
+	echo | dh_make -i -p "poni_$(version)" -c blank -f "../poni-$(version).tar.gz"
 	rm debian/*ex debian/*EX debian/docs debian/README.Debian
 	cp debian.in/* debian/
 	dch -v $(version) -D unstable "TODO: message"
