@@ -233,16 +233,9 @@ class Config(Item):
     def get_settings_dirs(self):
         parent_config_name = self.get("parent")
         if parent_config_name:
-            # TODO: find_config() that returns exactly one hit
-            hits = list(self.node.confman.find_config(parent_config_name,
-                                                      full_match=True))
-            if len(hits) == 1:
-                parent_config_node, parent_config = hits[0]
-                for item in parent_config.get_settings_dirs():
-                    yield item
-            else:
-                raise errors.Error("need exactly one parent config %r" % (
-                        parent_config_name))
+            parent_config_node, parent_config = self.node.confman.get_config(parent_config_name)
+            for item in parent_config.get_settings_dirs():
+                yield item
 
         yield self.full_name, self.settings_dir
 
