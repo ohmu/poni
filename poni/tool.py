@@ -40,6 +40,11 @@ except ImportError:
     # older argh version
     expects_obj = lambda m: m
 
+# suppress argh warnings about installing 'argcomplete'
+import warnings
+import exceptions
+warnings.filterwarnings("ignore", ".*", exceptions.Warning, "argh.completion")
+
 try:
     from argh import named as argh_named
 except ImportError:
