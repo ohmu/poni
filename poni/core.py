@@ -493,7 +493,7 @@ class ConfigMan:
 
             lib_path = str(lib_path)
             if not lib_path in sys.path:
-                sys.path.append(lib_path)
+                sys.path.insert(0, lib_path)
 
     def init_repo(self):
         if self.config_path.exists():
