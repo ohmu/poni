@@ -68,6 +68,7 @@ class VSphereProvider(cloudbase.Provider):
         datastore_filter = prop.get('datastore_filter', '')
         hardware = prop.get('hardware', None)
         folder = prop.get('folder', None)
+        snapshot_memory = prop.get('snapshot_memory', True)
         instance = self.instances.get(instance_id)
         if not instance:
             vm = None
@@ -93,7 +94,7 @@ class VSphereProvider(cloudbase.Provider):
                             base_vm_name=base_vm_name, vm_state=vm_state,
                             placement=placement, resource_pool=resource_pool, cluster=cluster,
                             datastore=datastore, datastore_filter=datastore_filter, hardware=hardware,
-                            folder=folder)
+                            folder=folder, snapshot_memory=snapshot_memory)
             self.instances[instance_id] = instance
         return instance
 
@@ -190,15 +191,16 @@ class VSphereProvider(cloudbase.Provider):
                 instance = self._get_instance(prop)
                 assert instance, "instance %s not found. Very bad. Should not happen. Ever." % instance_id
                 vm_state = instance['vm_state']
+                snapshot_memory = instance.get('snapshot_memory', True)
                 job = None
                 if wait_state == 'running':
                     # Get the VM running from whatever state it's in
                     if vm_state == 'VM_CLEAN':
                         job = self.vmops.revert_to_snapshot(instance)
                     elif vm_state == 'VM_NON_EXISTENT':
-                        job = self.vmops.clone_vm(instance, nuke_old=True)
+                        job = self.vmops.clone_vm(instance, nuke_old=True, snapshot_memory=snapshot_memory)
                     elif vm_state == 'VM_DIRTY':
-                        job = self.vmops.clone_vm(instance, nuke_old=True)
+                        job = self.vmops.clone_vm(instance, nuke_old=True, snapshot_memory=snapshot_memory)
                 else:
                     # Handle the update
                     if vm_state == 'VM_RUNNING':
