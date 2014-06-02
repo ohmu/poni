@@ -315,10 +315,10 @@ class Node(Item):
         if network == "private":
             default = ["private.dns", "private.ip"]
         else:
-            default = []
+            default = ["{0}.ip".format(network), "private.ip"]
 
         addr_map = self.get_tree_property("addr_map", {})
-        addr_prop_list = addr_map.get(network, default)
+        addr_prop_list = addr_map.get(network, addr_map.get("default", default))
 
         for addr_prop_name in addr_prop_list:
             item = self
