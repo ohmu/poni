@@ -10,6 +10,7 @@ from . import cloud_aws
 from . import cloud_eucalyptus
 from . import cloud_libvirt
 from . import cloud_vsphere
+from . import cloud_docker
 from .cloudbase import Provider # provides backward compatibility with older extensions
 
 
@@ -18,6 +19,7 @@ PROVIDERS = {
     "eucalyptus" : cloud_eucalyptus.EucalyptusProvider,
     "libvirt" : cloud_libvirt.LibvirtProvider,
     "vsphere" : cloud_vsphere.VSphereProvider,
+    "docker" : cloud_docker.DockerProvider,
     }
 
 

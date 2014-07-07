@@ -5,7 +5,7 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
-
+import errors
 
 class NoProviderMethod(NotImplementedError):
     def __init__(self, obj, func):
@@ -33,6 +33,13 @@ class Provider(object):
         # shuffle the hash a bit to create unique hashes for Provider objects
         # and their provider_keys
         return hash(("cloudbase.Provider", self._provider_key))
+
+    def required_prop(self, cloud_prop, prop_name):
+        value = cloud_prop.get(prop_name)
+        if value is None:
+            raise errors.CloudError("'cloud.{0}' property required by {1} not defined".format(
+                    prop_name, self.provider_id))
+        return value
 
     @classmethod
     def get_provider_key(cls, cloud_prop):
