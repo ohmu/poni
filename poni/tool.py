@@ -5,34 +5,34 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
-
-import os
-import re
-import sys
-import itertools
-import logging
-import shlex
-import argh
-import glob
-import shutil
-import time
-from distutils.version import LooseVersion
-import argparse
-from path import path
-from . import config
-from . import errors
-from . import util
-from . import core
 from . import cloud
-from . import vc
-from . import importer
-from . import rcontrol_all
-from . import listout
 from . import colors
-from . import version
-from . import work
+from . import config
+from . import core
+from . import errors
+from . import importer
+from . import listout
+from . import rcontrol_all
 from . import template
 from . import times
+from . import util
+from . import vc
+from . import version
+from . import work
+from distutils.version import LooseVersion
+from path import path
+import argh
+import argparse
+import glob
+import itertools
+import logging
+import os
+import re
+import shlex
+import shutil
+import stat
+import sys
+import time
 
 try:
     from argh import expects_obj
@@ -672,6 +672,69 @@ class Tool:
         if result:
             raise errors.RemoteError("remote exec failed with code: %r" % (
                     result,))
+
+    @argh_named("cp")
+    @arg_verbose
+    @arg_full_match
+    @arg_host_access_method
+    @arg_flag("-d", "--create-dest-dir", help="create missing remote target directories")
+    @arg_flag("-r", "--recursive", help="copy directories recursively")
+    @argh.arg('source', type=str, nargs="+", help='source file/dir to copy')
+    @arg_target_nodes
+    @argh.arg('dest_dir', type=str, help='destination remote directory')
+    @expects_obj
+    def handle_remote_cp(self, arg):
+        """copy file(s) to remote node(s)"""
+        def pp(path):
+            """pretty-print paths to output-safe ascii"""
+            return repr(str(path))[1:-1]
+
+        # sanity check
+        for source in arg.source:
+            try:
+                st = os.stat(source)
+                if not arg.recursive and stat.S_ISDIR(st.st_mode):
+                    raise errors.UserError("copy source {0} is a directory and no -r specified".format(
+                            pp(source)))
+
+            except OSError as err:
+                raise errors.UserError("invalid copy source {0}: {1.__class__.__name__}: {1}".format(
+                        pp(source), err))
+
+        def copy_file_or_dir(node, remote, source_path, dest_dir):
+            try:
+                remote.stat(dest_dir)
+            except errors.RemoteError as err:
+                if not "Errno 2" in str(err):
+                    raise errors.UserError("{0}: unexpected error checking target directory {1}: {2.__class__.__name__}: {2}".format(
+                            node.name, pp(dest_dir), err))
+                elif not arg.create_dest_dir:
+                    raise errors.UserError("{0}: Remote directory {1} does not exist. (use -d to create it)".format(
+                            node.name, pp(dest_dir)))
+
+                remote.makedirs(dest_dir)
+
+            source_paths = (source_path.listdir() if source_path.isdir() else [path(source_path)])
+            for file_path in source_paths:
+                dest_path = path(dest_dir) / file_path.basename()
+                lstat = file_path.stat()
+                if stat.S_ISDIR(lstat.st_mode):
+                    copy_file_or_dir(node, remote, source_path / file_path.basename(), dest_path)
+                    continue
+
+                if arg.verbose:
+                    self.log.info("copying: %s -> %s:%s [%s]", pp(file_path), node.addr(), pp(dest_dir), node.name)
+                remote.put_file(file_path, dest_path)
+                remote.utime(dest_path, (int(lstat.st_mtime),
+                                         int(lstat.st_mtime)))
+
+        def copy_op(arg, node, remote):
+            for source in arg.source:
+                copy_file_or_dir(node, remote, path(source), path(arg.dest_dir))
+
+        copy_op.doc = "cp"
+        confman = self.get_confman(arg.root_dir, reset_cache=False)
+        self.remote_op(confman, arg, copy_op)
 
     @argh_named("shell")
     @arg_verbose
@@ -1416,6 +1479,7 @@ class Tool:
 
         parser.add_commands([
                 self.handle_remote_exec, self.handle_remote_shell,
+                self.handle_remote_cp,
                 ],
                             namespace="remote", title="remote operations",
                             help="command to execute")
