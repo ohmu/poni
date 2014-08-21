@@ -5,10 +5,14 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
-
+from . import colors
+from . import errors
+from . import template
+from . import util
 from path import path
 import argh
 import argparse
+import collections
 import datetime
 import difflib
 import itertools
@@ -17,17 +21,16 @@ import re
 import sys
 import time
 
-from . import colors
-from . import errors
-from . import template
-from . import util
-
-
 try:
     from argh import expects_obj
 except ImportError:
     # older argh version
     expects_obj = lambda m: m
+
+try:
+    from collections import OrderedDict
+except ImportError:
+    from .orddict import OrderedDict
 
 
 class RenderContext(object):
@@ -64,7 +67,7 @@ class Manager:
         self.buckets = {}
 
     def get_bucket(self, name):
-        return self.buckets.setdefault(name, freezingset())
+        return self.buckets.setdefault(name, OrderedSet())
 
     def emit_error(self, node, source_path, error):
         self.log.warning("node %s: %s: %s: %s", node.name, source_path,
@@ -384,20 +387,33 @@ def control(provides=None, requires=None, optional_requires=None, auto_enable=Tr
     return wrap
 
 
-class hashabledict(dict):
+class OrderedSet(OrderedDict):
+    def add(self, elem):
+        self[Edge(elem)] = None
+
+    def append(self, elem):
+        self[Edge(elem)] = None
+
+
+class Edge(dict):
+    SORT_FIELDS = set([
+        "source_node", "source_config", "dest_node", "dest_config", "action", "protocol",
+        "port"])
+
     def __hash__(self):
-        return hash(frozenset(self.iteritems()))
+        precalc_hash = getattr(self, "__precalc_hash", None)
+        if precalc_hash is None:
+            key = (
+                self['source_node'].name if 'source_node' in self else None,
+                self['dest_node'].name if 'dest_node' in self else None,
+                self['node'].name if 'node' in self else None,
+                self.get('action'), self.get('protocol'), self.get('port'),
+                tuple(sorted((k, v) for k, v in self.iteritems()
+                             if k not in self.SORT_FIELDS)))
+            precalc_hash = hash(("edge", key))
+            setattr(self, "__precalc_hash", precalc_hash)
 
-
-class freezingset(set):
-    """set that freezes dicts that are add()ed"""
-    def add(self, item):
-        assert isinstance(item, dict)
-        set.add(self, hashabledict(item))
-
-    def append(self, item):
-        """backward-compatibility with old implementation that used lists"""
-        self.add(item)
+        return precalc_hash
 
 
 class PlugIn:
@@ -572,8 +588,7 @@ class PlugIn:
 
     def add_record(self, bucket_name, **kwargs):
         self.manager.get_bucket(bucket_name).add(
-            hashabledict(source_node=self.node, source_config=self.top_config,
-                 **kwargs))
+            Edge(source_node=self.node, source_config=self.top_config, **kwargs))
 
     def get_names(self):
         names = dict(node=self.node,
