@@ -312,6 +312,11 @@ class Node(Item):
     def addr(self, network=None):
         """Return node's network address for the given network name"""
         network = network or "private"
+        key = (self.path, network)
+        cached = self.confman.node_addr_cache.get(key)
+        if cached is not None:
+            return cached
+
         if network == "private":
             default = ["private.dns", "private.ip"]
         else:
@@ -333,6 +338,7 @@ class Node(Item):
                     break
 
             if item is not None:
+                self.confman.node_addr_cache[key] = item
                 return item
 
         raise errors.MissingProperty(
@@ -460,6 +466,7 @@ class ConfigMan:
         self.system_root = self.root_dir / "system"
         self.config_path = self.root_dir / REPO_CONF_FILE
         self.node_cache = {}
+        self.node_addr_cache = {}
         self.find_cache = {}
         self.find_config_cache = {}
         self._cache_reset_counter = g_cache_reset_counter
@@ -478,6 +485,7 @@ class ConfigMan:
 
     def reset_cache(self):
         self.node_cache = {}
+        self.node_addr_cache = {}
         self.find_cache = {}
         self.find_config_cache = {}
         global g_cache_reset_counter
