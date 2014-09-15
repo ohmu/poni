@@ -8,6 +8,7 @@ See LICENSE for details.
 
 from __future__ import with_statement
 
+import cStringIO
 import errno
 import logging
 import os
@@ -15,6 +16,7 @@ import select
 import shutil
 import subprocess
 import sys
+import tarfile
 import time
 from . import errors
 from . import colors
@@ -249,6 +251,68 @@ class LocalControl(RemoteControl):
         os.utime(file_path, times)
 
 
+class LocalTarControl(RemoteControl):
+    """Writing to a local tar file"""
+    def __init__(self, node, tar_dir):
+        self.tar_dir = tar_dir
+        RemoteControl.__init__(self, node)
+
+    @convert_local_errors
+    def put_file(self, source_path, dest_path, callback=None):
+        self.write_file(dest_path, open(source_path, "rb").read())
+
+    @convert_local_errors
+    def makedirs(self, dir_path):
+        pass
+
+    @convert_local_errors
+    def read_file(self, file_path):
+        raise IOError(errno.ENOENT, "LocalTarControl: No such file")
+
+    @convert_local_errors
+    def write_file(self, file_path, contents, mode=None, owner=None,
+                   group=None):
+        full_path = os.path.join(self.tar_dir, self.node["host"], "image.tar")
+        if not os.path.isdir(os.path.dirname(full_path)):
+            os.makedirs(os.path.dirname(full_path))
+
+        file_obj = cStringIO.StringIO(contents)
+        with tarfile.open(full_path, "a") as output:
+            info = tarfile.TarInfo(file_path)
+            info.size = len(contents)
+            if mode is not None:
+                info.mode = mode
+            if owner is not None:
+                info.uid = owner
+            if group is not None:
+                info.gid = group
+            info.mtime = time.time()
+            output.addfile(info, file_obj)
+
+    @convert_local_errors
+    def execute_command(self, cmd, pseudo_tty=False):
+        full_path = os.path.join(self.tar_dir, self.node["host"], "image.control")
+        if not os.path.isdir(os.path.dirname(full_path)):
+            os.makedirs(os.path.dirname(full_path))
+
+        with open(full_path, "a") as output:
+            output.write(cmd + "\n")
+
+        yield DONE, 0
+
+    @convert_local_errors
+    def execute_shell(self):
+        assert 0, "LocalTarControl does not support remote commands"
+
+    @convert_local_errors
+    def stat(self, file_path):
+        raise IOError(errno.ENOENT, "LocalTarControl: No such file")
+
+    @convert_local_errors
+    def utime(self, file_path, times):
+        pass
+
+
 class SshRemoteControl(RemoteControl):
     """Remote control over an SSH connection using Paramiko"""
     def __init__(self, node):
@@ -265,5 +329,3 @@ class SshRemoteControl(RemoteControl):
             self.key_filename = node.get_tree_property("ssh-key")
 
         self.connect_timeout = node.get_tree_property("ssh-timeout", 60.0)
-
-

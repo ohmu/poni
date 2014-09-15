@@ -5,21 +5,23 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
-from . import errors
 from . import cloud_aws
+from . import cloud_docker
 from . import cloud_eucalyptus
+from . import cloud_image
 from . import cloud_libvirt
 from . import cloud_vsphere
-from . import cloud_docker
-from .cloudbase import Provider # provides backward compatibility with older extensions
+from . import errors
+from .cloudbase import Provider  # provides backward compatibility with older extensions
 
 
 PROVIDERS = {
-    "aws-ec2" : cloud_aws.AwsProvider,
-    "eucalyptus" : cloud_eucalyptus.EucalyptusProvider,
-    "libvirt" : cloud_libvirt.LibvirtProvider,
-    "vsphere" : cloud_vsphere.VSphereProvider,
-    "docker" : cloud_docker.DockerProvider,
+    "aws-ec2": cloud_aws.AwsProvider,
+    "docker": cloud_docker.DockerProvider,
+    "eucalyptus": cloud_eucalyptus.EucalyptusProvider,
+    "image": cloud_image.ImageProvider,
+    "libvirt": cloud_libvirt.LibvirtProvider,
+    "vsphere": cloud_vsphere.VSphereProvider,
     }
 
 
@@ -40,8 +42,7 @@ class Sky:
         try:
             provider_class = PROVIDERS[provider_id]
         except KeyError:
-            raise errors.CloudError("unknown cloud provider %r" % (
-                    provider_id,))
+            raise errors.CloudError("unknown cloud provider %r" % (provider_id,))
 
         key = provider_class.get_provider_key(cloud_prop)
         cached = self.providers.get(key)
@@ -51,5 +52,3 @@ class Sky:
             return cached
 
         return cached
-
-

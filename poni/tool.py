@@ -78,8 +78,7 @@ def arg_target_nodes(method):
     return arg_exclude_nodes(b(method))
 
 arg_host_access_method = argh.arg("-m", "--method",
-                                  choices=rcontrol_all.METHODS.keys(),
-                                  help="override host access method")
+                                  help="override host access method (local, ssh, tar:DIR)")
 arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
                           help="write command output to files in DIR")
 arg_config_pattern = argh.arg("-c", "--config", metavar="PATTERN", type=str, nargs="*",

@@ -14,7 +14,9 @@ from . import errors
 METHODS = {
     "ssh": rcontrol_paramiko.ParamikoRemoteControl,
     "local": rcontrol.LocalControl,
+    "tar": rcontrol.LocalTarControl,
     }
+
 
 class RemoteManager:
     def __init__(self):
@@ -25,16 +27,23 @@ class RemoteManager:
             remote.close()
 
     def get_remote(self, node, method):
+        method = method or "ssh"
         key = (node.name, method)
         remote = self.remotes.get(key)
         if not remote:
+            parts = method.split(":", 1)
+            if len(parts) == 2:
+                method, args = parts
+                args = [args]
+            else:
+                args = []
             try:
-                control_class = METHODS[method or "ssh"]
+                control_class = METHODS[method]
             except KeyError:
                 raise errors.RemoteError(
                     "unknown remote control method %r" % method)
 
-            remote = control_class(node)
+            remote = control_class(node, *args)
             self.remotes[key] = remote
 
         return remote
@@ -42,4 +51,3 @@ class RemoteManager:
 manager = RemoteManager()
 
 get_remote = manager.get_remote
-
