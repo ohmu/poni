@@ -25,10 +25,15 @@ import uuid
 
 MISSING_LIBS = []
 try:
-    import DNS
-except ImportError:
+    import dns, dns.flags, dns.resolver
     DNS = None
-    MISSING_LIBS.append("DNS")
+except ImportError:
+    dns = None
+    try:
+        import DNS
+    except ImportError:
+        DNS = None
+        MISSING_LIBS.append("dnspython or PyDNS")
 
 try:
     import libvirt
@@ -61,39 +66,45 @@ else:
             self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)  # pylint: disable=E1120
 
 
-def _do_dns_lookup(req, max_retries=3):
-    "Make a DNS lookup and retry on DNS timeouts"
-    tri = 0
-    while tri < max_retries:
-        try:
-            return req.req()
-        except DNS.Base.DNSError:
-            # probably should be some logging here
-            time.sleep(1)
-            tri += 1
-    raise
-
-
-def _lv_dns_lookup(name, qtype):
+def _lv_pydns_lookup(name):
     """DNS lookup using PyDNS, handles retry over TCP in case of truncation
     and returns a list of results."""
-    req = DNS.Request(name=name, qtype=qtype)
-    response = _do_dns_lookup(req)
-    if response and response.header["tc"]:
-        # truncated, try with tcp
-        req = DNS.Request(name=name, qtype=qtype, protocol="tcp")
-        response = _do_dns_lookup(req)
+    if not DNS.defaults["server"]:
+        DNS.DiscoverNameServers()
+    req = DNS.Request(name=name, qtype="srv", protocol="udp")
+    for retries_left in [3, 2, 1, 0]:
+        try:
+            response = req.req()
+            if response and response.header["tc"]:
+                # truncated, rerun with tcp
+                req = DNS.Request(name=name, qtype="srv", protocol="tcp")
+                continue
+            break
+        except DNS.Base.DNSError:
+            if not retries_left:
+                raise
+            time.sleep(1)  # retry after sleeping a second
     if not response or not response.answers:
         return []
     result = []
     for a in response.answers:
-        if a["typename"].lower() != qtype.lower():
+        if a["typename"].lower() != "srv":
             continue
         if isinstance(a["data"], list):
             result.extend(a["data"])
         else:
             result.append(a["data"])
     return result
+
+
+def _lv_dns_lookup(name):
+    """DNS lookup using dnspython, falls back to PyDNS if dnspython isn't available."""
+    if dns is None:
+        return _lv_pydns_lookup(name)
+    resp = dns.resolver.query(name, "srv")
+    if resp.response.flags & dns.flags.TC:
+        resp = dns.resolver.query(name, "srv", tcp=True)
+    return [(a.priority, a.weight, a.port, a.target.to_text(True)) for a in resp]
 
 
 def _created_str():
@@ -194,8 +205,6 @@ class LibvirtProvider(Provider):
         # with them.  They can also be defined in SRV records in "services"
         # property as well as an older style "nodesets" property without
         # service information in which case we use _libvirt._tcp.
-        if not DNS.defaults["server"]:
-            DNS.DiscoverNameServers()
         hosts = {}
         for entry in profile.get("nodes", []):
             host, _, port = entry.partition(":")
@@ -203,7 +212,7 @@ class LibvirtProvider(Provider):
         services = set(profile.get("services", []))
         services.update("_libvirt._tcp.{0}".format(host) for host in profile.get("nodesets", []))
         for entry in services:
-            for priority, weight, port, host in _lv_dns_lookup(entry, "SRV"):
+            for priority, weight, port, host in _lv_dns_lookup(entry):
                 hosts["{0}:{1}".format(host, port)] = (priority, weight)
         self.hosts = hosts
         self.hosts_online = None
