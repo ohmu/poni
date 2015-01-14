@@ -43,6 +43,9 @@ build-dep:
 test-dep:
 	apt-get --yes install pylint nosetests
 
+pep8:
+	pep8 --ignore=E501 poni/*.py
+
 pylint:
 	python -m pylint.lint --rcfile=pylintrc poni/*.py
 
