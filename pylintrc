@@ -1,0 +1,11 @@
+[MESSAGES CONTROL]
+# C0302:  1,0: Too many lines in module (1247)
+# W0511:192,0: TODO: separate stdout/stderr?
+# W0212: 62,23:InstanceStarter.__init__: Access to a protected member _get_instances of a client class
+# W0142:448,30:AwsProvider._run_instance: Used * or ** magic
+# W0603:491,8:ConfigMan.reset_cache: Using the global statement
+disable=I,R,C0111,C0103,R0201,W0612,W0613,C0301,C0302,W0511,W0212,W0142,W0603
+
+[REPORTS]
+include-ids=yes
+reports=no

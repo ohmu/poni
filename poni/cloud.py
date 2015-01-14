@@ -12,7 +12,7 @@ from . import cloud_image
 from . import cloud_libvirt
 from . import cloud_vsphere
 from . import errors
-from .cloudbase import Provider  # provides backward compatibility with older extensions
+from .cloudbase import Provider  # provides backward compatibility with older extensions # pylint: disable=W0611
 
 
 PROVIDERS = {

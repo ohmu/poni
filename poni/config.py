@@ -12,7 +12,6 @@ from . import util
 from path import path
 import argh
 import argparse
-import collections
 import datetime
 import difflib
 import itertools
@@ -75,7 +74,8 @@ class Manager:
         self.error_count += 1
 
     def copy_tree(self, source_path, dest_path, remote, path_prefix="", verbose=False):
-        def progress(copied, total, ctx={}):
+        def progress(copied, total, ctx=None):
+            ctx = ctx or {}
             ctx.setdefault("last", time.time())
             if (copied == total) or (time.time() - ctx["last"]) > 1.0:
                 sys.stderr.write("\r%s/%s bytes copied" % (copied, total))

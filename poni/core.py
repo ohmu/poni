@@ -566,7 +566,7 @@ class ConfigMan:
 
     def load_config(self):
         try:
-            return json.load(file(self.config_path))
+            return dict(json.load(file(self.config_path)))
         except Exception as error:
             raise errors.RepoError(
                 "%s: not a valid repo (hint: 'init'-command): %s: %s" % (

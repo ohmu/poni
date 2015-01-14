@@ -31,6 +31,7 @@ class OrderedDict(dict):
         because their insertion order is arbitrary.
 
         '''
+        dict.__init__(self)
         if len(args) > 1:
             raise TypeError('expected at most 1 arguments, got %d' % len(args))
         try:
@@ -139,7 +140,7 @@ class OrderedDict(dict):
         for k in self:
             yield (k, self[k])
 
-    def update(*args, **kwds):
+    def update(*args, **kwds):  # pylint: disable=E0211
         '''od.update(E, **F) -> None.  Update od from dict/iterable E and F.
 
         If E is a dict instance, does:           for k in E: od[k] = E[k]
@@ -162,7 +163,7 @@ class OrderedDict(dict):
             for key in other:
                 self[key] = other[key]
         elif hasattr(other, 'keys'):
-            for key in other.keys():
+            for key in other.keys():  # pylint: disable=E1103
                 self[key] = other[key]
         else:
             for key, value in other:
@@ -194,8 +195,9 @@ class OrderedDict(dict):
         self[key] = default
         return default
 
-    def __repr__(self, _repr_running={}):
+    def __repr__(self, _repr_running=None):
         'od.__repr__() <==> repr(od)'
+        _repr_running = {} if _repr_running is None else _repr_running
         call_key = id(self), _get_ident()
         if call_key in _repr_running:
             return '...'

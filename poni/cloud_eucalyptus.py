@@ -53,7 +53,7 @@ class EucalyptusProvider(cloud_aws.AwsProvider):
 
         try:
             parsed_url = urlparse.urlsplit(os.environ.get("EC2_URL"))
-            host, port = parsed_url.netloc.split(':', 1)
+            host, port = parsed_url.netloc.split(':', 1)  # pylint: disable=E1103
             port = int(port)
         except (ValueError, AttributeError):
             raise errors.CloudError("Failed to parse EC2_URL environmental variable")
@@ -61,9 +61,8 @@ class EucalyptusProvider(cloud_aws.AwsProvider):
         self._conn = boto.connect_euca(aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'], aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
                                        host=host,
                                        port=port,
-                                       path=parsed_url.path)
+                                       path=parsed_url.path)  # pylint: disable=E1103
         return self._conn
 
     def _get_vpc_conn(self):
         raise errors.CloudError("Eucalyptus doesn't support VPCs yet")
-

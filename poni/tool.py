@@ -286,7 +286,7 @@ class Tool:
 
         match = re.search(r"^\s*#\s+poni\.template\s*:\s*(\w+)", script_text, re.MULTILINE)
         engine = match.group(1) if match else "cheetah"
-        script_text = template.render(engine=engine, source_text=script_text, vars=variables)
+        script_text = template.render(engine=engine, source_text=script_text, variables=variables)
         lines = script_text.splitlines()
 
         def wrap(args):
@@ -323,9 +323,8 @@ class Tool:
             self.parser.dispatch(argv=args, pre_call=set_repo_path,
                                  namespace=namespace)
             stop = time.time()
-            if namespace.time_op:
-                self.task_times.add_task("L%d" % (i+1), line, start, stop,
-                                         args=args)
+            if namespace.time_op:  # pylint: disable=E1101
+                self.task_times.add_task("L%d" % (i + 1), line, start, stop, args=args)
 
     @argh_named("update-config")
     @arg_verbose
@@ -684,9 +683,9 @@ class Tool:
     @expects_obj
     def handle_remote_cp(self, arg):
         """copy file(s) to remote node(s)"""
-        def pp(path):
+        def pp(pth):
             """pretty-print paths to output-safe ascii"""
-            return repr(str(path))[1:-1]
+            return repr(str(pth))[1:-1]
 
         # sanity check
         for source in arg.source:
@@ -974,7 +973,7 @@ class Tool:
                  if node.get("cloud", None)]
         if not props:
             raise errors.UserError("%r does not match any nodes" % (arg.nodes))
-        for provider, props in itertools.groupby(props, lambda prop: self.sky.get_provider(prop)):
+        for provider, props in itertools.groupby(props, self.sky.get_provider):
             yield provider, props
 
     @argh_named("create-snapshot")
@@ -1056,7 +1055,7 @@ class Tool:
             found = True
             converters = {
                 "prop": (
-                    lambda x: util.get_dict_prop(dict(node=item), x.split("."),
+                    lambda x: util.get_dict_prop(dict(node=item), x.split("."),  # pylint: disable=W0631
                                                  verify=True)[1],
                     None
                     )
@@ -1064,6 +1063,7 @@ class Tool:
             props = dict(util.parse_prop(p, converters=converters)
                          for p in arg.property)
             changes = item.set_properties(props)
+            old_value = None
             for key, old_value, new_value in changes:
                 changed = ((type(old_value) != type(new_value))
                            or (old_value != new_value))
@@ -1389,7 +1389,7 @@ class Tool:
             converters = {
                 "prop": (
                     lambda x: util.get_dict_prop(dict(node=conf_node,
-                                                      config=conf),
+                                                      config=conf),  # pylint: disable=W0631
                                                  x.split("."),
                                                  verify=True)[1],
                     None
@@ -1444,7 +1444,7 @@ class Tool:
                             help="time-log this operation as NAME")
         parser.add_argument(
             "-d", "--root-dir", dest="root_dir", default=default_root,
-            type=lambda rel_path: os.path.abspath(rel_path),
+            type=os.path.abspath,
             metavar="DIR",
             help="repository root directory (default: $HOME/.poni/default)")
         parser.add_argument(
@@ -1558,23 +1558,22 @@ class Tool:
                                              raw_output=True,
                                              namespace=namespace)
             stop = time.time()
-            if namespace.time_op:
-                op_name = namespace.time_op \
-                    if (namespace.time_op != "-") else (" ".join(args))
+            if namespace.time_op:  # pylint: disable=E1101
+                op_name = namespace.time_op if (namespace.time_op != "-") else (" ".join(args))  # pylint: disable=E1101
                 self.task_times.add_task("C", op_name, start, stop, args=args)
         except KeyboardInterrupt:
             self.log.error("*** terminated by keyboard ***")
-            if namespace.pass_thru_exceptions:
+            if namespace.pass_thru_exceptions:  # pylint: disable=E1101
                 raise
             return -1
         except errors.Error as error:
             self.log.error("%s: %s", error.__class__.__name__, error)
-            if namespace.pass_thru_exceptions:
+            if namespace.pass_thru_exceptions:  # pylint: disable=E1101
                 raise
             return -1
         finally:
-            if namespace.time_log:
-                self.task_times.save(namespace.time_log)
+            if namespace.time_log:  # pylint: disable=E1101
+                self.task_times.save(namespace.time_log)  # pylint: disable=E1101
 
             rcontrol_all.manager.cleanup()
 

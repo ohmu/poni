@@ -15,6 +15,7 @@ try:
 except ImportError:
     apt_inst = None
 
+
 class Importer:
     def __init__(self, source, verbose=False):
         self.log = logging.getLogger("importer")
@@ -41,6 +42,7 @@ class DebImporter(Importer):
 
     def __import_to(self, confman):
         prefix = "usr/lib/poni-config/"
+
         def callback(member, contents):
             if member.name.endswith("/") or not member.name.startswith(prefix):
                 # not a poni-config file, skip
@@ -67,7 +69,8 @@ class DebImporter(Importer):
 
         data_tar = apt_inst.DebFile(file(self.source)).data
         # reads each file into memory and calls the callback, but there's no file-object based option...
-        data_tar.go(callback)
+        data_tar.go(callback)  # pylint: disable=E1101
+
 
 def get_importer(source_path, **kwargs):
     source_path = path(source_path)

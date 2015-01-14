@@ -50,8 +50,9 @@ if "sock" in inspect.getargspec(paramiko.SSHClient.connect).args:
     TunnelingSSHClient = paramiko.SSHClient
 else:
     import getpass
+
     class TunnelingSSHClient(paramiko.SSHClient):
-        def connect(self, hostname, port=22, username=None, key_filename=None, sock=None):
+        def connect(self, hostname, port=22, username=None, key_filename=None, sock=None):  # pylint: disable=W0221
             self._transport = paramiko.Transport(sock)
             if self._log_channel is not None:
                 self._transport.set_log_channel(self._log_channel)
@@ -227,7 +228,9 @@ class LibvirtProvider(Provider):
                     args = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no",
                             "-p{0}".format(port), "root@{0}".format(host), "uptime"]
                     procs.append(subprocess.Popen(args))
-                [proc.wait() for proc in procs]
+
+                for proc in procs:
+                    proc.wait()
 
             self.hosts_online = []
 
@@ -484,10 +487,12 @@ class LibvirtProvider(Provider):
                 break
 
         self.log.info("instances ready: delete {1:.2f}s, cloning {2:.2f}s, boot {0:.2f}s".format(
-                cloning_started - delete_started, boot_started - cloning_started,
-                time.time() - boot_started))
+            cloning_started - delete_started, boot_started - cloning_started,
+            time.time() - boot_started))
 
-        [client.close() for client in tunnels.itervalues()]
+        for client in tunnels.itervalues():
+            client.close()
+
         self.disconnect()
         return result
 
@@ -503,7 +508,7 @@ class LibvirtProvider(Provider):
             v['power'] = 'off'
         return result
 
-    def create_snapshot(self, props, name, description=None, memory=False):
+    def create_snapshot(self, props, name=None, description=None, memory=False):
         return self.__vm_async_apply(props, 'create_snapshot', name, description, memory)
 
     def remove_snapshot(self, props, name):
@@ -639,7 +644,7 @@ class PoniLVConn(object):
     def clone_vm(self, name, spec, overwrite=False):
         def macaddr(index):
             """create a mac address based on the VM name for DHCP predictability"""
-            mac_ext = hashlib.md5(name).hexdigest()
+            mac_ext = hashlib.md5(name).hexdigest()  # pylint: disable=E1101
             return "52:54:00:{0}:{1}:{2:02x}".format(mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16) ^ index)
 
         def gethw(prefix):
@@ -840,8 +845,8 @@ class PoniLVVol(object):
 
     def __read_desc(self):
         xml = etree.fromstring(self.vol.XMLDesc(0))
-        format = xml.find("target").find("format")
-        tformat = format.get("type") if format is not None else None
+        fmt = xml.find("target").find("format")
+        tformat = fmt.get("type") if fmt is not None else None
         self.format = tformat if tformat is not None else "raw"
         sdevice = xml.find("source").find("device")
         self.device = "block" if sdevice is not None else "file"
@@ -888,14 +893,14 @@ class PoniLVPool(object):
         voltree = XMLE.volume(
             XMLE.name(name),
             XMLE.target(XMLE.format(type=voltype)))
-        bytes = (megabytes or 0) * 1024 * 1024
+        byte_count = (megabytes or 0) * 1024 * 1024
         if srcvol:
-            if not bytes:
-                bytes = srcvol.info()[1]
+            if not byte_count:
+                byte_count = srcvol.info()[1]
             voltree.append(XMLE.backingStore(
                     XMLE.format(type=srctype),
                     XMLE.path(srcvol.path())))
-        voltree.append(XMLE.capacity(str(bytes)))
+        voltree.append(XMLE.capacity(str(byte_count)))
         volxml = etree.tostring(voltree)
 
         try:

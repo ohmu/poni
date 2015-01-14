@@ -44,7 +44,7 @@ test-dep:
 	apt-get --yes install pylint nosetests
 
 pylint:
-	python -m pylint.lint --disable=C0111,C0103,R0201,W0612,W0613,R0912,R0913,R0914 - --max-line-length 150 poni/*.py
+	python -m pylint.lint --rcfile=pylintrc poni/*.py
 
 tests:
 	nosetests --processes=2

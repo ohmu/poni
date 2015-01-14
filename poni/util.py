@@ -183,6 +183,9 @@ class TaskPool(ThreadPool):
         self.log = logging.getLogger("taskpool")
         self.applied = 0
 
+    def __reduce__(self):
+        pass
+
     def _call_wrapper(self, method, method_args, method_kwargs=None):
         try:
             return method(*method_args, **(method_kwargs or {}))
@@ -193,8 +196,9 @@ class TaskPool(ThreadPool):
             self.log.exception("task error: {0.__class__.__name__}: {0}".format(error))
             raise
 
-    def apply_async(self, method, args):
-        ThreadPool.apply_async(self, self._call_wrapper, [method, args])
+    def apply_async(self, method, args=(), kwds=None, callback=None):
+        kwds = kwds or {}
+        ThreadPool.apply_async(self, self._call_wrapper, [method, args], kwds, callback)
         self.applied += 1
 
     def wait_all(self):

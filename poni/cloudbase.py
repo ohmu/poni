@@ -5,13 +5,14 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
-import errors
+from . import errors
+
 
 class NoProviderMethod(NotImplementedError):
     def __init__(self, obj, func):
         name = (obj if isinstance(obj, type) else obj.__class__).__name__
-        NotImplementedError.__init__(self,
-            "{0} does not implement {1}".format(name, func))
+        NotImplementedError.__init__(self, "{0} does not implement {1}".format(name, func))
+
 
 class Provider(object):
     """Abstract base-class for cloud-specific cloud provider logic"""

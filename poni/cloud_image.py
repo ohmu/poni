@@ -6,7 +6,6 @@ See LICENSE for details.
 
 """
 from . import cloudbase
-from . import errors
 import copy
 import logging
 
