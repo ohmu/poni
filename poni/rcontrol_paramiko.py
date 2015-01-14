@@ -221,7 +221,12 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
                 # wait for input, note that the results are not used for anything
                 if poll:
-                    poll.poll(timeout=1.0)  # just poll, not interested in the fileno
+                    try:
+                        poll.poll(timeout=1.0)  # just poll, not interested in the fileno
+                    except IOError as ex:
+                        if ex.errno != errno.EINTR:
+                            raise
+                        continue
                 else:
                     select.select([channel], [], [], 1.0)
 
