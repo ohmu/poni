@@ -9,8 +9,8 @@ from poni.cloudbase import Provider
 from poni.errors import CloudError
 import copy
 import datetime
-import getpass
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -45,11 +45,13 @@ except ImportError:
     MISSING_LIBS.append("lxml")
 
 
-if getattr(paramiko.SSHClient, "connect_socket", None):
-    SshClientLVP = paramiko.SSHClient
+# hack to support tunneled connections before paramiko v1.8.0-11-g31ea4f0
+if "sock" in inspect.getargspec(paramiko.SSHClient.connect).args:
+    TunnelingSSHClient = paramiko.SSHClient
 else:
-    class SSHClientLVP(paramiko.SSHClient):
-        def connect_socket(self, sock, username, key_filename):
+    import getpass
+    class TunnelingSSHClient(paramiko.SSHClient):
+        def connect(self, hostname, port=22, username=None, key_filename=None, sock=None):
             self._transport = paramiko.Transport(sock)
             if self._log_channel is not None:
                 self._transport.set_log_channel(self._log_channel)
@@ -424,7 +426,7 @@ class LibvirtProvider(Provider):
 
                 conn = instance["vm_conns"][0]
                 if conn not in tunnels:
-                    client = SSHClientLVP()
+                    client = paramiko.SSHClient()
                     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                     client.connect(conn.host, port=conn.port, username=conn.username, key_filename=conn.keyfile)
                     tunnels[conn] = client
@@ -433,9 +435,10 @@ class LibvirtProvider(Provider):
                 ipv4 = None
                 try:
                     tunchan = trans.open_channel("direct-tcpip", (instance["ipv6"], 22), ("localhost", 0))
-                    client = SSHClientLVP()
+                    client = TunnelingSSHClient()
                     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    client.connect_socket(tunchan, username="root", key_filename=instance["ssh_key"])
+                    client.connect(instance["ipv6"], sock=tunchan,
+                                   username="root", key_filename=instance["ssh_key"])
                     cmdchan = client.get_transport().open_session()
                     cmdchan.set_combine_stderr(True)
                     cmdchan.exec_command('ip addr show scope global')
