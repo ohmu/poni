@@ -1,8 +1,15 @@
-from poni import tool
+from nose import SkipTest
+from poni import tool, vc
 from helper import *
 import subprocess
 
+
 class TestVersionControl(Helper):
+    @classmethod
+    def setupClass(cls):
+        if not vc.git:
+            raise SkipTest("GitPython not installed or too old")
+
     def git(self, repo, cmd):
         full_cmd = ["git",
                     "--git-dir=%s/.git" % repo,
@@ -39,4 +46,3 @@ class TestVersionControl(Helper):
         assert not poni.run(["vc", "checkpoint", "checkpoint changes"])
         assert self.git(repo, ["status", "-s"]) == ""
         assert "checkpoint changes" in self.git(repo, ["log"])
-
