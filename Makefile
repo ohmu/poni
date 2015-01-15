@@ -30,10 +30,11 @@ clean: deb-clean
 	$(MAKE) -C doc clean
 
 build-dep:
-	apt-get --yes install python-setuptools python-docutils lynx
+	apt-get --yes install python-setuptools python-docutils python-sphinx lynx
 
 test-dep:
-	apt-get --yes install pylint nosetests
+	apt-get --yes install pep8 pylint python-nose \
+		python-argh python-boto python-cheetah python-genshi python-git
 
 pep8:
 	pep8 --ignore=E501 poni/*.py
@@ -42,10 +43,17 @@ pylint:
 	python -m pylint.lint --rcfile=pylintrc poni/*.py
 
 tests:
-	nosetests --processes=2
+	nosetests --processes=2 -v
 
 coverage:
 	nosetests --with-coverage --cover-package=poni --cover-html
+
+travis:
+	# Travis does a shallow clone and won't find tags with git describe
+	echo "__version__ = '0.7-travis'" > poni/version.py
+	git fetch https://github.com/jaraco/path.py 5.1
+	git cat-file blob FETCH_HEAD:path.py > path.py
+	make all pylint tests
 
 .PHONY: readme
 .PHONY: coverage
