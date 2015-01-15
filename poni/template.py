@@ -73,7 +73,7 @@ def render_name(source_text, source_path, variables):
             else:
                 node = getattr(node, part)
         if callable(node):
-            node = node(*eval("(" + targs)) if targs else node()
+            node = node(*eval("(" + targs)) if targs else node()  # pylint: disable=W0123
         if not isinstance(node, basestring):
             node = str(node)
         return node

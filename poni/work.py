@@ -36,7 +36,7 @@ class Task(threading.Thread):
             self.runner.task_finished(self)
 
 
-class Runner:
+class Runner(object):
     def __init__(self, max_jobs=None):
         self.log = logging.getLogger("runner")
         self.not_started = set()

@@ -39,7 +39,7 @@ class Config(dict):
 
         for sort_key, layer_name, file_path in self.layers:
             try:
-                config_dict = json.load(file(file_path, "rb"))
+                config_dict = json.load(open(file_path, "rb"))
             except ValueError as error:
                 raise errors.SettingsError("%s: %s: %s" % (
                         file_path, error.__class__.__name__, error))
@@ -84,7 +84,7 @@ class Config(dict):
                 self.apply_update(value, target[key], file_path)
 
 
-class Proxy:
+class Proxy(object):
     def __init__(self, target):
         self.target = target
 

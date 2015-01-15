@@ -5,6 +5,10 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
+
+# pylint doesn't like boto.ec2
+# pylint: disable=E1101
+
 from collections import defaultdict
 import copy
 import logging
@@ -927,7 +931,7 @@ class AwsProvider(cloudbase.Provider):
                 missing_count += 1
 
         if missing_count == 0:
-            self.log.info("All instances %s" % state)
+            self.log.info("All instances %s", state)
             return True
 
         self.log.info("%d instances not yet %s", missing_count, state)

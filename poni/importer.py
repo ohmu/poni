@@ -16,7 +16,7 @@ except ImportError:
     apt_inst = None
 
 
-class Importer:
+class Importer(object):
     def __init__(self, source, verbose=False):
         self.log = logging.getLogger("importer")
         self.source = source
@@ -62,12 +62,12 @@ class DebImporter(Importer):
             logger = self.log.info if self.verbose else self.log.debug
             pretty_path = confman.root_dir.relpathto(dest_path)
             if write:
-                file(dest_path, "wb").write(contents)
+                open(dest_path, "wb").write(contents)
                 logger("imported: %s", pretty_path)
             else:
                 logger("unchanged: %s", pretty_path)
 
-        data_tar = apt_inst.DebFile(file(self.source)).data
+        data_tar = apt_inst.DebFile(open(self.source)).data
         # reads each file into memory and calls the callback, but there's no file-object based option...
         data_tar.go(callback)  # pylint: disable=E1101
 

@@ -48,7 +48,7 @@ def ensure_dir(typename, root, name, must_exist):
     return target_dir
 
 
-class ConfigMatch:
+class ConfigMatch(object):
     def __init__(self, pattern, full_match=False):
         if "$" in pattern[:-1]:
             # make sure no unexpanded macros leak from templates
@@ -183,7 +183,7 @@ class Config(Item):
     def __init__(self, node, name, config_dir, extra=None):
         Item.__init__(self, "config", None, name, config_dir,
                       config_dir / CONFIG_CONF_FILE, extra)
-        self.update(json.load(file(self.conf_file)))
+        self.update(json.load(open(self.conf_file)))
         self.node = node
         self.settings_dir = self.path / SETTINGS_DIR
         # TODO: lazy-load settings
@@ -307,7 +307,7 @@ class Node(Item):
         self.confman = confman
         self._remotes = {}
         self.config_cache = {}
-        self.update(json.load(file(self.conf_file)))
+        self.update(json.load(open(self.conf_file)))
 
     def addr(self, network=None):
         """Return node's network address for the given network name"""
@@ -454,12 +454,12 @@ class System(Item):
                       system_path / SYSTEM_CONF_FILE, extra)
         self["sub_count"] = sub_count
         try:
-            self.update(json.load(file(self.conf_file)))
+            self.update(json.load(open(self.conf_file)))
         except IOError:
             pass
 
 
-class ConfigMan:
+class ConfigMan(object):
     def __init__(self, root_dir, must_exist=True):
         # TODO: check repo.json from dir, option to start verification
         self.root_dir = path(root_dir)
@@ -566,7 +566,7 @@ class ConfigMan:
 
     def load_config(self):
         try:
-            return dict(json.load(file(self.config_path)))
+            return dict(json.load(open(self.config_path)))
         except Exception as error:
             raise errors.RepoError(
                 "%s: not a valid repo (hint: 'init'-command): %s: %s" % (
@@ -609,7 +609,7 @@ class ConfigMan:
         if copy_props and parent_node_name:
             parent_node_conf = (self.system_root / parent_node_name
                                 / NODE_CONF_FILE)
-            spec = json.load(file(parent_node_conf))
+            spec = json.load(open(parent_node_conf))
         else:
             spec = {}
 

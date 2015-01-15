@@ -60,7 +60,7 @@ CODES.update({
     })
 
 
-class Output:
+class Output(object):
     def __init__(self, out_file, color="auto"):
         self.out = out_file
         if ((color == "on") or (color == "auto"

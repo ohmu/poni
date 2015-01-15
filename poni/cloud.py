@@ -25,7 +25,7 @@ PROVIDERS = {
     }
 
 
-class Sky:
+class Sky(object):
     """Super-cloud provider"""
     def __init__(self):
         self.providers = {}
