@@ -18,7 +18,7 @@ METHODS = {
     }
 
 
-class RemoteManager:
+class RemoteManager(object):
     def __init__(self):
         self.remotes = {}
 

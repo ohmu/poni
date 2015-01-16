@@ -166,9 +166,9 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
             except (socket.error, paramiko.SSHException) as error:
                 remaining = max(0, end_time - time.time())
                 self.log.warning("%s: ssh connection to %s failed: %s: %s, "
-                                 "retry time remaining=%.0fs" % (
+                                 "retry time remaining=%.0fs",
                                  self.node.name, host,
-                                 error.__class__.__name__, error, remaining))
+                                 error.__class__.__name__, error, remaining)
                 self._ssh = None
                 time.sleep(2.5)
 

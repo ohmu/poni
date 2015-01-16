@@ -150,14 +150,14 @@ class ControlTask(work.Task):
             self.op["result"] = ret
         except (SystemExit, errors.Error) as error:
             # SystemExit is what argh produces with invalid args
-            self.log.error("%s/%s [%s] failed: %s: %s" % (
+            self.log.error("%s/%s [%s] failed: %s: %s",
                     self.op["node"].name, self.op["config"].name,
-                    self.op["name"], error.__class__.__name__, error))
+                    self.op["name"], error.__class__.__name__, error)
             self.op["result"] = "%s: %s" % (error.__class__.__name__, error)
         except BaseException as error:
-            self.log.error("%s/%s [%s] failed: %s: %s" % (
+            self.log.error("%s/%s [%s] failed: %s: %s",
                     self.op["node"].name, self.op["config"].name,
-                    self.op["name"], error.__class__.__name__, error))
+                    self.op["name"], error.__class__.__name__, error)
             self.op["result"] = "Unhandled error: %s: %s" % (
                 error.__class__.__name__, error)
             self.log.exception("task exception")
@@ -166,7 +166,7 @@ class ControlTask(work.Task):
             self.op["stop_time"] = time.time()
 
 
-class Tool:
+class Tool(object):
     """command-line tool"""
     def __init__(self, default_repo_path=None):
         self.log = logging.getLogger(TOOL_NAME)
@@ -214,7 +214,7 @@ class Tool:
             }
         for req in arg.req:
             try:
-                result = eval(req, {}, props)
+                result = eval(req, {}, props)  # pylint: disable=W0123
                 if arg.verbose:
                     self.log.info("requirement OK: %r", req)
             except Exception as error:
@@ -275,7 +275,7 @@ class Tool:
         """run commands from a script file"""
         try:
             if arg.script != "-":
-                script_text = file(arg.script).read()
+                script_text = open(arg.script).read()
             else:
                 script_text = sys.stdin.read()
         except (OSError, IOError) as error:
@@ -638,8 +638,8 @@ class Tool:
                     len(failed), ran_count, skipped_count))
         else:
             self.log.info(
-                "all [%d] control tasks finished successfully (%d skipped)" % (
-                    ran_count, skipped_count))
+                "all [%d] control tasks finished successfully (%d skipped)",
+                    ran_count, skipped_count)
 
     @argh_named("exec")
     @arg_verbose
@@ -1164,7 +1164,7 @@ class Tool:
     @expects_obj
     def handle_report(self, arg):
         """show command execution timeline report"""
-        out = file(arg.output_file, "w") if arg.output_file else sys.stdout
+        out = open(arg.output_file, "w") if arg.output_file else sys.stdout
         for chunk in self.task_times.iter_report():
             out.write(chunk)
 

@@ -58,7 +58,7 @@ else:
                 self._transport.set_log_channel(self._log_channel)
             self._transport.start_client()
             paramiko.resource.ResourceManager.register(self, self._transport)  # pylint: disable=E1120
-            self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)
+            self._auth(username or getpass.getuser(), None, None, [key_filename], False, False)  # pylint: disable=E1120
 
 
 def _do_dns_lookup(req, max_retries=3):

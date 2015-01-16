@@ -6,6 +6,11 @@ See LICENSE for details.
 
 """
 
+# pylint doesn't like git.Repo
+# pylint: disable=E1101
+# pylint: disable=E1103
+
+
 from path import path
 import re
 
@@ -21,7 +26,7 @@ GIT_IGNORE = """\
 *.pyc
 """
 
-class VersionControl:
+class VersionControl(object):
     def __init__(self, repo_dir):
         self.repo_dir = repo_dir
 

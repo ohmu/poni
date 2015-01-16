@@ -27,7 +27,7 @@ STDOUT = 1
 STDERR = 2
 
 
-class RemoteControl:
+class RemoteControl(object):
     def __init__(self, node):
         self.node = node
         self.warn_timeout = 30.0 # seconds to wait before warning user after receiving any output
@@ -199,12 +199,12 @@ class LocalControl(RemoteControl):
 
     @convert_local_errors
     def read_file(self, file_path):
-        return file(file_path, "rb").read()
+        return open(file_path, "rb").read()
 
     @convert_local_errors
     def write_file(self, file_path, contents, mode=None, owner=None,
                    group=None):
-        f = file(file_path, "wb")
+        f = open(file_path, "wb")
         if mode is not None:
             os.chmod(file_path, mode)
 

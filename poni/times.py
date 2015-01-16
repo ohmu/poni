@@ -13,12 +13,12 @@ from . import util
 
 timediff = lambda a, b: str(datetime.timedelta(seconds=int(a - b)))
 
-class Times:
+class Times(object):
     def __init__(self):
         self.entry = []
 
     def load(self, file_path):
-        self.entry = json.load(file(file_path))
+        self.entry = json.load(open(file_path))
 
     def save(self, file_path):
         util.json_dump(self.entry, file_path)

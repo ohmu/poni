@@ -1,6 +1,6 @@
 rst2html=rst2html
 
-all: poni/version.py dist doc readme example-doc
+all: poni/version.py dist doc readme
 
 include package.mk
 
@@ -11,7 +11,7 @@ dist: doc readme
 	python setup.py sdist
 
 doc:
-	(cd doc && make html)
+	make -C doc html
 
 readme: README.html
 
@@ -19,14 +19,6 @@ README.txt: README.html
 	lynx $< -dump > $@
 
 README.html: README.rst LICENSE
-	$(rst2html) $< $@
-
-example-doc: examples/puppet/README.html examples/db-cluster/README.html
-
-examples/puppet/README.html: examples/puppet/README.rst
-	$(rst2html) $< $@
-
-examples/db-cluster/README.html: examples/db-cluster/README.rst
 	$(rst2html) $< $@
 
 clean: deb-clean
@@ -38,10 +30,11 @@ clean: deb-clean
 	$(MAKE) -C doc clean
 
 build-dep:
-	apt-get --yes install python-setuptools python-docutils lynx
+	apt-get --yes install python-setuptools python-docutils python-sphinx lynx
 
 test-dep:
-	apt-get --yes install pylint nosetests
+	apt-get --yes install pep8 pylint python-nose \
+		python-argh python-boto python-cheetah python-genshi python-git
 
 pep8:
 	pep8 --ignore=E501 poni/*.py
@@ -50,14 +43,20 @@ pylint:
 	python -m pylint.lint --rcfile=pylintrc poni/*.py
 
 tests:
-	nosetests --processes=2
+	nosetests --processes=2 -v
 
 coverage:
 	nosetests --with-coverage --cover-package=poni --cover-html
+
+travis:
+	# Travis does a shallow clone and won't find tags with git describe
+	echo "__version__ = '0.7-travis'" > poni/version.py
+	git fetch https://github.com/jaraco/path.py 5.1
+	git cat-file blob FETCH_HEAD:path.py > path.py
+	make all pylint tests
 
 .PHONY: readme
 .PHONY: coverage
 .PHONY: tests
 .PHONY: dist
 .PHONY: doc
-.PHONY: example-doc

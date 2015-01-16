@@ -13,6 +13,10 @@ General Information
 :pypi: http://pypi.python.org/pypi/poni
 :email: mika dot eloranta at gmail dot com
 :bug tracker: https://github.com/melor/poni/issues
+:build status: |BuildStatus|_
+
+.. |BuildStatus| image:: https://travis-ci.org/melor/poni.png?branch=master
+.. _BuildStatus: https://travis-ci.org/melor/poni
 
 Pre-requisites
 ==============

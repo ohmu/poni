@@ -75,7 +75,7 @@ def set_dict_prop(item, address, value, verify=False, schema=None):
 def json_dump(data, file_path):
     """safe json dump to file, writes to temp file first"""
     temp_path = "%s.json_dump.tmp" % file_path
-    with file(temp_path, "wb") as out:
+    with open(temp_path, "wb") as out:
         json.dump(data, out, indent=4, sort_keys=True)
 
     os.rename(temp_path, file_path)

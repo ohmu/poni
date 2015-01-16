@@ -157,7 +157,7 @@ type_conversions = {
     }
 
 
-class Codec:
+class Codec(object):
     def __init__(self, chain_str, converters=None, default=None):
         self.default = default
         self.chain = []
@@ -201,7 +201,7 @@ class Codec:
             codec_func = get_func(codec_name)
             return lambda value: codec_func(value)[0]
         except LookupError as error:
-            raise InvalidCodecDefinition(error[0])
+            raise InvalidCodecDefinition(str(error))
 
     def add_to_chain(self, codec_name, direction):
         if codec_name == "pass":
@@ -228,7 +228,7 @@ class Codec:
                 else:
                     format_str = "converting value %r from %r failed: %s"
 
-                raise ValueError(format_str % (result, codec_name, error[0]))
+                raise ValueError(format_str % (result, codec_name, error))
 
         return result
 

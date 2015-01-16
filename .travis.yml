@@ -1,0 +1,7 @@
+language: python
+  - "2.6"
+  - "2.7"
+install: sudo make build-dep test-dep
+script: make travis
+notifications:
+  slack: ohmu:rihgYxa0c4dFiPvdAPAgP7R4

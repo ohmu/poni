@@ -49,7 +49,7 @@ class RenderContext(object):
                           self.entry["source_path"], self.entry["dest_path"], self.target)
 
 
-class Manager:
+class Manager(object):
     def __init__(self, confman):
         self.log = logging.getLogger("manager")
         self.reset()
@@ -170,10 +170,10 @@ class Manager:
                                 source_path, error.__class__.__name__, error))
 
                     if dir_stats["file_count"] == 0:
-                        self.log.warning("source directory '%s' is empty" % (
-                                source_path))
+                        self.log.warning("source directory '%s' is empty",
+                                source_path)
                     elif verbose:
-                        self.log.info(
+                        self.log.info(  # pylint: disable=W1201
                             "[OK] copy source directory '%(path)s' has "
                             "%(file_count)s files, "
                             "%(total_bytes)s bytes" % dir_stats)
@@ -416,7 +416,7 @@ class Edge(dict):
         return precalc_hash
 
 
-class PlugIn:
+class PlugIn(object):
     def __init__(self, manager, config, node, top_config):
         self.log = logging.getLogger("plugin")
         self.manager = manager
@@ -518,7 +518,7 @@ class PlugIn:
         namespace.color = color
         if output_dir:
             output_file_path = output_dir / ("%s.log" % node.name.replace("/", "_"))
-            namespace.output_file = file(output_file_path, "at")
+            namespace.output_file = open(output_file_path, "a")
         else:
             namespace.output_file = None
 
@@ -577,7 +577,7 @@ class PlugIn:
         try:
             # paths are always rendered as templates
             dest_path = self.render_name(dest_path)
-            text = source_text if (source_text is not None) else file(source_path, "rb").read()
+            text = source_text if (source_text is not None) else open(source_path, "rb").read()
             return dest_path, text
         except (IOError, OSError) as error:
             raise errors.VerifyError(source_path, error)
