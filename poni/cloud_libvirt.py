@@ -656,25 +656,27 @@ class PoniLVConn(object):
             mac_ext = hashlib.md5(name).hexdigest()  # pylint: disable=E1101
             return "52:54:00:{0}:{1}:{2:02x}".format(mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16) ^ index)
 
-        def gethw(prefix):
-            """grab all relevant hardware entries from spec"""
-            fp = "hardware." + prefix
-            rel = sorted((int(k[len(fp):]), k) for k in spec.iterkeys() if k.startswith(fp))
-            return [spec[k] for i, k in rel]
-
         if name in self.dominfo.vms:
             if not overwrite:
                 raise LVPError("{0!r} vm already exists".format(name))
             self.dominfo.vms[name].delete()
 
-        spec = copy.deepcopy(spec)
-        if isinstance(spec.get("hardware"), dict):
-            for k, v in spec["hardware"].iteritems():
-                spec["hardware." + k] = v
+        hardware = dict(spec.get("hardware", {}))
+        for k in spec:
+            if k.startswith("hardware."):
+                hardware[k[9:]] = spec[k]
+
+        # `hardware` should contain lists of `nics` and `disks`, but
+        # previously we've just had a number of entries like `disk0` ..
+        # `disk7`
+        if "disks" not in hardware:
+            hardware["disks"] = [v for k, v in hardware.items() if k.startswith("disk")]
+        if "nics" not in hardware:
+            hardware["nics"] = [v for k, v in hardware.items() if k.startswith("nic")]
 
         hypervisor = spec.get("hypervisor", self.hypervisor)
-        ram_mb = spec.get("hardware.ram_mb", spec.get("hardware.ram", 1024))
-        ram_kb = spec.get("hardware.ram_kb", 1024 * ram_mb)
+        ram_mb = hardware.get("ram_mb", hardware.get("ram", 1024))
+        ram_kb = hardware.get("ram_kb", 1024 * ram_mb)
 
         if hypervisor == "kvm":
             devs = XMLE.devices(
@@ -688,10 +690,10 @@ class PoniLVConn(object):
                     XMLE.alias(name="video0")),
                 XMLE.memballoon(XMLE.alias(name="balloon0"), model="virtio"))
             extra = [
-                XMLE.cpu(mode=spec.get("hardware.cpumode", "host-model")),
+                XMLE.cpu(mode=hardware.get("cpumode", "host-model")),
                 XMLE.features(XMLE.acpi(), XMLE.apic(), XMLE.pae()),
                 XMLE.os(
-                    XMLE.type("hvm", machine="pc", arch=spec.get("hardware.arch", "x86_64")),
+                    XMLE.type("hvm", machine="pc", arch=hardware.get("arch", "x86_64")),
                     XMLE.boot(dev="hd")),
                 ]
         elif hypervisor == "lxc":
@@ -704,7 +706,7 @@ class PoniLVConn(object):
             extra = [
                 XMLE.resource(XMLE.partition("/machine")),
                 XMLE.os(
-                    XMLE.type("exe", arch=spec.get("hardware.arch", "x86_64")),
+                    XMLE.type("exe", arch=hardware.get("arch", "x86_64")),
                     XMLE.init(spec.get("init", "/sbin/init"))),
                 XMLE.seclabel(type="none"),
                 ]
@@ -720,12 +722,12 @@ class PoniLVConn(object):
             XMLE.on_reboot("restart"),
             XMLE.on_crash("restart"),
             XMLE.memory(str(ram_kb)),
-            XMLE.vcpu(str(spec.get("hardware.cpus", 1))),
+            XMLE.vcpu(str(hardware.get("cpus", 1))),
             devs, *extra,
             type=hypervisor)
 
-        # Set up disks - find all hardware.diskX entries in spec
-        for i, item in enumerate(gethw("disk")):
+        # Set up disks
+        for i, item in enumerate(hardware.get("disks", [])):
             # we want to name the devices/files created on the host sides with names the kvm guests
             # will see (ie vda, vdb, etc) but lxc hosts don't really see devices, instead we just
             # have target directories
@@ -783,14 +785,9 @@ class PoniLVConn(object):
 
         # Set up interfaces - any hardware.nicX entries in spec,
         default_network = spec.get("default_network", "default")
-        items = gethw("nic") or [{}]
-        for i, item in enumerate(items):
-            if "bridge" in item:  # support for old style bridge-only defs
-                itype = "bridge"
-                inet = item["bridge"]
-            else:
-                itype = item.get("type", "network")
-                inet = item.get("network", default_network)
+        for i, item in enumerate(hardware.get("nics", [])):
+            itype = item.get("type", "network")
+            inet = item.get("network", default_network)
             iface = XMLE.interface(XMLE.mac(address=item.get("mac", macaddr(i))), type=itype)
             if hypervisor == "kvm":
                 iface.append(XMLE.model(type="virtio"))
