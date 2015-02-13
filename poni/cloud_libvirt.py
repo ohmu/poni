@@ -641,7 +641,7 @@ class PoniLVConn(object):
             dominfo["vms_offline"] += 1
 
         for name in self.conn.listStoragePools():
-            pool = PoniLVPool(self.conn.storagePoolLookupByName(name))
+            pool = PoniLVPool(self.conn.storagePoolLookupByName(name), self.conn)
             dominfo.pools[name] = pool
 
         doms = [dom for dom in dominfo.vms.itervalues() if dom.info["cputime"] > 0]
@@ -742,11 +742,14 @@ class PoniLVConn(object):
                     raise LVPError("host {0}:{1} does not have pool named '{2}'".format(
                             self.host, self.port, item["pool"]))
 
-                vol_name = "{0}-{1}".format(name, dev_name)
+                if "name" in item:
+                    vol_name = "{0}-{1}-{2}".format(name, item["name"], dev_name)
+                else:
+                    vol_name = "{0}-{1}".format(name, dev_name)
                 if "clone" in item:
                     vol = pool.clone_volume(item["clone"], vol_name, item.get("size"), overwrite=overwrite, voltype=item.get("type"))
                 if "create" in item:
-                    vol = pool.create_volume(vol_name, item["size"], overwrite=overwrite, voltype=item.get("type"))
+                    vol = pool.create_volume(vol_name, item["size"], overwrite=overwrite, voltype=item.get("type"), upload=item.get("upload"))
                 disk_path = vol.path
                 disk_type = vol.device
                 driver_type = vol.format
@@ -844,9 +847,10 @@ class PoniLVConn(object):
 
 
 class PoniLVVol(object):
-    def __init__(self, vol, pool):
+    def __init__(self, vol, pool, conn):
         self.vol = vol
         self.pool = pool
+        self.conn = conn
         self.path = vol.path()
         self.format = None
         self.device = None
@@ -860,10 +864,19 @@ class PoniLVVol(object):
         sdevice = xml.find("source").find("device")
         self.device = "block" if sdevice is not None else "file"
 
+    def upload(self, data):
+        stream = self.conn.newStream(0)
+        if hasattr(data, "read"):
+            data = data.read()
+        self.vol.upload(stream, 0, len(data))
+        stream.send(data)
+        stream.finish()
+
 
 class PoniLVPool(object):
-    def __init__(self, pool):
+    def __init__(self, pool, conn):
         self.pool = pool
+        self.conn = conn
         self.path = None
         self.type = None
         self.info = None
@@ -922,10 +935,13 @@ class PoniLVPool(object):
             self.delete_volume(name)
             vol = self.pool.createXML(volxml, 0)
 
-        return PoniLVVol(vol, self)
+        return PoniLVVol(vol, self, self.conn)
 
-    def create_volume(self, target, megabytes, overwrite=False, voltype=None):
-        return self._define_volume(target, megabytes, None, overwrite, voltype)
+    def create_volume(self, target, megabytes, overwrite=False, voltype=None, upload=None):
+        vol = self._define_volume(target, megabytes, None, overwrite, voltype)
+        if upload is not None:
+            vol.upload(data=upload)
+        return vol
 
     def clone_volume(self, source, target, megabytes=None, overwrite=False, voltype=None):
         return self._define_volume(target, megabytes, source, overwrite, voltype)
