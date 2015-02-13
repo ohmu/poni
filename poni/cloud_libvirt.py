@@ -1,7 +1,10 @@
 """
-LibVirt provider for Poni.
+multi-host libvirt 'cloud' provider for Poni.
+
 Copyright (C) 2011-2014 F-Secure Corporation, Helsinki, Finland.
-Author: Oskari Saarenmaa <ext-oskari.saarenmaa@f-secure.com>
+Copyright (C) 2013-2015 Ohmu Ltd, Helsinki, Finland.
+See LICENSE for details.
+
 """
 
 from poni import util
@@ -190,15 +193,25 @@ class LibvirtProvider(Provider):
 
         Provider.__init__(self, "libvirt", cloud_prop)
         self.log = logging.getLogger("poni.libvirt")
-        self.ssh_key = None
-        profile_file = cloud_prop.get("profile")
-        if not profile_file:
-            raise CloudError("required node property 'cloud.profile' pointing to a profile file not defined")
 
-        profile = json.load(open(profile_file, "rb"))
+        # Use a json profile file if one is defined, otherwise use
+        # properties directly from `cloud_prop`
+        profile_file = cloud_prop.get("profile")
+        if profile_file:
+            profile = json.load(open(profile_file, "rb"))
+        else:
+            profile = cloud_prop
+
         self.hypervisor = profile.get("hypervisor", "kvm")
         if "ssh_key" in profile:
             self.ssh_key = os.path.expandvars(os.path.expanduser(profile["ssh_key"]))
+        else:
+            self.ssh_key = None
+
+        # default to accessing the hosts as root unless something else is
+        # specified or caller asks not to pass username by setting it empty
+        user = profile.get("username", "root")
+        user_at = user + "@" if user else ""
 
         # Look up all hypervisor hosts, they can be defined one-by-one
         # ("nodes" property) in which case we use the highest priorities
@@ -207,13 +220,12 @@ class LibvirtProvider(Provider):
         # service information in which case we use _libvirt._tcp.
         hosts = {}
         for entry in profile.get("nodes", []):
-            host, _, port = entry.partition(":")
-            hosts["{0}:{1}".format(host, port or 22)] = (0, 100)
+            hosts[user_at + entry] = (0, 100)
         services = set(profile.get("services", []))
         services.update("_libvirt._tcp.{0}".format(host) for host in profile.get("nodesets", []))
         for entry in services:
             for priority, weight, port, host in _lv_dns_lookup(entry):
-                hosts["{0}:{1}".format(host, port)] = (priority, weight)
+                hosts["{0}{1}:{2}".format(user_at, host, port)] = (priority, weight)
         self.hosts = hosts
         self.hosts_online = None
 
@@ -223,9 +235,9 @@ class LibvirtProvider(Provider):
         Return a cloud Provider object for the given cloud properties.
         """
         profile_file = cloud_prop.get("profile")
-        if not profile_file:
-            raise CloudError("required node property 'cloud.profile' pointing to a profile file not defined")
-        return ("PONILV", profile_file)
+        if profile_file:
+            return ("PONILV", profile_file)
+        return ("PONILV", id(cloud_prop))
 
     def conns(self):
         if self.hosts_online is None:
@@ -234,9 +246,11 @@ class LibvirtProvider(Provider):
                 procs = []
                 for hostport in self.hosts.iterkeys():
                     host, _, port = hostport.partition(':')
-                    args = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no",
-                            "-p{0}".format(port), "root@{0}".format(host), "uptime"]
-                    procs.append(subprocess.Popen(args))
+                    cmd = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", host]
+                    if port:
+                        cmd.append("-p" + str(port))
+                    cmd.append("uptime")
+                    procs.append(subprocess.Popen(cmd))
 
                 for proc in procs:
                     proc.wait()
@@ -265,7 +279,7 @@ class LibvirtProvider(Provider):
     def disconnect(self):
         self.hosts_online = None
 
-    def __get_all_vms(self):
+    def _get_all_vms(self):
         vms = {}
         tasks = util.TaskPool()
 
@@ -280,18 +294,18 @@ class LibvirtProvider(Provider):
         tasks.wait_all()
         return vms
 
-    def __get_vms(self, props):
-        vms = self.__get_all_vms()
+    def _get_vms(self, props):
+        vms = self._get_all_vms()
         names = set(prop["vm_name"] for prop in props).intersection(vms)
         for vm_name in names:
             for conn in vms[vm_name]:
                 self.log.debug("found %r from %r", vm_name, conn)
                 yield conn.dominfo.vms[vm_name]
 
-    def __vm_async_apply(self, props, op, *args):
+    def _vm_async_apply(self, props, op, *args):
         result = {}
         tasks = util.TaskPool()
-        for vm in self.__get_vms(props):
+        for vm in self._get_vms(props):
             tasks.apply_async(getattr(vm, op), args)
             result[vm.name] = {}
         tasks.wait_all()
@@ -312,7 +326,7 @@ class LibvirtProvider(Provider):
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
-        self.__vm_async_apply(props, 'delete')
+        self._vm_async_apply(props, 'delete')
 
     def weighted_random_choice(self, cands):
         """Weighted random selection of a single target host from a list of candidates"""
@@ -349,7 +363,7 @@ class LibvirtProvider(Provider):
         self.log.info("deleting existing VM instances")
         delete_started = time.time()
         tasks = util.TaskPool()
-        vms = self.__get_all_vms()
+        vms = self._get_all_vms()
         for vm_name, prop in props.iteritems():
             # Delete any existing instances if required to reinit (the
             # default) or if the same VM was found from multiple hosts.
@@ -397,7 +411,7 @@ class LibvirtProvider(Provider):
         cloning_started = time.time()
         # only create a new task pool and refresh vms if we deleted something
         if tasks.applied:
-            vms = self.__get_all_vms()
+            vms = self._get_all_vms()
             tasks = util.TaskPool()
         instances = []
         conns = [conn for conn in self.conns() if conn.srv_weight > 0]
@@ -506,28 +520,28 @@ class LibvirtProvider(Provider):
         return result
 
     def power_on_instances(self, props):
-        result = self.__vm_async_apply(props, 'power_on')
+        result = self._vm_async_apply(props, 'power_on')
         for v in result.itervalues():
             v['power'] = 'on'
         return result
 
     def power_off_instances(self, props):
-        result = self.__vm_async_apply(props, 'power_off')
+        result = self._vm_async_apply(props, 'power_off')
         for v in result.itervalues():
             v['power'] = 'off'
         return result
 
     def create_snapshot(self, props, name=None, description=None, memory=False):
-        return self.__vm_async_apply(props, 'create_snapshot', name, description, memory)
+        return self._vm_async_apply(props, 'create_snapshot', name, description, memory)
 
     def remove_snapshot(self, props, name):
-        return self.__vm_async_apply(props, 'remove_snapshot', name)
+        return self._vm_async_apply(props, 'remove_snapshot', name)
 
     def revert_to_snapshot(self, props, name=None):
-        return self.__vm_async_apply(props, 'revert_to_snapshot', name)
+        return self._vm_async_apply(props, 'revert_to_snapshot', name)
 
     def find_instances(self, match_function):
-        vms = self.__get_all_vms()
+        vms = self._get_all_vms()
         return [{"vm_name": vm_name} for vm_name in vms if match_function(vm_name)]
 
 
@@ -542,24 +556,31 @@ class DomainInfo(dict):
 
 
 class PoniLVConn(object):
-    def __init__(self, host, port=None, hypervisor=None, uri=None, keyfile=None, priority=None, weight=None):
-        if ":" in host:
-            host, _, port = host.rpartition(":")
-        port = int(port or 22)
+    def __init__(self, host=None, port=None, hypervisor=None, uri=None, keyfile=None, priority=None, weight=None):
         if not hypervisor or hypervisor == "qemu":
             hypervisor = "kvm"
         if not uri:
-            uri = "{hypervisor}+ssh://root@{host}:{port}/{path}" \
+            portc = ":{0}".format(port) if port else ""
+            uri = "{hypervisor}+ssh://{host}{portc}/{path}" \
                   "?no_tty=1&no_verify=1&keyfile={keyfile}" \
-                  .format(host=host, port=port, keyfile=keyfile or "",
+                  .format(host=host, portc=portc, keyfile=keyfile or "",
                           hypervisor="qemu" if hypervisor == "kvm" else hypervisor,
                           path="system" if hypervisor == "kvm" else "")
-        m = re.search("://(.+?)@", uri)
         self.log = logging.getLogger("ponilvconn")
-        self.username = m and m.group(1)
+        self.username = None
+        self.host = None
+        self.port = None
+        m = re.search("://(.+?)(/|$)", uri)
+        if m:
+            netloc = m.group(1)
+            if "@" in netloc:
+                self.username, _, netloc = netloc.partition("@")
+            if ":" in netloc:
+                self.host, _, self.port = netloc.rpartition(":")
+            else:
+                self.host = netloc
+        self.port = int(self.port or 22)
         self.keyfile = keyfile
-        self.host = host
-        self.port = port
         self.hypervisor = hypervisor
         self.emulator = None  # the executable launched by lxc guests
         self.uri = uri
