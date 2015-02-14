@@ -5,6 +5,7 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
+from __future__ import print_function
 from . import cloud
 from . import colors
 from . import config
@@ -42,8 +43,7 @@ except ImportError:
 
 # suppress argh warnings about installing 'argcomplete'
 import warnings
-import exceptions
-warnings.filterwarnings("ignore", ".*", exceptions.Warning, "argh.completion")
+warnings.filterwarnings("ignore", ".*", Warning, "argh.completion")
 
 try:
     from argh import named as argh_named
@@ -307,7 +307,7 @@ class Tool(object):
                 continue
 
             if arg.verbose:
-                print "$ " + " ".join(wrap(a) for a in args)
+                print("$ " + " ".join(wrap(a) for a in args))
 
             # strip arguments following "--"
             # TODO: this code is now in two places, refactor
@@ -591,7 +591,7 @@ class Tool(object):
         # assign tasks
         runner = work.Runner(max_jobs=arg.jobs)
         logger = self.log.info if arg.verbose else self.log.debug
-        for op_id, op in tasks.iteritems():
+        for op_id, op in tasks.items():
             run = op.get("run") or (not arg.no_deps)
             op["run"] = run
             if not run:
@@ -611,7 +611,7 @@ class Tool(object):
         # collect results
         results = [task.op.get("result") for task in runner.stopped]
         failed = [r for r in results if r]
-        skipped_count = sum(1 for op in tasks.itervalues() if not op["run"])
+        skipped_count = sum(1 for op in tasks.values() if not op["run"])
         ran_count = len(tasks) - skipped_count
         assert len(results) == ran_count
 
@@ -798,7 +798,7 @@ class Tool(object):
         confman = self.get_confman(arg.root_dir, reset_cache=False)
         self.require_vc(confman)
         for out in confman.vc.status():
-            print out,
+            print(out.rstrip())
 
     @argh_named("checkpoint")
     @argh.arg('message', type=str, help='commit message')
@@ -827,7 +827,7 @@ class Tool(object):
                     clouds[provider] = []
                 clouds[provider].append(cloud_prop)
                 self.log.info("terminating: %s", node.name)
-        for provider, props in clouds.iteritems():
+        for provider, props in clouds.items():
             provider.terminate_instances(props)
             count += len(props)
         self.log.info("%s instances terminated", count)
@@ -900,7 +900,7 @@ class Tool(object):
         nodes = []
 
         def printable(dict_obj):
-            return ", ".join(("%s=%r" % item) for item in dict_obj.iteritems())
+            return ", ".join(("%s=%r" % item) for item in dict_obj.items())
 
         for node in confman.find(arg.target, full_match=arg.full_match):
             cloud_prop = node.get("cloud", {})
@@ -941,7 +941,7 @@ class Tool(object):
                 provider = self.sky.get_provider(cloud_prop)
                 providers.setdefault(provider, []).append(cloud_prop)
 
-            for provider, prop_list in providers.iteritems():
+            for provider, prop_list in providers.items():
                 updates = provider.wait_instances(prop_list, wait_state=wait_state)
 
                 for node in nodes:
@@ -1109,7 +1109,8 @@ class Tool(object):
         manager = self.get_manager(confman)
         self.collect_all(manager)
         self.log.debug("verify_op %r: confman cache=%r, manager files=%r, buckets=%r",
-                       target, confman.dump_stats(), len(manager.files), dict((k, len(v)) for k, v in manager.buckets.iteritems()))
+                       target, confman.dump_stats(), len(manager.files),
+                       dict((k, len(v)) for k, v in manager.buckets.items()))
 
         if target:
             if exclude:
@@ -1154,9 +1155,9 @@ class Tool(object):
             tag=arg.tag)
 
         if arg.show_buckets:
-            for name, items in manager.buckets.iteritems():
+            for name, items in manager.buckets.items():
                 for i, item in enumerate(items):
-                    print "%s #%d: %r" % (name, i, item)
+                    print("%s #%d: %r" % (name, i, item))
 
     @argh_named("report")
     @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
@@ -1397,7 +1398,7 @@ class Tool(object):
                 }
             props = dict(util.parse_prop(p, converters=converters)
                          for p in arg.setting)
-            for key_path, value in props.iteritems():
+            for key_path, value in props.items():
                 addr = key_path.split(".")
                 old = util.set_dict_prop(conf.settings, addr, value,
                                          verify=True)

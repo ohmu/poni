@@ -13,6 +13,7 @@ from . import util
 from . import vc
 from .util import json
 from path import path
+import codecs
 import errno
 import imp
 import os
@@ -113,7 +114,7 @@ class Item(dict):
 
     def showable(self):
         """Yields (key, value) for all items visible by default"""
-        for k, v in sorted(self.iteritems()):
+        for k, v in sorted(self.items()):
             if k not in DONT_SHOW:
                 yield k, v
 
@@ -125,7 +126,7 @@ class Item(dict):
         Returns list of changes made: [(item_key, old_value, new_value)]
         """
         changes = []
-        for key_str, value in props.iteritems():
+        for key_str, value in props.items():
             old_value = util.set_dict_prop(self, key_str.split("."), value)
             changes.append((key_str, old_value, value))
 
@@ -138,7 +139,7 @@ class Item(dict):
         Returns a list of changes made: [(prop_name, old_value, new_value)]
         """
         changes = []
-        for key, value in updates.iteritems():
+        for key, value in updates.items():
             old = self.get(key)
             if old != value:
                 self[key] = value
@@ -148,7 +149,7 @@ class Item(dict):
 
     def saveable(self):
         """Yields (key, value) for all properties that should be saved"""
-        for k, v in sorted(self.iteritems()):
+        for k, v in sorted(self.items()):
             if k not in DONT_SAVE:
                 yield k, v
 
@@ -240,11 +241,11 @@ class Config(Item):
         yield self.full_name, self.settings_dir
 
     def saveable(self):
-        return self.iteritems()
+        return self.items()
 
     def showable(self):
         dont_show = set(["node", "name", "path", "settings_dir", "conf"])
-        for k, v in sorted(self.iteritems()):
+        for k, v in sorted(self.items()):
             if k not in dont_show:
                 yield k, v
 
@@ -514,7 +515,7 @@ class ConfigMan(object):
 
             util.json_dump({}, self.config_path)
             (self.root_dir / "poni.id").write_bytes(  # pylint: disable=E1120
-            """
+                codecs.decode(codecs.decode(b"""
             eJy1l7uOJCcUhvN5ipKQKkK1EogASKCSIiEiIbZlGSSvd3VYv7//Q1+2dy5yte09
             0nRXMwUf5w7L8oNszpNcfpK83B6CcItc3PhZoBvMWQIMotfU339N+u3/gbl9W7bC
             sFFrvQy/XVrK7b3hZ2Fx28iWVQDmhpFzRfdm3U067x0+3H+AyapHLR4LeeqDlN88
@@ -542,8 +543,7 @@ class ConfigMan(object):
             SdVmYo95phNo7/0ZmFJjkx3etieDf+WqzI1wkMCJ+ymYhhE3rqfq5DUYWcb9hWGt
             OlxFzsN67rgOmn7q0nSfNOZJGSeRfY1qO51nm2/7yjeYs9f7gSJc5zETrVrhznA2
             9GXhoKj2JGeKK56MXo+Ii1G/nKVO9rM+/u0NfuNWxPcxro0vd1z79u2r+/Tp9/6t
-            /fXL9uuXz58+//bHF/r09cuf/eXlb2jrYlE="""
-            .decode("base64").decode("zlib"))
+            /fXL9uuXz58+//bHF/r09cuf/eXlb2jrYlE=""", "base64"), "zlib"))
         except (OSError, IOError) as error:
             raise errors.RepoError("repository '%s' init failed: %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
@@ -577,7 +577,7 @@ class ConfigMan(object):
         util.json_dump(conf, self.config_path)
 
     def cleanup(self):
-        for node in self.node_cache.itervalues():
+        for node in self.node_cache.values():
             node.cleanup()
 
     def get_system_dir(self, name, must_exist=True):

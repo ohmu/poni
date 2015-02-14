@@ -8,7 +8,7 @@ See LICENSE for details.
 
 from __future__ import with_statement
 
-import cStringIO
+from io import BytesIO
 import errno
 import logging
 import os
@@ -276,7 +276,7 @@ class LocalTarControl(RemoteControl):
         if not os.path.isdir(os.path.dirname(full_path)):
             os.makedirs(os.path.dirname(full_path))
 
-        file_obj = cStringIO.StringIO(contents)
+        file_obj = BytesIO(contents)
         with tarfile.open(full_path, "a") as output:
             info = tarfile.TarInfo(file_path)
             info.size = len(contents)

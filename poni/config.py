@@ -5,6 +5,7 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
+from __future__ import print_function
 from . import colors
 from . import errors
 from . import template
@@ -240,7 +241,7 @@ class Manager(object):
                                                color("---", "header")))
 
                 if isinstance(show_output, (str, unicode)):
-                    print show_output
+                    print(show_output)
                 else:
                     diff_colors = {"+": "lgreen", "@": "white", "-": "lred"}
                     for line in show_output:
@@ -408,7 +409,7 @@ class Edge(dict):
                 self['dest_node'].name if 'dest_node' in self else None,
                 self['node'].name if 'node' in self else None,
                 self.get('action'), self.get('protocol'), self.get('port'),
-                tuple(sorted((k, v) for k, v in self.iteritems()
+                tuple(sorted((k, v) for k, v in self.items()
                              if k not in self.SORT_FIELDS)))
             precalc_hash = hash(("edge", key))
             setattr(self, "__precalc_hash", precalc_hash)
@@ -485,7 +486,7 @@ class PlugIn(object):
         self.add_controls()
 
         # add controls defined using the 'control' decorator
-        for name, prop in self.__class__.__dict__.iteritems():
+        for name, prop in self.__class__.__dict__.items():
             if hasattr(prop, "poni_control"):
                 self.add_argh_control(getattr(self, prop.__name__),
                                       **prop.poni_control)
@@ -495,7 +496,7 @@ class PlugIn(object):
         pass
 
     def iter_control_operations(self, node, config):
-        for name, prop in self.controls.iteritems():
+        for name, prop in self.controls.items():
             out = prop.copy()
             out["name"] = name
             out["config"] = config
@@ -577,8 +578,10 @@ class PlugIn(object):
         try:
             # paths are always rendered as templates
             dest_path = self.render_name(dest_path)
-            text = source_text if (source_text is not None) else open(source_path, "rb").read()
-            return dest_path, text
+            if source_text is None:
+                with open(source_path, "r") as f:
+                    source_text = f.read()
+            return dest_path, source_text
         except (IOError, OSError) as error:
             raise errors.VerifyError(source_path, error)
 

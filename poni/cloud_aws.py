@@ -296,7 +296,7 @@ class InstanceStarter(object):
             if self.pending:
                 self.log.info("[%s/%s] instances ready (%s), waiting...",
                               self.total_instances - len(self.pending), self.total_instances,
-                              ", ".join(("%s: %r" % s) for s in summary.iteritems()))
+                              ", ".join(("%s: %r" % s) for s in summary.items()))
                 time.sleep(5.0)
 
         self.log.info("Instances ready. Return %s ", self.output)
@@ -375,7 +375,7 @@ class AwsProvider(cloudbase.Provider):
                 return instance
 
         # it might also be in the local cache if AWS does not yet return it...
-        for instance in self._instance_cache.itervalues():
+        for instance in self._instance_cache.values():
             instance.update()
             if match(instance):
                 return instance
@@ -429,7 +429,7 @@ class AwsProvider(cloudbase.Provider):
         conn = self._get_conn()
         extra_tags = cloud_prop.get("extra_tags", {})
         if (not isinstance(extra_tags, dict) or
-            any((not isinstance(k, basestring) or not isinstance(v, basestring)) for k, v in extra_tags.iteritems())):
+            any((not isinstance(k, basestring) or not isinstance(v, basestring)) for k, v in extra_tags.items())):
             raise errors.CloudError(
                 "invalid 'extra_tags' value %r: dict containing str:str mapping required" % (extra_tags,))
 
@@ -439,7 +439,7 @@ class AwsProvider(cloudbase.Provider):
             self.log.info("Assigned tags to instance %s (%s)", resource.id, extra_tags)
 
     def tag_instance_volumes(self, instance):
-        for key, dev in instance.block_device_mapping.iteritems():
+        for key, dev in instance.block_device_mapping.items():
             extra_tags = {
                 'Name': instance.tags['Name'] + ":" + key,
                 TAG_PONI_STATE: 'created',
@@ -545,7 +545,7 @@ class AwsProvider(cloudbase.Provider):
             "user_data": ("user_data", str),
             "ebs_optimized": ("ebs_optimized", bool),
             }
-        for arg_name, (key_name, arg_type) in optional_args.iteritems():
+        for arg_name, (key_name, arg_type) in optional_args.items():
             arg_value = cloud_prop.get(key_name)
             if arg_value is not None:
                 try:
@@ -629,7 +629,7 @@ class AwsProvider(cloudbase.Provider):
         hardware = cloud_prop.get("hardware", {})
         disk_map = boto.ec2.blockdevicemapping.BlockDeviceMapping()
         vm_name = cloud_prop["vm_name"]
-        for disk_num in xrange(10):
+        for disk_num in range(10):
             disk = hardware.get("disk%d" % disk_num)
             if not disk:
                 continue
@@ -997,7 +997,7 @@ class AwsProvider(cloudbase.Provider):
         """
         pending_snapshot_count = 0
 
-        for instance_id, snd in pending_snapshots.iteritems():
+        for instance_id, snd in pending_snapshots.items():
             snapshot = snd["snapshot"]
             if "final_status" in snd:
                 # This snapshot was already finished
@@ -1038,7 +1038,7 @@ class AwsProvider(cloudbase.Provider):
         else:
             # No more waiting.
             failed_snaps = 0
-            for instance_id, snd in pending_snapshots.iteritems():
+            for instance_id, snd in pending_snapshots.items():
                 if snd["final_status"] == "error":
                     failed_snaps += 1
 

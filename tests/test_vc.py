@@ -1,3 +1,4 @@
+from __future__ import print_function
 from pytest import skip
 from poni import tool, vc
 from helper import *
@@ -14,14 +15,14 @@ class TestVersionControl(Helper):
         full_cmd = ["git",
                     "--git-dir=%s/.git" % repo,
                     "--work-tree=%s" % repo] + cmd
-        print "git cmd: %r" % full_cmd
+        print("git cmd: %r" % full_cmd)
         git = subprocess.Popen(full_cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
         git.wait()
         stdout = git.stdout.read()
         stderr = git.stderr.read()
-        print "git stdout: %r" % stdout
-        print "git stderr: %r" % stderr
+        print("git stdout: %r" % stdout)
+        print("git stderr: %r" % stderr)
         assert git.returncode == 0
         return stdout
 

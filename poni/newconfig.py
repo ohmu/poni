@@ -39,7 +39,7 @@ class Config(dict):
 
         for sort_key, layer_name, file_path in self.layers:
             try:
-                config_dict = json.load(open(file_path, "rb"))
+                config_dict = json.load(open(file_path, "r"))
             except ValueError as error:
                 raise errors.SettingsError("%s: %s: %s" % (
                         file_path, error.__class__.__name__, error))
@@ -57,7 +57,7 @@ class Config(dict):
             raise errors.SettingsError("%s: expected dict, got %s (%r)" % (
                     file_path, type(update), update))
 
-        for key, value in update.iteritems():
+        for key, value in update.items():
             first = key[:1]
             if first in ["!", "+", "-"]:
                 try:

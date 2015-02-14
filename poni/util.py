@@ -74,7 +74,7 @@ def set_dict_prop(item, address, value, verify=False, schema=None):
 def json_dump(data, file_path):
     """safe json dump to file, writes to temp file first"""
     temp_path = "%s.json_dump.tmp" % file_path
-    with open(temp_path, "wb") as out:
+    with open(temp_path, "w") as out:
         json.dump(data, out, indent=4, sort_keys=True)
 
     os.rename(temp_path, file_path)
@@ -150,7 +150,7 @@ def path_iter_dict(dict_obj, prefix=None):
     'path' is in format 'key1.key2.valuename'
     """
     prefix = prefix or []
-    for key, value in sorted(dict_obj.iteritems()):
+    for key, value in sorted(dict_obj.items()):
         location = prefix + [key]
         if isinstance(value, dict):
             for item in path_iter_dict(value, prefix=location):
@@ -196,7 +196,7 @@ class TaskPool(ThreadPool):
             self.log.exception("task error: {0.__class__.__name__}: {0}".format(error))
             raise
 
-    def apply_async(self, method, args=(), kwds=None, callback=None):
+    def apply_async(self, method, args=(), kwds=None, callback=None):  # pylint: disable=W0221
         kwds = kwds or {}
         ThreadPool.apply_async(self, self._call_wrapper, [method, args], kwds, callback)
         self.applied += 1

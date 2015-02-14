@@ -1,3 +1,4 @@
+from __future__ import print_function
 from poni import template
 from poni import tool
 from helper import *
@@ -59,7 +60,7 @@ class TestTemplates(Helper):
         # deploy and verify
         assert not poni.run(["deploy"])
         output = output_file.bytes()
-        print output
+        print(output)
         assert "<foo>baz</foo>" in output
 
     name_tests = {
@@ -75,13 +76,13 @@ class TestTemplates(Helper):
         }
 
     def test_render_name(self):
-        for tmpl, exp in self.name_tests.iteritems():
+        for tmpl, exp in self.name_tests.items():
             res = template.render_name(tmpl, None, g_vars)
             assert exp == res, \
                 "template {0!r}, expected {1!r}, got {2!r}".format(tmpl, exp, res)
 
     def test_render_cheetah(self):
-        for tmpl, exp in self.name_tests.iteritems():
+        for tmpl, exp in self.name_tests.items():
             res = template.render_cheetah(tmpl, None, g_vars)
             assert exp == res, \
                 "template {0!r}, expected {1!r}, got {2!r}".format(tmpl, exp, res)

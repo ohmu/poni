@@ -8,7 +8,7 @@ See LICENSE for details.
 """
 
 from . import errors
-from cStringIO import StringIO
+from io import StringIO
 import re
 
 try:

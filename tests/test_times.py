@@ -1,3 +1,4 @@
+from __future__ import print_function
 import random
 import json
 from poni import tool
@@ -13,7 +14,7 @@ def test_times():
         tasks.add_task(i, "task%d" % i, start, stop)
 
     report = "".join(tasks.iter_report())
-    print report
+    print(report)
     for i in range(0, N):
         name = "task%d" % i
         assert name in report, "%r missing from report" % name
@@ -27,7 +28,7 @@ import time
 class PlugIn(config.PlugIn):
     @config.control()
     def dummy(self, arg):
-        print "dummy"
+        print("dummy")
 
 """
 
