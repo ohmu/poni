@@ -446,7 +446,12 @@ class LibvirtProvider(Provider):
                 if vm_name not in missing:
                     continue
 
-                addrs = self._get_instance_address_ipv6autoconf(instance, context)
+                if instance.get("address_discovery") == "qemu-guest-agent":
+                    address_discovery = self._get_instance_address_qemu_ga
+                else:
+                    address_discovery = self._get_instance_address_ipv6autoconf
+
+                addrs = address_discovery(instance, context)
                 if not addrs:
                     self.log.warning("no ip addresses yet for: %s", instance)
                     continue
@@ -483,6 +488,18 @@ class LibvirtProvider(Provider):
 
         for cleanup_func in context["cleanup"]:
             cleanup_func()
+
+    def _get_instance_address_qemu_ga(self, instance, context):
+        conn = instance["vm_conns"][0]
+        # XXX: figure out how to run qemu-agent-command through the Python API
+        cmd = ["virsh", "-c", conn.uri, "qemu-agent-command", instance["vm_name"], '{"execute": "guest-network-get-interfaces"}']
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, err = proc.communicate()
+        if proc.returncode:
+            self.log.warning("qemu-agent-command on %r failed: %r", instance["vm_name"], err)
+            return
+        res = json.loads(out)
+        return res["return"]
 
     def _get_instance_address_ipv6autoconf(self, instance, context):
         """find public addresses for instances based on ipv6 autoconfiguration
@@ -839,6 +856,17 @@ class PoniLVConn(object):
             elif itype == "bridge":
                 iface.append(XMLE.source(bridge=inet))
             devs.append(iface)
+
+        # Add guest-agent channel
+        if hardware.get("qemu-guest-agent"):
+            channel = hardware["qemu-guest-agent"]
+            if not isinstance(channel, str):
+                channel = "org.qemu.guest_agent.0"
+            item = XMLE.channel(
+                XMLE.source(mode="bind"),
+                XMLE.target(type="virtio", name=channel),
+                type="unix")
+            devs.append(item)
 
         new_desc = etree.tostring(desc)
         vm = self.conn.defineXML(new_desc)
