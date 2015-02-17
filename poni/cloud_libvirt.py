@@ -17,7 +17,6 @@ import inspect
 import json
 import logging
 import os
-import paramiko
 import random
 import re
 import socket
@@ -52,11 +51,16 @@ except ImportError:
     XMLE = None
     MISSING_LIBS.append("lxml")
 
+try:
+    import paramiko
+except ImportError:
+    paramiko = None  # paramiko is optional
+
 
 # hack to support tunneled connections before paramiko v1.8.0-11-g31ea4f0
-if "sock" in inspect.getargspec(paramiko.SSHClient.connect).args:
+if paramiko and "sock" in inspect.getargspec(paramiko.SSHClient.connect).args:
     TunnelingSSHClient = paramiko.SSHClient
-else:
+elif paramiko:
     import getpass
 
     class TunnelingSSHClient(paramiko.SSHClient):
@@ -505,6 +509,8 @@ class LibvirtProvider(Provider):
         """find public addresses for instances based on ipv6 autoconfiguration
            by opening ssh connection from local host to hypervisor and an ipv6
            tunnel using link-local address through it to the target host"""
+        if paramiko is None:
+            raise CloudError("paramiko must be installed for IPv6 autoconfig vm discovery")
         if 'ipv6autoconf' not in context:
             context['ipv6autoconf'] = True
             context['tunnels'] = {}  # connections to hypervisors
