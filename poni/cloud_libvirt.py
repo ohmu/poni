@@ -230,7 +230,7 @@ class LibvirtProvider(Provider):
             if libvirt.getVersion() < 9004:
                 # libvirt support for no_verify was introduced in 0.9.4
                 procs = []
-                for hostport in self.hosts.iterkeys():
+                for hostport in self.hosts:
                     host, _, port = hostport.partition(':')
                     cmd = ["/usr/bin/ssh", "-oBatchMode=yes", "-oStrictHostKeyChecking=no", host]
                     if port:
@@ -253,7 +253,7 @@ class LibvirtProvider(Provider):
                     self.log.warn("Connection to %r failed: %r", conn.uri, ex)
 
             tasks = util.TaskPool()
-            for host, (priority, weight) in self.hosts.iteritems():
+            for host, (priority, weight) in self.hosts.items():
                 tasks.apply_async(lv_connect, [host, priority, weight])
 
             tasks.wait_all()
@@ -350,7 +350,7 @@ class LibvirtProvider(Provider):
         delete_started = time.time()
         tasks = util.TaskPool()
         vms = self._get_all_vms()
-        for vm_name, prop in props.iteritems():
+        for vm_name, prop in props.items():
             # Delete any existing instances if required to reinit (the
             # default) or if the same VM was found from multiple hosts.
             if vm_name in vms:
@@ -402,7 +402,7 @@ class LibvirtProvider(Provider):
             tasks = util.TaskPool()
         instances = []
         conns = [conn for conn in self.conns() if conn.srv_weight > 0]
-        for vm_name, prop in props.iteritems():
+        for vm_name, prop in props.items():
             if vm_name in vms:
                 instance = dict(vm_name=vm_name, vm_state="VM_DIRTY", vm_conns=vms[vm_name], prop=prop)
             else:
@@ -502,6 +502,9 @@ class LibvirtProvider(Provider):
         if proc.returncode:
             self.log.warning("qemu-agent-command on %r failed: %r", instance["vm_name"], err)
             return
+        # subprocess returns bytes, but we want a str which is different on Python 3
+        if isinstance(out, bytes) and bytes is not str:
+            out = out.decode("utf-8")  # pylint: disable=E1103
         res = json.loads(out)
         return res["return"]
 
@@ -559,17 +562,21 @@ class LibvirtProvider(Provider):
             self.log.warning("no data received from: %r", instance)
             return None
 
+        # paramiko gives us bytes, but we want a str which is different on Python 3
+        if isinstance(data, bytes) and bytes is not str:
+            data = data.decode("utf-8")
+
         return list(parse_ip_addr(data))
 
     def power_on_instances(self, props):
         result = self._vm_async_apply(props, 'power_on')
-        for v in result.itervalues():
+        for v in result.values():
             v['power'] = 'on'
         return result
 
     def power_off_instances(self, props):
         result = self._vm_async_apply(props, 'power_off')
-        for v in result.itervalues():
+        for v in result.values():
             v['power'] = 'off'
         return result
 
@@ -641,11 +648,11 @@ class PoniLVConn(object):
     @property
     def weight(self):
         """calculate a weight for this node based on its cpus and ram"""
-        counters = {
-            "total_mhz": self.dominfo.vms_online + self.dominfo.cpus_online / 4.0,
-            "memory": self.dominfo.vms_online + self.dominfo.ram_online / 4096.0,
-        }
-        load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters.iteritems())
+        counters = [
+            ("total_mhz", self.dominfo.vms_online + self.dominfo.cpus_online / 4.0),
+            ("memory", self.dominfo.vms_online + self.dominfo.ram_online / 4096.0),
+            ]
+        load_w = sum((self.node[k] / float(v or 1)) / self.node[k] for k, v in counters)
         return load_w * self.srv_weight
 
     def connect(self):
@@ -710,7 +717,7 @@ class PoniLVConn(object):
             pool = PoniLVPool(self.conn.storagePoolLookupByName(name), self.conn)
             dominfo.pools[name] = pool
 
-        doms = [dom for dom in dominfo.vms.itervalues() if dom.info["cputime"] > 0]
+        doms = [dom for dom in dominfo.vms.values() if dom.info["cputime"] > 0]
         dominfo["cpus_online"] = sum(dom.info["cpus"] for dom in doms)
         dominfo["ram_online"] = sum(dom.info["maxmem"] / 1024 for dom in doms)
         self.dominfo = dominfo  # atomic update of all dom info stats
@@ -719,7 +726,8 @@ class PoniLVConn(object):
     def clone_vm(self, name, spec, overwrite=False):
         def macaddr(index):
             """create a mac address based on the VM name for DHCP predictability"""
-            mac_ext = hashlib.md5(name).hexdigest()  # pylint: disable=E1101
+            hname = name.encode("utf-8") if not isinstance(name, bytes) else name
+            mac_ext = hashlib.md5(hname).hexdigest()  # pylint: disable=E1101
             return "52:54:00:{0}:{1}:{2:02x}".format(mac_ext[0:2], mac_ext[2:4], int(mac_ext[4:6], 16) ^ index)
 
         if name in self.dominfo.vms:
@@ -874,7 +882,7 @@ class PoniLVConn(object):
                 type="unix")
             devs.append(item)
 
-        new_desc = etree.tostring(desc)
+        new_desc = etree.tostring(desc, encoding='unicode')
         vm = self.conn.defineXML(new_desc)
         self.libvirt_retry(vm.create)
         for retry in range(1, 10):
@@ -996,8 +1004,8 @@ class PoniLVPool(object):
             voltree.append(XMLE.backingStore(
                     XMLE.format(type=srctype),
                     XMLE.path(srcvol.path())))
-        voltree.append(XMLE.capacity(str(byte_count)))
-        volxml = etree.tostring(voltree)
+        voltree.append(XMLE.capacity(str(int(byte_count))))
+        volxml = etree.tostring(voltree, encoding='unicode')
 
         try:
             vol = self.pool.createXML(volxml, 0)
@@ -1130,7 +1138,8 @@ class PoniLVDom(object):
         flags = 0 if memory else libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
         snapxml = etree.tostring(XMLE.domainsnapshot(
             XMLE.name(name),
-            XMLE.description(description or _created_str())))
+            XMLE.description(description or _created_str())),
+            encoding='unicode')
         self.dom.snapshotCreateXML(snapxml, flags)
 
     @convert_libvirt_errors
