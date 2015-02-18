@@ -21,7 +21,6 @@ from . import vc
 from . import version
 from . import work
 from distutils.version import LooseVersion  # pylint: disable=E0611
-from path import path
 import argh
 import argparse
 import glob
@@ -79,7 +78,7 @@ def arg_target_nodes(method):
 
 arg_host_access_method = argh.arg("-m", "--method",
                                   help="override host access method (local, ssh, tar:DIR)")
-arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR", type=path,
+arg_output_dir = argh.arg("-o", "--output-dir", metavar="DIR",
                           help="write command output to files in DIR")
 arg_config_pattern = argh.arg("-c", "--config", metavar="PATTERN", type=str, nargs="*",
                               help='apply to only configs matching pattern')
@@ -234,7 +233,7 @@ class Tool(object):
 
     @argh_named("import")
     @arg_verbose
-    @argh.arg('source', type=path, help='source dir/file', nargs="+")
+    @argh.arg('source', help='source dir/file', nargs="+")
     @expects_obj
     def handle_import(self, arg):
         """import nodes/configs"""
@@ -329,7 +328,7 @@ class Tool(object):
     @argh_named("update-config")
     @arg_verbose
     @argh.arg('config', type=str, help="target config (regexp)")
-    @argh.arg('source', type=path, help='source file or directory', nargs="+")
+    @argh.arg('source', help='source file or directory', nargs="+")
     @expects_obj
     def handle_update_config(self, arg):
         """update files to a config"""
@@ -343,9 +342,9 @@ class Tool(object):
                 if arg.verbose:
                     self.log.info("%s: added %r", conf.full_name,
                                   str(source_path))
-                if source_path.isfile():
+                if os.path.isfile(source_path):
                     shutil.copy2(source_path, conf.path)
-                elif source_path.isdir():
+                elif os.path.isdir(source_path):
                     assert 0, "unimplemented"
                 else:
                     raise errors.UserError("don't know how to handle: %r (cwd: %s)" %
@@ -441,7 +440,7 @@ class Tool(object):
     @arg_full_match
     @argh.arg('-c', '--config', type=str, help='config search pattern')
     @argh.arg('name', type=str, help='library name')
-    @argh.arg('path', type=path, help='library path within config')
+    @argh.arg('path', help='library path within config')
     @expects_obj
     def handle_add_library(self, arg):
         """add a Python library from a config to PYTHONPATH"""
@@ -460,18 +459,18 @@ class Tool(object):
                                               for n, c in configs)))
 
             node, conf = configs[0]
-            full_path = conf.path / arg.path
-            store_path = confman.root_dir.relpathto(full_path)
+            full_path = os.path.join(conf.path, arg.path)
+            store_path = os.path.relpath(full_path, start=confman.root_dir)
         else:
             # arbitrary system dir path
-            full_path = arg.path.abspath()
+            full_path = os.path.abspath(arg.path)
             store_path = full_path
 
-        if not full_path.isdir():
+        if not os.path.isdir(full_path):
             raise errors.UserError("directory %r does not exist" % (
                     str(full_path)))
 
-        if store_path.isabs():
+        if os.path.isabs(store_path):
             self.log.warning("absolute Python library path to %r stored, "
                              "this may compromise repository portability",
                              str(store_path))
@@ -656,8 +655,8 @@ class Tool(object):
         def rexec(arg, node, remote):
             color = colors.Output(sys.stdout, color=arg.color).color
             if arg.output_dir:
-                output_file_path = arg.output_dir / ("%s.log" % node.name.replace("/", "_"))
-                output_file = output_file_path.open("wt")
+                output_file_path = os.path.join(arg.output_dir, "%s.log" % node.name.replace("/", "_"))
+                output_file = open(output_file_path, "w")
             else:
                 output_file = None
 
@@ -712,12 +711,15 @@ class Tool(object):
 
                 remote.makedirs(dest_dir)
 
-            source_paths = (source_path.listdir() if source_path.isdir() else [path(source_path)])
+            if os.path.isdir(source_path):
+                source_paths = [os.path.join(source_path, name) for name in os.listdir(source_path)]
+            else:
+                source_paths = [source_path]
             for file_path in source_paths:
-                dest_path = path(dest_dir) / file_path.basename()
-                lstat = file_path.stat()
+                dest_path = os.path.join(dest_dir, os.path.basename(file_path))
+                lstat = os.lstat(file_path.stat)
                 if stat.S_ISDIR(lstat.st_mode):
-                    copy_file_or_dir(node, remote, source_path / file_path.basename(), dest_path)
+                    copy_file_or_dir(node, remote, os.path.join(source_path, os.path.basename(file_path)), dest_path)
                     continue
 
                 if arg.verbose:
@@ -728,7 +730,7 @@ class Tool(object):
 
         def copy_op(arg, node, remote):
             for source in arg.source:
-                copy_file_or_dir(node, remote, path(source), path(arg.dest_dir))
+                copy_file_or_dir(node, remote, source, arg.dest_dir)
 
         copy_op.doc = "cp"
         confman = self.get_confman(arg.root_dir, reset_cache=False)
@@ -1160,7 +1162,7 @@ class Tool(object):
                     print("%s #%d: %r" % (name, i, item))
 
     @argh_named("report")
-    @argh.arg("-o", "--output-file", metavar="FILE", type=path, nargs="?",
+    @argh.arg("-o", "--output-file", metavar="FILE", nargs="?",
               help='output file path (default: stdout)')
     @expects_obj
     def handle_report(self, arg):
@@ -1431,15 +1433,14 @@ class Tool(object):
             default_root = os.environ.get("%s_ROOT" % TOOL_NAME.upper())
 
         if not default_root:
-            default_root = (path(os.environ["HOME"]) / (".%s" % TOOL_NAME)
-                            / "default")
+            default_root = os.path.join(os.environ["HOME"], ".%s" % TOOL_NAME, "default")
 
         parser = argh.ArghParser()
         parser.add_argument("-E", "--pass-thru-exceptions", default=False,
                             action="store_true", help="do not suppress exceptions with user-friendly error messages")
         parser.add_argument("-D", "--debug", dest="debug", default=False,
                             action="store_true", help="enable debug output")
-        parser.add_argument("-L", "--time-log", metavar="FILE", type=path,
+        parser.add_argument("-L", "--time-log", metavar="FILE",
                             help="update execution times to a file")
         parser.add_argument("-T", "--clock", metavar="NAME", dest="time_op",
                             help="time-log this operation as NAME")
@@ -1528,7 +1529,7 @@ class Tool(object):
             """tune the logging before executing commands"""
             self.tune_arg_namespace(arg)
 
-            if arg.time_log and arg.time_log.exists():
+            if arg.time_log and os.path.exists(arg.time_log):
                 self.task_times.load(arg.time_log)
 
             if arg.debug:

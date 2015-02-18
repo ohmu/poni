@@ -10,13 +10,13 @@ from . import colors
 from . import errors
 from . import template
 from . import util
-from path import path
 import argh
 import argparse
 import datetime
 import difflib
 import itertools
 import logging
+import os
 import re
 import sys
 import time
@@ -82,15 +82,18 @@ class Manager(object):
                 sys.stderr.write("\r%s/%s bytes copied" % (copied, total))
                 ctx["last"] = time.time()
 
-        dest_dir = path(path_prefix + dest_path)
+        dest_dir = path_prefix + dest_path
         try:
             remote.stat(dest_dir)
         except errors.RemoteError:
             remote.makedirs(dest_dir)
 
-        for file_path in path(source_path).files():
-            dest_path = dest_dir / file_path.basename()
-            lstat = file_path.stat()
+        for dir_entry in os.listdir(source_path):
+            file_path = os.path.join(source_path, dir_entry)
+            if os.path.isdir(file_path):
+                continue
+            dest_path = os.path.join(dest_dir, dir_entry)
+            lstat = os.stat(file_path)
             try:
                 rstat = remote.stat(dest_path)
                 # copy if mtime or size differs
@@ -183,21 +186,21 @@ class Manager(object):
                 continue
 
             stats["file_count"] += 1
-            source_path = entry["config"].path / entry["source_path"]
+            source_path = os.path.join(entry["config"].path, entry["source_path"])
             try:
                 dest_path = entry["dest_path"]
                 if dest_path and dest_path[-1:] == "/":
                     # dest path ending in slash: use source filename
-                    dest_path = path(dest_path) / source_path.basename()
+                    dest_path = os.path.join(dest_path, os.path.basename(source_path))
 
                 if raw:
-                    dest_path, output = dest_path, source_path.bytes()
+                    dest_path, output = dest_path, open(source_path).read()
                 else:
                     with RenderContext(entry, "template"):
                         dest_path, output = render(source_path, dest_path, source_text=entry["source_text"])
 
                 if dest_path:
-                    dest_path = path(item_path_prefix + dest_path).normpath()
+                    dest_path = os.path.normpath(item_path_prefix + dest_path)
 
                 if (not audit and not deploy) and verbose:
                     # plain verify mode
@@ -215,7 +218,7 @@ class Manager(object):
             if show and not filtered_out:
                 if show_diff:
                     diff = difflib.unified_diff(
-                        source_path.bytes().splitlines(True),
+                        open(source_path).read().splitlines(True),
                         output.splitlines(True),
                         "template", "rendered",
                         "", "",
@@ -319,7 +322,7 @@ class Manager(object):
                 self.log.info(self.audit_format, "OK",
                               entry["node"].name, dest_path)
         else:
-            dest_dir = dest_path.dirname()
+            dest_dir = os.path.dirname(dest_path)
             try:
                 remote.stat(dest_dir)
             except errors.RemoteError:
@@ -518,7 +521,7 @@ class PlugIn(object):
         namespace.node = node
         namespace.color = color
         if output_dir:
-            output_file_path = output_dir / ("%s.log" % node.name.replace("/", "_"))
+            output_file_path = os.path.join(output_dir, "%s.log" % node.name.replace("/", "_"))
             namespace.output_file = open(output_file_path, "a")
         else:
             namespace.output_file = None
@@ -527,9 +530,9 @@ class PlugIn(object):
 
     def get_override_config_path(self, filename):
         for search_path in (self.top_config.path, self.config.path):
-            file_path = search_path / filename
-            if file_path.exists():
-                return file_path.abspath()
+            file_path = os.path.join(search_path, filename)
+            if os.path.exists(file_path):
+                return os.path.abspath(file_path)
         raise errors.VerifyError("no %r found for config %r" % (
                 filename, self.top_config.name))
 

@@ -16,7 +16,6 @@ import select
 import termios
 import tty
 import errno
-from path import path
 
 import warnings
 try:
@@ -286,21 +285,20 @@ class ParamikoRemoteControl(rcontrol.SshRemoteControl):
 
     @convert_paramiko_errors
     def makedirs(self, dir_path):
-        dir_path = path(dir_path)
         sftp = self.get_sftp()
         create_dirs = []
         while 1:
             try:
-                sftp.stat(str(dir_path))
+                sftp.stat(dir_path)
                 break # dir exists
             except (paramiko.SSHException, IOError):
                 create_dirs.insert(0, dir_path)
-                dir_path, rest = dir_path.splitpath()
+                dir_path, rest = os.path.split(dir_path)
                 if not dir_path or not rest:
                     break
 
         for dir_path in create_dirs:
-            sftp.mkdir(str(dir_path))
+            sftp.mkdir(dir_path)
 
     @convert_paramiko_errors
     def utime(self, file_path, times):

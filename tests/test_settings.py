@@ -17,15 +17,16 @@ class TestSettings(Helper):
 
     def test_settings_set(self):
         input_dir = self.temp_file()
-        settings_dir = input_dir / "settings"
-        settings_dir.makedirs()
-        defaults_file = settings_dir / "00-defaults.json"
+        settings_dir = os.path.join(input_dir, "settings")
+        os.makedirs(settings_dir)
+        defaults_file = os.path.join(settings_dir, "00-defaults.json")
         defaults = {"foo":"bar"}
-        defaults_file.write_bytes(json.dumps(defaults))
+        with open(defaults_file, "w") as f:
+            json.dump(defaults, f)
 
-        poni = self.repo_and_config("node", "conf", plugin_text, 
+        poni = self.repo_and_config("node", "conf", plugin_text,
                                     copy=input_dir)
-        
+
         assert not poni.run(["settings", "list"])
         # TODO: verify output
 

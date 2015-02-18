@@ -11,7 +11,7 @@ See LICENSE for details.
 # pylint: disable=E1103
 
 
-from path import path
+import os
 import re
 
 try:
@@ -45,7 +45,7 @@ class GitVersionControl(VersionControl):
 
     def init_repo(self, repo_dir):
         self.git = git.Repo.init(repo_dir)
-        (repo_dir / ".gitignore").write_bytes(GIT_IGNORE)
+        open(os.path.join(repo_dir, ".gitignore"), "w").write(GIT_IGNORE)
         self.git.index.add([".gitignore"])
         self.commit_all("initial commit")
 
@@ -83,7 +83,7 @@ class GitVersionControl(VersionControl):
 
 
 def create_vc(repo_dir):
-    if (path(repo_dir) / ".git").exists():  # pylint: disable=E1120
+    if os.path.exists(os.path.join(repo_dir, ".git")):
         return GitVersionControl(repo_dir)
     else:
         return None

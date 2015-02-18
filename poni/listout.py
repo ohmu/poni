@@ -8,6 +8,7 @@ See LICENSE for details.
 
 """
 
+import os
 import sys
 from . import colors
 from . import core
@@ -103,7 +104,7 @@ class ListOutput(colors.Output):
 
     def format_layer(self, entry):
         yield "#%d: %s: %s" % (entry["index"], entry["layer"],
-                               entry["file_path"].basename()), "layer"
+                               os.path.basename(entry["file_path"])), "layer"
 
     def format_prop(self, entry):
         return self.value_repr(entry["prop"], top_level=True)

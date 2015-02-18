@@ -2,6 +2,8 @@ from __future__ import print_function
 from poni import template
 from poni import tool
 from helper import *
+import os
+
 
 single_xml_file_plugin_text = """
 from poni import config
@@ -41,13 +43,15 @@ class TestTemplates(Helper):
 
         # write template config plugin.py
         tconf_path = "%s/%s" % (template_node, template_conf)
-        conf_dir = repo / "system" / template_node / "config" / template_conf
-        tplugin_path = conf_dir / "plugin.py"
+        conf_dir = os.path.join(repo, "system", template_node, "config", template_conf)
+        tplugin_path = os.path.join(conf_dir, "plugin.py")
         output_file = self.temp_file()
         tfile = self.temp_file()
-        file(tfile, "w").write(genshi_xml_template)
+        with open(tfile, "w") as f:
+            f.write(genshi_xml_template)
         args = dict(source=tfile, dest=output_file)
-        tplugin_path.open("w").write(single_xml_file_plugin_text % args)
+        with open(tplugin_path, "w") as f:
+            f.write(single_xml_file_plugin_text % args)
 
         # add inherited config
         instance_node = "inode"
@@ -59,7 +63,8 @@ class TestTemplates(Helper):
 
         # deploy and verify
         assert not poni.run(["deploy"])
-        output = output_file.bytes()
+        with open(output_file, "r") as f:
+            output = f.read()
         print(output)
         assert "<foo>baz</foo>" in output
 

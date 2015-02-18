@@ -1,5 +1,6 @@
 from __future__ import print_function
 import json
+import os
 from poni import tool
 from helper import *
 
@@ -17,7 +18,7 @@ class TestCommands(Helper):
         nodes = ["foo", "bar/foo/baz"]
         for node in nodes:
             poni.run(["add-node", node])
-            node_config = repo / "system" / node / "node.json"
+            node_config = os.path.join(repo, "system", node, "node.json")
             with open(node_config, "r") as f:
                 config = json.load(f)
             print(node, config)
@@ -29,7 +30,7 @@ class TestCommands(Helper):
         nodes = ["foo", "bar/foo/baz"]
         for node in nodes:
             poni.run(["add-system", node])
-            node_config = repo / "system" / node / "system.json"
+            node_config = os.path.join(repo, "system", node, "system.json")
             with open(node_config, "r") as f:
                 config = json.load(f)
             print(node, config)
@@ -54,7 +55,7 @@ class TestCommands(Helper):
             "boff": (":bool=off", False),
             }
 
-        node_config = repo / "system" / node / "node.json"
+        node_config = os.path.join(repo, "system", node, "node.json")
         for key, val in vals.items():
             if isinstance(val, (str, unicode)):
                 inval = val
@@ -100,7 +101,7 @@ class TestCommands(Helper):
             with open(script_file, "w") as f:
                 f.write("add-node %s\nset %s foo=bar" % (node, node))
             assert not poni.run(["script", script_file])
-            node_config = repo / "system" / node / "node.json"
+            node_config = os.path.join(repo, "system", node, "node.json")
             with open(node_config, "r") as f:
                 config = json.load(f)
             assert config["foo"] == "bar"
@@ -131,8 +132,9 @@ class TestCommands(Helper):
         assert not poni.run(["set", template_node, "verify:bool=off"])
 
         # write template config template file
-        tfile_path = poni.default_repo_path / "system" / template_node / "config" / template_conf / source_file
-        tfile_path.open("w").write(file_contents)
+        tfile_path = os.path.join(poni.default_repo_path, "system", template_node, "config", template_conf, source_file)
+        with open(tfile_path, "w") as f:
+            f.write(file_contents)
 
         # add inherited config
         assert not poni.run(["add-node", instance_node])
@@ -148,7 +150,8 @@ class TestCommands(Helper):
         output_file = self.temp_file()
         poni = self._make_inherited_config("tnode", "tconf", "inode", "iconf",
                                            "test.txt", template_text, output_file)
-        assert output_file.bytes() == template_text
+        with open(output_file, "r") as f:
+            assert f.read() == template_text
 
     def test_auto_override_config(self):
         template_text = "hello"
@@ -156,15 +159,18 @@ class TestCommands(Helper):
         poni = self._make_inherited_config("tnode", "tconf", "inode", "iconf",
                                            "test.txt", template_text, output_file,
                                            auto_override=True)
-        assert output_file.bytes() == template_text
+        with open(output_file, "r") as f:
+            assert f.read() == template_text
         # update inherited node with new content in "test.txt"
         new_template_text = "world"
-        tmpfile = self.temp_dir() / "test.txt"
-        tmpfile.write_bytes(new_template_text)
+        tmpfile = os.path.join(self.temp_dir(), "test.txt")
+        with open(tmpfile, "w") as f:
+            f.write(new_template_text)
         poni.run(["update-config", "-v", "inode/iconf", tmpfile])
         # see if the file is deployed with changed content
         poni.run(["deploy"])
-        assert output_file.bytes() == new_template_text
+        with open(output_file, "r") as f:
+            assert f.read() == new_template_text
 
     def test_require(self):
         poni, repo = self.init_repo()

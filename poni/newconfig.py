@@ -9,7 +9,8 @@ TODO: this simple draft is VERY likely to change a lot
 """
 
 import logging
-from path import path
+import os
+from glob import glob
 from . import errors
 from .util import json
 
@@ -29,10 +30,9 @@ class Config(dict):
         # sorted by the filename prefix (first two letters) and secondarily
         # by the inheritance order (parent before child)
         for i, (layer_name, config_dir) in enumerate(self.config_dirs):
-            config_dir = path(config_dir)
-            if config_dir.exists():
-                for file_path in config_dir.glob("*.json"):
-                    self.layers.append(((file_path.basename()[:2], i),
+            if os.path.exists(config_dir):
+                for file_path in glob(os.path.join(config_dir, "*.json")):
+                    self.layers.append(((os.path.basename(file_path)[:2], i),
                                         layer_name, file_path))
 
         self.layers.sort()

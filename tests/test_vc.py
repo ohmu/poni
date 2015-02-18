@@ -2,6 +2,7 @@ from __future__ import print_function
 from pytest import skip
 from poni import tool, vc
 from helper import *
+import os
 import subprocess
 
 
@@ -34,7 +35,7 @@ class TestVersionControl(Helper):
 
         assert not poni.run(["vc", "init"])
 
-        assert (repo / ".git").exists()
+        assert os.path.exists(os.path.join(repo, ".git"))
         assert self.git(repo, ["status", "-s"]) == ""
 
         return poni, repo

@@ -7,7 +7,7 @@ See LICENSE for details.
 """
 
 import logging
-from path import path
+import os
 from . import errors
 
 try:
@@ -49,18 +49,18 @@ class DebImporter(Importer):
                 return
 
             dest_sub = member.name[len(prefix):]
-            dest_path = confman.system_root / dest_sub
-            dest_dir = dest_path.dirname()
-            if not dest_dir.exists():
-                dest_dir.makedirs()
+            dest_path = os.path.join(confman.system_root, dest_sub)
+            dest_dir = os.path.dirname(dest_path)
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
 
-            write = not dest_path.exists()
-            if (not write) and dest_path.exists():
-                old = dest_path.bytes()
+            write = not os.path.exists(dest_path)
+            if (not write) and os.path.exists(dest_path):
+                old = open(dest_path).read()
                 write = (old != contents)
 
             logger = self.log.info if self.verbose else self.log.debug
-            pretty_path = confman.root_dir.relpathto(dest_path)
+            pretty_path = os.path.relpath(dest_path, start=confman.root_dir)
             if write:
                 open(dest_path, "wb").write(contents)
                 logger("imported: %s", pretty_path)
@@ -73,10 +73,9 @@ class DebImporter(Importer):
 
 
 def get_importer(source_path, **kwargs):
-    source_path = path(source_path)
-    if source_path.isdir():
+    if os.path.isdir(source_path):
         assert 0, "unimplemented"
-    elif source_path.isfile() and source_path.endswith(".deb"):
+    elif os.path.isfile(source_path) and source_path.endswith(".deb"):
         return DebImporter(source_path, **kwargs)
     else:
         raise errors.ImporterError(

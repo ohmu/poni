@@ -59,7 +59,8 @@ class TestClockedOps(Helper):
         # TODO: verify output
 
     def verify_log(self, ops):
-        data = json.load(self.time_log.open())
+        with open(self.time_log, "r") as f:
+            data = json.load(f)
         def has_all(a, b):
             assert a["stop"] >= a["start"]
             for k, v in b.items():
