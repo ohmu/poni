@@ -3,12 +3,14 @@ import itertools
 import shutil
 import os
 import tempfile
+import unittest
 from path import path
 from poni import tool
 
 
-class Helper:
-    def __init__(self):
+class Helper(unittest.TestCase):
+    def __init__(self, *args, **kwa):
+        super(Helper, self).__init__(*args, **kwa)
         self.temp_files = []
 
     def temp_file(self, prefix="test_poni"):
@@ -61,5 +63,3 @@ def combos(seq, max_len=None):
     for length in range(0, max_len or (len(seq) + 1)):
         for combo in itertools.combinations(seq, length):
             yield combo
-
-

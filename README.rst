@@ -38,9 +38,9 @@ Using Amazon EC2 requires setting the following environment variables::
 
 Additionally, running the included automated tests requires:
 
-* nose_
+* pytest_
 
-.. _nose: http://pypi.python.org/pypi/nose
+.. _pytest: http://pytest.org/
 
 Building HTML files from the included ReST_ documentation requires:
 
@@ -102,7 +102,7 @@ Verifying the installation
 * You should be able to ``import poni`` from Python
 * The ``poni`` command-line tool is installed (to a platform-specific location),
   try running ``poni -h`` for help
-* Running automated tests: ``cd poni-v.vv/ && nosetests``
+* Running automated tests: ``make tests``
 
 Usage
 =====

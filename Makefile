@@ -1,4 +1,5 @@
-rst2html=rst2html
+PYTHON ?= python
+rst2html ?= rst2html
 
 all: poni/version.py dist doc readme
 
@@ -33,7 +34,7 @@ build-dep:
 	apt-get --yes install python-setuptools python-docutils python-sphinx lynx
 
 test-dep:
-	apt-get --yes install pep8 pylint python-nose \
+	apt-get --yes install pep8 pylint python-pytest \
 		python-argh python-boto python-cheetah python-genshi python-git
 
 pep8:
@@ -43,10 +44,7 @@ pylint:
 	python -m pylint.lint --rcfile=pylintrc poni/*.py
 
 tests:
-	nosetests --processes=2 -v
-
-coverage:
-	nosetests --with-coverage --cover-package=poni --cover-html
+	PYTHONPATH=. $(PYTHON) -m pytest -vv tests
 
 travis:
 	# Travis does a shallow clone and won't find tags with git describe
