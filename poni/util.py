@@ -9,7 +9,6 @@ See LICENSE for details.
 import logging
 import os
 from multiprocessing.pool import ThreadPool
-from path import path
 from . import errors
 from . import recode
 
@@ -136,9 +135,10 @@ def format_error(error):
 def dir_stats(dir_path):
     """return a statistics dict about a directory and its contents"""
     out = {"path": dir_path, "file_count": 0, "total_bytes": 0}
-    for file_path in path(dir_path).walkfiles():
-        out["file_count"] += 1
-        out["total_bytes"] += file_path.stat().st_size
+    for dir_name, dir_entries, file_entries in os.walk(dir_path):
+        for file_name in file_entries:
+            out["file_count"] += 1
+            out["total_bytes"] += os.path.getsize(os.path.join(dir_name, file_name))
 
     return out
 
