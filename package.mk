@@ -3,18 +3,17 @@ short_version = $(shell git describe --long | sed -e 's/-g.*//')
 major_version = $(shell git describe --abbrev=0)
 minor_version = $(shell git describe --long | sed -e 's,[^-]*-,,')
 
-path = $(realpath .)
-base = $(shell basename $(path))
-
 export DEBFULLNAME := Mika Eloranta
 export DEBEMAIL := mika.eloranta@gmail.com
 
 rpm: poni/version.py
-	cd .. ; tar -zcv --exclude=*~ --exclude=.git -f $(base)-$(version).tar.gz $(base)
-	rpmbuild -ta ../$(base)-$(version).tar.gz \
-		--define 'full_version $(version)' \
+	git archive -o rpm-src-poni.tar --prefix=poni/ HEAD
+	# add poni/version.py to the tar, it's not in git repository
+	tar -r -f rpm-src-poni.tar --transform=s-poni-poni/poni- poni/version.py
+	rpmbuild -ta rpm-src-poni.tar \
 		--define 'major_version $(major_version)' \
-		--define 'minor_version $(subst -,_,$(minor_version))'
+		--define 'minor_version $(subst -,.,$(minor_version))'
+	$(RM) rpm-src-poni.tar
 
 debian:
 	python setup.py sdist -d ..
