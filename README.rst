@@ -68,8 +68,9 @@ Installing the following Python libraries will add optional functionality:
 * Boto_ (`Amazon EC2`_ virtual machine provisioning)
 * pyvsphere_ (VMWare virtual machine provisioning)
 * libvirt-python_ (libvirt virtual machine provisioning)
-* PyDNS_ (libvirt provisioning dependency)
 * lxml_ (libvirt provisioning dependency)
+* dnspython_ (libvirt provisioning dependency)
+* PyDNS_ (used if dnspython_ isn't available)
 
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
 .. _Paramiko: http://pypi.python.org/pypi/paramiko
@@ -83,8 +84,9 @@ Installing the following Python libraries will add optional functionality:
 .. _Sphinx: http://sphinx.pocoo.org/
 .. _pyvsphere: https://github.com/F-Secure/pyvsphere
 .. _libvirt-python: http://libvirt.org/python.html
-.. _PyDNS: http://pydns.sourceforge.net/
 .. _lxml: http://lxml.de/
+.. _dnspython: http://www.dnspython.org/
+.. _PyDNS: http://pydns.sourceforge.net/
 
 Installation using pip or easy_install
 --------------------------------------
