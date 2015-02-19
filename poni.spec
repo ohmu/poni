@@ -1,5 +1,3 @@
-%{!?python_sitearch: %define python_sitearch %(%{__python} -c "from distutils.sysconfig import get_python_lib; print get_python_lib(1)")}
-
 Name:           poni
 Version:        %{major_version}
 Release:        %{minor_version}%{?dist}
@@ -7,32 +5,30 @@ Summary:        simple system configuration management tool
 
 Group:          Development/Languages
 License:        ASL 2.0
-Source0:        poni-%{full_version}.tar.gz
-BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+Source0:        rpm-src-poni.tar
 
-BuildArch:	noarch
-BuildRequires:  python-devel
-
-Requires:	python-boto, python-argh
+Requires:       python-argh, python-boto, python-dns, python-lxml, libvirt-python
+BuildRequires:  pylint, pytest
+BuildArch:      noarch
 
 %description
 Poni is a simple system configuration management tool.
+
 
 %prep
 %setup -q -n %{name}
 
 
 %build
-CFLAGS="$RPM_OPT_FLAGS" %{__python} setup.py build
+python2 setup.py build
 
 
 %install
-rm -rf $RPM_BUILD_ROOT
-%{__python} setup.py install --skip-build --root $RPM_BUILD_ROOT
+python2 setup.py install --skip-build --root %{buildroot}
 
 
-%clean
-rm -rf $RPM_BUILD_ROOT
+%check
+make PYTHON=python2 pylint tests
 
 
 %files
@@ -44,11 +40,14 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Mon Jan 10 2011 Oskari Saarenmaa <oskari@saarenmaa.fi> - 0.4-0
+* Thu Feb 19 2015 Oskari Saarenmaa <os@ohmu.fi> - 0.7-150
+- Refactored packaging, run tests, etc.
+
+* Mon Jan 10 2011 Oskari Saarenmaa <os@ohmu.fi> - 0.4-0
 - Update to 0.4; bundle into poni proper.
 
-* Mon Dec 27 2010 Oskari Saarenmaa <oskari@saarenmaa.fi> - 0.3.1-0
+* Mon Dec 27 2010 Oskari Saarenmaa <os@ohmu.fi> - 0.3.1-0
 - Update to 0.3.1.
 
-* Thu Dec 23 2010 Oskari Saarenmaa <oskari@saarenmaa.fi> - 0.2-0
+* Thu Dec 23 2010 Oskari Saarenmaa <os@ohmu.fi> - 0.2-0
 - Initial.

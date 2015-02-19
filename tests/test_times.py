@@ -32,7 +32,7 @@ class PlugIn(config.PlugIn):
 """
 
 class TestClockedOps(Helper):
-    def setup(self):
+    def setup_method(self, method):
         Helper.setup(self)
         self.poni = self.repo_and_config("node", "conf", plugin_text)
         self.time_log = self.temp_file()

@@ -1,4 +1,4 @@
-from nose import SkipTest
+from pytest import skip
 from poni import tool, vc
 from helper import *
 import subprocess
@@ -6,9 +6,9 @@ import subprocess
 
 class TestVersionControl(Helper):
     @classmethod
-    def setupClass(cls):
+    def setup_class(cls):
         if not vc.git:
-            raise SkipTest("GitPython not installed or too old")
+            skip("GitPython not installed or too old")
 
     def git(self, repo, cmd):
         full_cmd = ["git",

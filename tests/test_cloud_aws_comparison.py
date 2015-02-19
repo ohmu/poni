@@ -1,10 +1,10 @@
-from nose import SkipTest
+from pytest import skip
 from poni import cloud, cloud_aws
 
 def test_hash():
     """validate aws provider hash and comparison implementation"""
     if not cloud_aws.boto_is_current:
-        raise SkipTest("boto is not installed or is too old")
+        skip("boto is not installed or is too old")
     sky = cloud.Sky()
     east_prop = dict(provider="aws-ec2", region="us-east-1")
     east1 = sky.get_provider(east_prop)

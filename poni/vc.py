@@ -83,7 +83,7 @@ class GitVersionControl(VersionControl):
 
 
 def create_vc(repo_dir):
-    if (path(repo_dir) / ".git").exists():
+    if (path(repo_dir) / ".git").exists():  # pylint: disable=E1120
         return GitVersionControl(repo_dir)
     else:
         return None

@@ -1,4 +1,5 @@
-rst2html=rst2html
+PYTHON ?= python
+rst2html ?= rst2html
 
 all: poni/version.py dist doc readme
 
@@ -33,27 +34,20 @@ build-dep:
 	apt-get --yes install python-setuptools python-docutils python-sphinx lynx
 
 test-dep:
-	apt-get --yes install pep8 pylint python-nose \
+	apt-get --yes install pep8 pylint python-pytest \
 		python-argh python-boto python-cheetah python-genshi python-git
 
 pep8:
 	pep8 --ignore=E501 poni/*.py
 
 pylint:
-	python -m pylint.lint --rcfile=pylintrc poni/*.py
+	if $(PYTHON) -m pylint.lint --help-msg C0330 | grep -qF bad-continuation; \
+	then $(PYTHON) -m pylint.lint --rcfile pylintrc --disable=C0325,C0330 poni; \
+	else $(PYTHON) -m pylint.lint --rcfile pylintrc poni; \
+	fi
 
 tests:
-	nosetests --processes=2 -v
-
-coverage:
-	nosetests --with-coverage --cover-package=poni --cover-html
-
-travis:
-	# Travis does a shallow clone and won't find tags with git describe
-	echo "__version__ = '0.7-travis'" > poni/version.py
-	git fetch https://github.com/jaraco/path.py 5.1
-	git cat-file blob FETCH_HEAD:path.py > path.py
-	make all pylint tests
+	PYTHONPATH=. $(PYTHON) -m pytest -vv tests
 
 .PHONY: readme
 .PHONY: coverage

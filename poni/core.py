@@ -39,7 +39,7 @@ g_cache_reset_counter = 0
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
     target_dir = path(root) / name
-    exists = target_dir.exists()
+    exists = target_dir.exists()  # pylint: disable=E1120
     if (not must_exist) and exists:
         raise errors.UserError("%s %r already exists" % (typename, name))
     elif must_exist and (not exists):
@@ -504,16 +504,17 @@ class ConfigMan(object):
                 sys.path.insert(0, lib_path)
 
     def init_repo(self):
-        if self.config_path.exists():
+        if self.config_path.exists():  # pylint: disable=E1120
             raise errors.Error("repository '%s' already initialized" % (
                     self.root_dir))
 
         try:
-            if not self.system_root.exists():
-                self.system_root.makedirs()
+            if not self.system_root.exists():  # pylint: disable=E1120
+                self.system_root.makedirs()  # pylint: disable=E1120
 
             util.json_dump({}, self.config_path)
-            (self.root_dir / "poni.id").write_bytes("""
+            (self.root_dir / "poni.id").write_bytes(  # pylint: disable=E1120
+            """
             eJy1l7uOJCcUhvN5ipKQKkK1EogASKCSIiEiIbZlGSSvd3VYv7//Q1+2dy5yte09
             0nRXMwUf5w7L8oNszpNcfpK83B6CcItc3PhZoBvMWQIMotfU339N+u3/gbl9W7bC
             sFFrvQy/XVrK7b3hZ2Fx28iWVQDmhpFzRfdm3U067x0+3H+AyapHLR4LeeqDlN88
@@ -588,13 +589,13 @@ class ConfigMan(object):
 
     def create_system(self, name):
         system_dir = self.get_system_dir(name, must_exist=False)
-        system_dir.makedirs()
+        system_dir.makedirs()  # pylint: disable=E1120
         spec_file = system_dir / SYSTEM_CONF_FILE
         util.json_dump({}, spec_file)
         return system_dir
 
     def system_exists(self, name):
-        return (path(self.system_root) / name).exists()
+        return (path(self.system_root) / name).exists()  # pylint: disable=E1120
 
     def create_node(self, node, host=None, parent_node_name=None,
                     copy_props=None):
@@ -603,7 +604,7 @@ class ConfigMan(object):
             self.create_system(system_dir)
 
         node_dir = self.get_node_dir(system_dir, node_name, must_exist=False)
-        node_dir.makedirs()
+        node_dir.makedirs()  # pylint: disable=E1120
         spec_file = node_dir / NODE_CONF_FILE
 
         if copy_props and parent_node_name:

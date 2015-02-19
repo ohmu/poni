@@ -19,7 +19,7 @@ from . import util
 from . import vc
 from . import version
 from . import work
-from distutils.version import LooseVersion
+from distutils.version import LooseVersion  # pylint: disable=E0611
 from path import path
 import argh
 import argparse
@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore", ".*", exceptions.Warning, "argh.completion")
 try:
     from argh import named as argh_named
 except ImportError:
-    from argh import alias as argh_named
+    from argh import alias as argh_named  # pylint: disable=E0611
 
 
 TOOL_NAME = "poni"
@@ -1055,7 +1055,7 @@ class Tool(object):
             found = True
             converters = {
                 "prop": (
-                    lambda x: util.get_dict_prop(dict(node=item), x.split("."),  # pylint: disable=W0631
+                    lambda x: util.get_dict_prop(dict(node=item), x.split("."),  # pylint: disable=W0631, W0640
                                                  verify=True)[1],
                     None
                     )
@@ -1388,8 +1388,8 @@ class Tool(object):
             set_list = []
             converters = {
                 "prop": (
-                    lambda x: util.get_dict_prop(dict(node=conf_node,
-                                                      config=conf),  # pylint: disable=W0631
+                    lambda x: util.get_dict_prop(dict(node=conf_node,  # pylint: disable=W0640
+                                                      config=conf),  # pylint: disable=W0631, W0640
                                                  x.split("."),
                                                  verify=True)[1],
                     None
