@@ -1156,6 +1156,8 @@ class PoniLVDom(object):
         self.dom.revertToSnapshot(snap, libvirt.VIR_DOMAIN_SNAPSHOT_REVERT_FORCE)
 
 
+_IP_ADDR_SPLIT_RE = re.compile("^[0-9]+: ", flags=re.MULTILINE)
+
 def parse_ip_addr(data):
     """Parse addresses from 'ip addr' output"""
     # 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP qlen 1000
@@ -1164,7 +1166,7 @@ def parse_ip_addr(data):
     #        valid_lft 85266sec preferred_lft 85266sec
     #     inet6 2001:1bc8:100:6::f301/64 scope global
     #        valid_lft forever preferred_lft forever
-    for iface in re.split("^[0-9]+: ", data.strip(), flags=re.MULTILINE):
+    for iface in _IP_ADDR_SPLIT_RE.split(data.strip()):
         if not iface:
             continue
         lines = [l.strip() for l in iface.splitlines()]
