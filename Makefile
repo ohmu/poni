@@ -41,7 +41,10 @@ pep8:
 	pep8 --ignore=E501 poni/*.py
 
 pylint:
-	python -m pylint.lint --rcfile=pylintrc poni/*.py
+	if $(PYTHON) -m pylint.lint --help-msg C0330 | grep -qF bad-continuation; \
+	then $(PYTHON) -m pylint.lint --rcfile pylintrc --disable=C0325,C0330 poni; \
+	else $(PYTHON) -m pylint.lint --rcfile pylintrc poni; \
+	fi
 
 tests:
 	PYTHONPATH=. $(PYTHON) -m pytest -vv tests

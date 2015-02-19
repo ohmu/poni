@@ -10,12 +10,12 @@ See LICENSE for details.
 # pylint: disable=E1101
 
 from collections import defaultdict
+from distutils.version import LooseVersion  # pylint: disable=E0611
 import copy
 import logging
 import os
 import re
 import time
-from distutils.version import LooseVersion
 
 from . import errors
 from . import cloudbase

@@ -13,5 +13,5 @@ disable=I,R,C0111,C0103,F0401,R0201,W0612,W0613,C0301,C0302,W0511,W0212,W0142,W0
 # C0330: Wrong hanging indentation.
 
 [REPORTS]
-include-ids=yes
 reports=no
+msg-template={msg_id}:{line:3d},{column}: {obj}: {msg}
