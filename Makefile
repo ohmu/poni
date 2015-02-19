@@ -49,13 +49,6 @@ pylint:
 tests:
 	PYTHONPATH=. $(PYTHON) -m pytest -vv tests
 
-travis:
-	# Travis does a shallow clone and won't find tags with git describe
-	echo "__version__ = '0.7-travis'" > poni/version.py
-	git fetch https://github.com/jaraco/path.py 5.1
-	git cat-file blob FETCH_HEAD:path.py > path.py
-	make all pylint tests
-
 .PHONY: readme
 .PHONY: coverage
 .PHONY: tests
