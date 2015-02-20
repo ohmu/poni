@@ -1,4 +1,5 @@
 from __future__ import print_function
+from pytest import skip
 from poni import template
 from poni import tool
 from helper import *
@@ -32,6 +33,9 @@ g_vars = {
 
 class TestTemplates(Helper):
     def test_xml_template(self):
+        if not template.genshi:
+            skip("Genshi not available")
+
         poni, repo = self.init_repo()
 
         # add template config
@@ -87,6 +91,8 @@ class TestTemplates(Helper):
                 "template {0!r}, expected {1!r}, got {2!r}".format(tmpl, exp, res)
 
     def test_render_cheetah(self):
+        if not template.CheetahTemplate:
+            skip("CheetahTemplate not available")
         for tmpl, exp in self.name_tests.items():
             res = template.render_cheetah(tmpl, None, g_vars)
             assert exp == res, \

@@ -635,6 +635,11 @@ class PlugIn(object):
         return self.cached_template(("name", hash(name)),
                                     lambda: template.render_name(name, None, names or self.get_names()))
 
+    def render_name_template(self, source_path, dest_path, source_text=None):
+        if source_path:
+            source_text = open(source_path).read()
+        return (self.render_name(dest_path), self.render_name(source_text))
+
     def render_cheetah(self, source_path, dest_path, source_text=None):
         if source_text and ("$" not in source_text) and ("#" not in source_text):
             return (self.render_name(dest_path), source_text)  # skip rendering in trivial cases

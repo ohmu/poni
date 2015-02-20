@@ -8,6 +8,10 @@ single_file_plugin_text = """
 from poni import config
 
 class PlugIn(config.PlugIn):
+    def __init__(self, *a, **kwa):
+        super(PlugIn, self).__init__(*a, **kwa)
+        self.render = self.render_name_template
+
     def add_actions(self):
         self.add_file("%(source)s", dest_path="%(dest)s", auto_override=%(override)s)
 """
@@ -99,7 +103,7 @@ class TestCommands(Helper):
             node = "test"
             script_file = self.temp_file()
             with open(script_file, "w") as f:
-                f.write("add-node %s\nset %s foo=bar" % (node, node))
+                f.write("# poni.template: name\nadd-node %s\nset %s foo=bar" % (node, node))
             assert not poni.run(["script", script_file])
             node_config = os.path.join(repo, "system", node, "node.json")
             with open(node_config, "r") as f:
