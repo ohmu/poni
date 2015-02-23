@@ -36,7 +36,7 @@ class TestVersionControl(Helper):
         assert not poni.run(["vc", "init"])
 
         assert os.path.exists(os.path.join(repo, ".git"))
-        assert self.git(repo, ["status", "-s"]) == ""
+        assert self.git(repo, ["status", "-s"]) == b""
 
         return poni, repo
 
@@ -44,7 +44,7 @@ class TestVersionControl(Helper):
         poni, repo = self.vc_init()
         assert not poni.run(["add-node", "foo/bar2"])
         assert not poni.run(["add-config", "foo/bar2", "baz2"])
-        assert "foo/bar2" in self.git(repo, ["status", "-s"])
+        assert b"foo/bar2" in self.git(repo, ["status", "-s"])
         assert not poni.run(["vc", "checkpoint", "checkpoint changes"])
-        assert self.git(repo, ["status", "-s"]) == ""
-        assert "checkpoint changes" in self.git(repo, ["log"])
+        assert self.git(repo, ["status", "-s"]) == b""
+        assert b"checkpoint changes" in self.git(repo, ["log"])

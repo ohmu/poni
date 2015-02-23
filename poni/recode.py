@@ -13,7 +13,13 @@ import re
 import codecs
 import json
 import socket
+import sys
 import uuid
+
+
+if sys.version_info[0] >= 3:
+    unicode = str  # pylint: disable=W0622
+
 
 class Error(Exception):
     """recode error"""
@@ -73,8 +79,10 @@ def to_float(value):
 def to_str(value):
     if value is None:
         return u""
+    elif isinstance(value, unicode):
+        return value
     else:
-        return unicode(value, "ascii")
+        return unicode(value)
 
 
 def from_env(value):
@@ -90,7 +98,7 @@ def from_env(value):
         (env_key, default_value) = (value, None)
 
     try:
-        return unicode(os.environ[env_key], "ascii")
+        return unicode(os.environ[env_key])
     except KeyError:
         if (default_value != None):
             return unicode(default_value)
@@ -108,7 +116,7 @@ def resolve_ip(name, family):
     if not addresses:
         raise EncodeError("name %r does not resolve to any addresses" % name)
 
-    return unicode(addresses[0][-1][0], "ascii")
+    return unicode(addresses[0][-1][0])
 
 def convert_num(cls, value):
     if value is None:
@@ -134,11 +142,11 @@ def to_bool(value):
 
 
 def to_uuid(value):
-    return unicode(str(uuid.UUID(bytes=value)))
+    return unicode(uuid.UUID(bytes=value))
 
 
 def to_uuid4(value):
-    return unicode(str(uuid.uuid4()), "ascii")
+    return unicode(uuid.uuid4())
 
 
 type_conversions = {
@@ -220,6 +228,9 @@ class Codec(object):
     def process(self, input_str):
         result = input_str
         for direction, codec_name, coder in self.chain:
+            # short-circuit decodes from ascii if we're already unicode
+            if codec_name == "ascii" and direction == DECODE and isinstance(result, unicode):
+                continue
             try:
                 result = coder(result)
             except Exception as error:

@@ -60,13 +60,7 @@ class TestCommands(Helper):
             }
 
         node_config = os.path.join(repo, "system", node, "node.json")
-        for key, val in vals.items():
-            if isinstance(val, (str, unicode)):
-                inval = val
-                outval = val
-            else:
-                inval, outval = val
-
+        for key, (inval, outval) in vals.items():
             set_str = "%s%s" % (key, inval)
             assert not poni.run(["set", node, set_str])
 

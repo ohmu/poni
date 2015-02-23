@@ -15,10 +15,17 @@ import copy
 import logging
 import os
 import re
+import sys
 import time
 
 from . import errors
 from . import cloudbase
+
+
+if sys.version_info[0] == 2:
+    string_types = basestring  # pylint: disable=E0602
+else:
+    string_types = str
 
 
 BOTO_REQUIREMENT = LooseVersion("2.5.2")
@@ -73,11 +80,11 @@ class InstanceStarter(object):
 
         self.info_by_id = dict((instance.id, dict(start=time.time()))
                                for instance in self.pending
-                               if not isinstance(instance, basestring))
+                               if not isinstance(instance, string_types))
         self.props_by_id = dict((p["instance"], p) for p in props)
         self.old_instance_id_by_new_id = dict((instance.id, instance.id)
                                               for instance in self.pending
-                                              if not isinstance(instance, basestring))
+                                              if not isinstance(instance, string_types))
         self.convert_id_map = {}
         self.output = {}
         self.conn = self.provider._get_conn()
@@ -210,7 +217,7 @@ class InstanceStarter(object):
         while self.pending:
             summary = defaultdict(int)
             for instance in self.pending[:]:
-                if isinstance(instance, basestring):
+                if isinstance(instance, string_types):
                     summary["spot"] += 1
                     self.check_spot_request_status(instance)
                     continue
@@ -429,7 +436,7 @@ class AwsProvider(cloudbase.Provider):
         conn = self._get_conn()
         extra_tags = cloud_prop.get("extra_tags", {})
         if (not isinstance(extra_tags, dict) or
-            any((not isinstance(k, basestring) or not isinstance(v, basestring)) for k, v in extra_tags.items())):
+            any((not isinstance(k, string_types) or not isinstance(v, string_types)) for k, v in extra_tags.items())):
             raise errors.CloudError(
                 "invalid 'extra_tags' value %r: dict containing str:str mapping required" % (extra_tags,))
 
@@ -492,7 +499,7 @@ class AwsProvider(cloudbase.Provider):
             raise errors.CloudError("'cloud.key_pair' cloud property not set")
 
         security_groups = cloud_prop.get("security_groups") or []
-        if security_groups and isinstance(security_groups, (basestring, unicode)):
+        if security_groups and isinstance(security_groups, string_types):
             security_groups = [security_groups]
         security_group_ids = [self.get_security_group_id(sg_name)
                               for sg_name in security_groups]
@@ -520,9 +527,9 @@ class AwsProvider(cloudbase.Provider):
             return dict(cloud=out_prop)
 
         instance_types = cloud_prop.get("type")
-        if not isinstance(instance_types, (basestring, list, tuple, set)):
+        if not isinstance(instance_types, (string_types, list, tuple, set)):
             raise errors.CloudError("Invalid type for instance types expecting basestring, list, tuple or set")
-        if instance_types and isinstance(instance_types, basestring):
+        if instance_types and isinstance(instance_types, string_types):
             instance_types = [instance_types]
 
         launch_kwargs = dict(
@@ -747,7 +754,7 @@ class AwsProvider(cloudbase.Provider):
         eip_instance_ids = [p["instance"] for p in props if p.get("eip") == "allocate"]
         eip_instances = []
         for instance in self._get_instances(props):
-            if isinstance(instance, basestring):
+            if isinstance(instance, string_types):
                 # spot request
                 conn.cancel_spot_instance_requests([instance])
             else:

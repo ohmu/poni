@@ -14,6 +14,13 @@ from . import colors
 from . import core
 from . import util
 
+if sys.version_info[0] == 2:
+    int_types = (int, long)  # pylint: disable=E0602
+    unicode_types = unicode  # pylint: disable=E0602
+else:
+    int_types = int
+    unicode_types = None
+
 
 class ListOutput(colors.Output):
     def __init__(self, tool, confman, show_nodes=False, show_systems=False,
@@ -58,7 +65,7 @@ class ListOutput(colors.Output):
             }
 
     def value_repr(self, value, top_level=False):
-        if isinstance(value, unicode):
+        if unicode_types and isinstance(value, unicode_types):
             try:
                 value = repr(value.encode("ascii"))
             except UnicodeEncodeError:
@@ -88,7 +95,7 @@ class ListOutput(colors.Output):
             yield value, "str"
         elif isinstance(value, bool):
             yield str(value), "bool"
-        elif isinstance(value, (int, long)):
+        elif isinstance(value, int_types):
             yield str(value), "int"
         else:
             yield repr(value), "red"

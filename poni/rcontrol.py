@@ -204,7 +204,7 @@ class LocalControl(RemoteControl):
     @convert_local_errors
     def write_file(self, file_path, contents, mode=None, owner=None,
                    group=None):
-        f = open(file_path, "wb")
+        f = open(file_path, "wb" if isinstance(contents, bytes) else "w")
         if mode is not None:
             os.chmod(file_path, mode)
 

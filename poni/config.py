@@ -33,6 +33,12 @@ except ImportError:
     from .orddict import OrderedDict
 
 
+if sys.version_info[0] == 2:
+    string_types = basestring  # pylint: disable=E0602
+else:
+    string_types = str
+
+
 class RenderContext(object):
     """Log information about the template upon rendering errors"""
     def __init__(self, entry, target):
@@ -243,7 +249,7 @@ class Manager(object):
                                                identity,
                                                color("---", "header")))
 
-                if isinstance(show_output, (str, unicode)):
+                if isinstance(show_output, string_types):
                     print(show_output)
                 else:
                     diff_colors = {"+": "lgreen", "@": "white", "-": "lred"}
@@ -369,7 +375,7 @@ class Manager(object):
         return error
 
     def add_file(self, tags=None, **kw):
-        tags = ([tags] if isinstance(tags, basestring) else tags) if tags else []
+        tags = ([tags] if isinstance(tags, string_types) else tags) if tags else []
         kw["tags"] = tags
         self.files.append(kw)
 

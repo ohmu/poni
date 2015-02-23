@@ -35,6 +35,12 @@ g_plugin_cache = {}
 g_cache_reset_counter = 0
 
 
+if sys.version_info[0] == 2:
+    string_types = basestring  # pylint: disable=E0602
+else:
+    string_types = str
+
+
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
     target_dir = os.path.join(root, name)
@@ -88,9 +94,9 @@ class Item(dict):
     def __init__(self, typename, system, name, item_dir, conf_file, extra):
         dict.__init__(self)
         assert isinstance(system, (System, type(None)))
-        assert isinstance(typename, (str, unicode))
-        assert isinstance(name, (str, unicode))
-        assert isinstance(item_dir, basestring)
+        assert isinstance(typename, string_types)
+        assert isinstance(name, string_types)
+        assert isinstance(item_dir, string_types)
         assert isinstance(extra, (dict, type(None)))
         self.type = typename
         self.system = system
@@ -329,7 +335,7 @@ class Node(Item):
             item = self
             for part in addr_prop_name.split("."):
                 item = item.get(part)
-                if not isinstance(item, (dict, str, unicode, type(None))):
+                if not isinstance(item, (dict, string_types, type(None))):
                     raise errors.InvalidProperty(
                         "node %s: wrong data type %s found looking for network address at property %r" % (
                             self.name, type(item), addr_prop_name))
@@ -694,7 +700,7 @@ class ConfigMan(object):
 
         pattern = pattern or ""
 
-        if isinstance(pattern, (str, unicode)):
+        if isinstance(pattern, string_types):
             if full_match and not pattern.endswith("$"):
                 pattern += "$"
 
