@@ -744,9 +744,9 @@ class PoniLVConn(object):
         # previously we've just had a number of entries like `disk0` ..
         # `disk7`
         if "disks" not in hardware:
-            hardware["disks"] = [v for k, v in hardware.items() if k.startswith("disk")]
+            hardware["disks"] = [v for k, v in sorted(hardware.items()) if k.startswith("disk")]
         if "nics" not in hardware:
-            hardware["nics"] = [v for k, v in hardware.items() if k.startswith("nic")]
+            hardware["nics"] = [v for k, v in sorted(hardware.items()) if k.startswith("nic")] or [{}]
 
         hypervisor = spec.get("hypervisor", self.hypervisor)
         ram_mb = hardware.get("ram_mb", hardware.get("ram", 1024))
