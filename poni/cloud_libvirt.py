@@ -318,17 +318,16 @@ class LibvirtProvider(Provider):
         """Weighted random selection of a single target host from a list of candidates"""
         # Only consider the entries with the highest priority (lowest service priority value)
         lowest_priority = min(conn.srv_priority for conn in cands)
-        result = sorted(((conn.weight, conn) for conn in cands
-                         if conn.srv_priority == lowest_priority),
-                        reverse=True)
+        result = [conn for conn in cands if conn.srv_priority == lowest_priority]
+        result.sort(key=lambda a: a.weight)
         if not result:
             raise LVPError("No connection available for cloning")
 
-        total_weight = sum(e[0] for e in result)
+        total_weight = sum(e.weight for e in result)
         random_pos = random.random() * total_weight
         weight_pos = 0.0
-        for weight, conn in result:
-            weight_pos += weight
+        for conn in result:
+            weight_pos += conn.weight
             if weight_pos >= random_pos:
                 return conn
 
