@@ -312,7 +312,7 @@ class LibvirtProvider(Provider):
         Terminate instances specified in the given sequence of cloud
         properties dicts.
         """
-        self._vm_async_apply(props, 'delete')
+        return self._vm_async_apply(props, 'delete')
 
     def weighted_random_choice(self, cands):
         """Weighted random selection of a single target host from a list of candidates"""
