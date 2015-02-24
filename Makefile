@@ -22,7 +22,7 @@ README.txt: README.html
 README.html: README.rst LICENSE
 	$(rst2html) $< $@
 
-clean: deb-clean
+clean:
 	$(RM) -r dist/ build/ poni.egg-info/ cover/
 	$(RM) poni/version.py poni/*.pyc tests/*.pyc *.pyc README.html README.txt \
 		examples/puppet/README.html examples/db-cluster/README.html
