@@ -10,13 +10,9 @@ if new_dir:
 else:
     new_dir = "."
 
-long_desc = file("%s/README.rst" % new_dir).read()
+long_desc = open("%s/README.rst" % new_dir).read()
 
-depends = [
-    "paramiko>=1.7.6",
-    "GitPython>=0.3.1",
-    "argh>=0.13",
-    ]
+depends = ["argh>=0.13"]
 
 try:
     import json

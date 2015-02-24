@@ -23,7 +23,7 @@ Pre-requisites
 
 Installing and operating Poni requires:
 
-* Python_ 2.6 (or greater)
+* Python_ 2.6, 2.7 or 3.4 or greater
 * setuptools_ installed
 * Internet connection for downloading the dependency Python packages from PyPI_
 

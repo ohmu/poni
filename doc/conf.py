@@ -56,7 +56,7 @@ copyright = u'2010-2012, Mika Eloranta'
 #
 git_version = subprocess.Popen(["git", "describe", "--long"], stdout=subprocess.PIPE).communicate()[0]
 # The short X.Y version.
-version = git_version.split("-")[0]
+version = git_version.decode("utf-8").split("-")[0]
 # The full version, including alpha/beta/rc tags.
 release = git_version.strip()
 
