@@ -101,7 +101,7 @@ class Item(dict):
         self.type = typename
         self.system = system
         self.name = name
-        self.path = item_dir
+        self.path = PathPyCompat(item_dir)
         self.conf_file = conf_file
         self.update(extra or {})
 
@@ -464,10 +464,16 @@ class System(Item):
             pass
 
 
+class PathPyCompat(str):
+    """Minimal path.py compatibility wrapper for legacy code"""
+    def __div__(self, other):
+        return os.path.join(self, other)
+
+
 class ConfigMan(object):
     def __init__(self, root_dir, must_exist=True):
         # TODO: check repo.json from dir, option to start verification
-        self.root_dir = root_dir
+        self.root_dir = PathPyCompat(root_dir)  # some legacy code assumes this is a path.py object
         self.system_root = os.path.join(self.root_dir, "system")
         self.config_path = os.path.join(self.root_dir, REPO_CONF_FILE)
         self.node_cache = {}
