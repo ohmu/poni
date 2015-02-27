@@ -379,7 +379,7 @@ class LibvirtProvider(Provider):
                     cands = [conn for conn in cands if prop["hosts"]["include"] in conn.host]
 
                 conn = self.weighted_random_choice(cands)
-                self.log.info("cloning %r on %r", instance["vm_name"], conn.host)
+                self.log.info("cloning %r on %r", instance["vm_name"], conn.host_str)
                 vm = conn.clone_vm(instance["vm_name"], prop, overwrite=True)
                 instance["vm_conns"] = [conn]
             else:
@@ -628,6 +628,7 @@ class PoniLVConn(object):
             else:
                 self.host = netloc
         self.port = int(self.port or 22)
+        self.host_str = self.host if self.port == 22 else "{0}:{1}".format(self.host, self.port)
         self.keyfile = keyfile
         self.hypervisor = hypervisor
         self.emulator = None  # the executable launched by lxc guests
@@ -1059,7 +1060,7 @@ class PoniLVDom(object):
 
     @convert_libvirt_errors
     def delete(self):
-        self.log.info("deleting %r on %r", self.name, self.conn.host)
+        self.log.info("deleting %r on %r", self.name, self.conn.host_str)
 
         try:
             self.dom.destroy()
@@ -1116,13 +1117,13 @@ class PoniLVDom(object):
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_online")
     def power_on(self):
-        self.log.info("powering on %r on %r", self.name, self.conn.host)
+        self.log.info("powering on %r on %r", self.name, self.conn.host_str)
         self.dom.create()
 
     @convert_libvirt_errors
     @ignore_libvirt_errors("vm_offline")
     def power_off(self):
-        self.log.info("powering off %r on %r", self.name, self.conn.host)
+        self.log.info("powering off %r on %r", self.name, self.conn.host_str)
         self.dom.destroy()
 
     @convert_libvirt_errors
@@ -1133,7 +1134,7 @@ class PoniLVDom(object):
         if not memory:
             raise LVPError("disk-only snapshots are not supported in libvirt vms at the moment")
         self.log.info("creating %s snapshot %r for %r on %r",
-                      "memory" if memory else "disk-only", name, self.name, self.conn.host)
+                      "memory" if memory else "disk-only", name, self.name, self.conn.host_str)
         flags = 0 if memory else libvirt.VIR_DOMAIN_SNAPSHOT_CREATE_DISK_ONLY
         snapxml = etree.tostring(XMLE.domainsnapshot(
             XMLE.name(name),
@@ -1144,13 +1145,13 @@ class PoniLVDom(object):
     @convert_libvirt_errors
     @ignore_libvirt_errors("snapshot_not_found")
     def remove_snapshot(self, name):
-        self.log.info("removing snapshot %r from %r on %r", name, self.name, self.conn.host)
+        self.log.info("removing snapshot %r from %r on %r", name, self.name, self.conn.host_str)
         snap = self.dom.snapshotLookupByName(name, 0)
         snap.delete(0)
 
     @convert_libvirt_errors
     def revert_to_snapshot(self, name):
-        self.log.info("reverting %r to %r by force on %r", name, self.name, self.conn.host)
+        self.log.info("reverting %r to %r by force on %r", name, self.name, self.conn.host_str)
         snap = self.dom.snapshotLookupByName(name, 0)
         self.dom.revertToSnapshot(snap, libvirt.VIR_DOMAIN_SNAPSHOT_REVERT_FORCE)
 
