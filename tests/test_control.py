@@ -10,22 +10,22 @@ class PlugIn(config.PlugIn):
     @config.control(provides=["foo"])
     @argh.arg("output")
     def foo(self, arg):
-        file(arg.output, "a").write("foo")
+        open(arg.output, "a").write("foo")
 
     @config.control(requires=["foo"])
     @argh.arg("output")
     def bar(self, arg):
-        file(arg.output, "a").write("bar")
+        open(arg.output, "a").write("bar")
 
     @config.control(optional_requires=["foo"])
     @argh.arg("output")
     def baz(self, arg):
-        file(arg.output, "a").write("baz")
+        open(arg.output, "a").write("baz")
 
     @config.control(optional_requires=["xxx"])
     @argh.arg("output")
     def bax(self, arg):
-        file(arg.output, "a").write("bax")
+        open(arg.output, "a").write("bax")
 
 """
 
@@ -36,7 +36,7 @@ class TestControls(Helper):
 
         def cmd_output(cmd, output):
             assert not poni.run(["control", ".", cmd, "--", temp])
-            assert file(temp).read() == output
+            assert open(temp).read() == output
             os.unlink(temp)
 
         cmd_output("foo", "foo")

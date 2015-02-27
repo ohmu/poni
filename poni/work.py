@@ -6,10 +6,13 @@ See LICENSE for details.
 
 """
 
-import time
 import logging
 import threading
-import Queue as queue
+import time
+try:
+    import Queue as queue
+except ImportError:
+    import queue
 
 
 class Task(threading.Thread):

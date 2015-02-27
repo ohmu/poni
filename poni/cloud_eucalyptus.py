@@ -10,7 +10,10 @@ See LICENSE for details.
 """
 import logging
 import os
-import urlparse
+try:
+    from urllib.parse import urlsplit  # pylint: disable=E0611
+except ImportError:
+    from urlparse import urlsplit
 
 from . import errors
 
@@ -52,7 +55,7 @@ class EucalyptusProvider(cloud_aws.AwsProvider):
                                         % env_key)
 
         try:
-            parsed_url = urlparse.urlsplit(os.environ.get("EC2_URL"))
+            parsed_url = urlsplit(os.environ.get("EC2_URL"))
             host, port = parsed_url.netloc.split(':', 1)  # pylint: disable=E1103
             port = int(port)
         except (ValueError, AttributeError):

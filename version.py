@@ -18,9 +18,9 @@ def get_project_version(version_file):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         proc.stderr.close()
-        git_ver = proc.stdout.readline().strip()
+        git_ver = proc.stdout.readline().strip().decode("utf-8")
         if git_ver and ((git_ver != file_ver) or not file_ver):
-            file(version_file, "wt").write("__version__ = '%s'\n" % git_ver)
+            open(version_file, "w").write("__version__ = '%s'\n" % git_ver)
             return git_ver
     except:
         pass

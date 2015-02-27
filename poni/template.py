@@ -8,26 +8,33 @@ See LICENSE for details.
 """
 
 from . import errors
-from cStringIO import StringIO
+from io import StringIO
 import re
+import sys
+
+
+if sys.version_info[0] == 2:
+    string_types = basestring  # pylint: disable=E0602
+else:
+    string_types = str
+
 
 try:
     # https://github.com/cheetahtemplate/cheetah/commit/bbca0d9e1db4710b523271399b3fae89d9993eb7
     from os.path import splitdrive
     import Cheetah.convertTmplPathToModuleName
-    _unitrans = unicode(Cheetah.convertTmplPathToModuleName._pathNameTransChars)
+    _unitrans = unicode(Cheetah.convertTmplPathToModuleName._pathNameTransChars)  # pylint: disable=E0602
     def _patched_convertTmplPathToModuleName(tmplPath):
         try:
             return splitdrive(tmplPath)[1].translate(_unitrans)
         except (UnicodeError, TypeError):
-            return unicode(splitdrive(tmplPath)[1]).translate(_unitrans)
+            return unicode(splitdrive(tmplPath)[1]).translate(_unitrans)  # pylint: disable=E0602
     Cheetah.convertTmplPathToModuleName.convertTmplPathToModuleName = _patched_convertTmplPathToModuleName
 
     import Cheetah.Template
     from Cheetah.Template import Template as CheetahTemplate
 
     import random
-    import sys
 
     # https://github.com/cheetahtemplate/cheetah/pull/2
     def _patched_genUniqueModuleName(baseModuleName):
@@ -86,7 +93,7 @@ def render_name(source_text, source_path, variables):
                 node = getattr(node, part)
         if callable(node):
             node = node(*eval("(" + targs)) if targs else node()  # pylint: disable=W0123
-        if not isinstance(node, basestring):
+        if not isinstance(node, string_types):
             node = str(node)
         return node
     return _name_re.sub(sub, source_text)

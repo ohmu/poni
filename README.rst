@@ -23,7 +23,7 @@ Pre-requisites
 
 Installing and operating Poni requires:
 
-* Python_ 2.6 (or greater)
+* Python_ 2.6, 2.7 or 3.4 or greater
 * setuptools_ installed
 * Internet connection for downloading the dependency Python packages from PyPI_
 
@@ -52,10 +52,9 @@ Building HTML files from the included ReST_ documentation requires:
 
 Installation
 ============
-NOTE: during installation the following packages and their dependencies are
+NOTE: during installation the following package and its dependencies are
 automatically installed from PyPI_:
 
-* `path.py`_ (directory and file management)
 * Argh_ (command-line argument parsing)
 
 Installing the following Python libraries will add optional functionality:
@@ -75,7 +74,6 @@ Installing the following Python libraries will add optional functionality:
 .. _`Amazon EC2`: http://aws.amazon.com/ec2/
 .. _Paramiko: http://pypi.python.org/pypi/paramiko
 .. _Boto: http://pypi.python.org/pypi/boto
-.. _`path.py`: http://pypi.python.org/pypi/path.py
 .. _Argh: http://pypi.python.org/pypi/argh
 .. _GitPython: http://pypi.python.org/pypi/GitPython
 .. _Cheetah: http://pypi.python.org/pypi/Cheetah

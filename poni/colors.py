@@ -5,6 +5,7 @@ Copyright (c) 2010-2012 Mika Eloranta
 See LICENSE for details.
 
 """
+from __future__ import print_function
 
 CODES = {
     'reset': '\033[0;m',
@@ -74,5 +75,5 @@ class Output(object):
 
 
 if __name__ == "__main__":
-    for name, code in sorted(CODES.iteritems()):
-        print "%s%s%s" % (code, name, CODES["reset"])
+    for name, code in sorted(CODES.items()):
+        print("%s%s%s" % (code, name, CODES["reset"]))

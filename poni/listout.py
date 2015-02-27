@@ -8,10 +8,18 @@ See LICENSE for details.
 
 """
 
+import os
 import sys
 from . import colors
 from . import core
 from . import util
+
+if sys.version_info[0] == 2:
+    int_types = (int, long)  # pylint: disable=E0602
+    unicode_types = unicode  # pylint: disable=E0602
+else:
+    int_types = int
+    unicode_types = None
 
 
 class ListOutput(colors.Output):
@@ -57,7 +65,7 @@ class ListOutput(colors.Output):
             }
 
     def value_repr(self, value, top_level=False):
-        if isinstance(value, unicode):
+        if unicode_types and isinstance(value, unicode_types):
             try:
                 value = repr(value.encode("ascii"))
             except UnicodeEncodeError:
@@ -71,7 +79,7 @@ class ListOutput(colors.Output):
             if not top_level:
                 yield "{", None
 
-            for i, (key, value) in enumerate(sorted(value.iteritems())):
+            for i, (key, value) in enumerate(sorted(value.items())):
                 if i > 0:
                     yield ", ", None
 
@@ -87,7 +95,7 @@ class ListOutput(colors.Output):
             yield value, "str"
         elif isinstance(value, bool):
             yield str(value), "bool"
-        elif isinstance(value, (int, long)):
+        elif isinstance(value, int_types):
             yield str(value), "int"
         else:
             yield repr(value), "red"
@@ -103,7 +111,7 @@ class ListOutput(colors.Output):
 
     def format_layer(self, entry):
         yield "#%d: %s: %s" % (entry["index"], entry["layer"],
-                               entry["file_path"].basename()), "layer"
+                               os.path.basename(entry["file_path"])), "layer"
 
     def format_prop(self, entry):
         return self.value_repr(entry["prop"], top_level=True)

@@ -12,8 +12,7 @@ from . import rcontrol_all
 from . import util
 from . import vc
 from .util import json
-from path import path
-import errno
+import codecs
 import imp
 import os
 import re
@@ -36,10 +35,16 @@ g_plugin_cache = {}
 g_cache_reset_counter = 0
 
 
+if sys.version_info[0] == 2:
+    string_types = basestring  # pylint: disable=E0602
+else:
+    string_types = str
+
+
 def ensure_dir(typename, root, name, must_exist):
     """validate dir 'name' under 'root': dir either 'must_exist' or not"""
-    target_dir = path(root) / name
-    exists = target_dir.exists()  # pylint: disable=E1120
+    target_dir = os.path.join(root, name)
+    exists = os.path.exists(target_dir)
     if (not must_exist) and exists:
         raise errors.UserError("%s %r already exists" % (typename, name))
     elif must_exist and (not exists):
@@ -89,9 +94,9 @@ class Item(dict):
     def __init__(self, typename, system, name, item_dir, conf_file, extra):
         dict.__init__(self)
         assert isinstance(system, (System, type(None)))
-        assert isinstance(typename, (str, unicode))
-        assert isinstance(name, (str, unicode))
-        assert isinstance(item_dir, path)
+        assert isinstance(typename, string_types)
+        assert isinstance(name, string_types)
+        assert isinstance(item_dir, string_types)
         assert isinstance(extra, (dict, type(None)))
         self.type = typename
         self.system = system
@@ -113,7 +118,7 @@ class Item(dict):
 
     def showable(self):
         """Yields (key, value) for all items visible by default"""
-        for k, v in sorted(self.iteritems()):
+        for k, v in sorted(self.items()):
             if k not in DONT_SHOW:
                 yield k, v
 
@@ -125,7 +130,7 @@ class Item(dict):
         Returns list of changes made: [(item_key, old_value, new_value)]
         """
         changes = []
-        for key_str, value in props.iteritems():
+        for key_str, value in props.items():
             old_value = util.set_dict_prop(self, key_str.split("."), value)
             changes.append((key_str, old_value, value))
 
@@ -138,7 +143,7 @@ class Item(dict):
         Returns a list of changes made: [(prop_name, old_value, new_value)]
         """
         changes = []
-        for key, value in updates.iteritems():
+        for key, value in updates.items():
             old = self.get(key)
             if old != value:
                 self[key] = value
@@ -148,7 +153,7 @@ class Item(dict):
 
     def saveable(self):
         """Yields (key, value) for all properties that should be saved"""
-        for k, v in sorted(self.iteritems()):
+        for k, v in sorted(self.items()):
             if k not in DONT_SAVE:
                 yield k, v
 
@@ -182,10 +187,11 @@ class Item(dict):
 class Config(Item):
     def __init__(self, node, name, config_dir, extra=None):
         Item.__init__(self, "config", None, name, config_dir,
-                      config_dir / CONFIG_CONF_FILE, extra)
+                      os.path.join(config_dir, CONFIG_CONF_FILE),
+                      extra)
         self.update(json.load(open(self.conf_file)))
         self.node = node
-        self.settings_dir = self.path / SETTINGS_DIR
+        self.settings_dir = os.path.join(self.path, SETTINGS_DIR)
         # TODO: lazy-load settings
         self.settings = newconfig.Config(self.get_settings_dirs())
         self.controls = None
@@ -218,15 +224,15 @@ class Config(Item):
 
     def load_settings_layer(self, file_name):
         try:
-            return json.load((self.settings_dir / file_name).open())
+            return json.load(open(os.path.join(self.settings_dir, file_name)))
         except (IOError, OSError):
             return {}
 
     def save_settings_layer(self, file_name, layer):
-        if not self.settings_dir.exists():
-            self.settings_dir.mkdir()
+        if not os.path.exists(self.settings_dir):
+            os.mkdir(self.settings_dir)
 
-        full_path = self.settings_dir / file_name
+        full_path = os.path.join(self.settings_dir, file_name)
         util.json_dump(layer, full_path)
         self.settings.reload()
 
@@ -240,18 +246,18 @@ class Config(Item):
         yield self.full_name, self.settings_dir
 
     def saveable(self):
-        return self.iteritems()
+        return self.items()
 
     def showable(self):
         dont_show = set(["node", "name", "path", "settings_dir", "conf"])
-        for k, v in sorted(self.iteritems()):
+        for k, v in sorted(self.items()):
             if k not in dont_show:
                 yield k, v
 
     def collect(self, manager, node, top_config=None):
         top_config = top_config or self
-        plugin_path = self.path / PLUGIN_FILE
-        if not plugin_path.exists():
+        plugin_path = os.path.join(self.path, PLUGIN_FILE)
+        if not os.path.exists(plugin_path):
             # no plugin, nothing to verify
             return
 
@@ -303,7 +309,7 @@ class Config(Item):
 class Node(Item):
     def __init__(self, confman, system, name, item_dir, extra=None):
         Item.__init__(self, "node", system, name, item_dir,
-                      item_dir / NODE_CONF_FILE, extra)
+                      os.path.join(item_dir, NODE_CONF_FILE), extra)
         self.confman = confman
         self._remotes = {}
         self.config_cache = {}
@@ -329,7 +335,7 @@ class Node(Item):
             item = self
             for part in addr_prop_name.split("."):
                 item = item.get(part)
-                if not isinstance(item, (dict, str, unicode, type(None))):
+                if not isinstance(item, (dict, string_types, type(None))):
                     raise errors.InvalidProperty(
                         "node %s: wrong data type %s found looking for network address at property %r" % (
                             self.name, type(item), addr_prop_name))
@@ -360,8 +366,8 @@ class Node(Item):
         return remote
 
     def add_config(self, config, parent=None, copy_dir=None):
-        config_dir = self.path / CONFIG_DIR / config
-        if config_dir.exists():
+        config_dir = os.path.join(self.path, CONFIG_DIR, config)
+        if os.path.exists(config_dir):
             raise errors.UserError(
                 "%s: config %r already exists" % (self.name, config))
 
@@ -372,41 +378,40 @@ class Node(Item):
                 raise errors.Error("copying config files failed: %s: %s" % (
                         error.__class__.__name__, error))
         else:
-            config_dir.makedirs()
+            os.makedirs(config_dir)
 
-        conf_file = config_dir / CONFIG_CONF_FILE
+        conf_file = os.path.join(config_dir, CONFIG_CONF_FILE)
         conf = {}
         if parent:
             conf["parent"] = parent
 
         util.json_dump(conf, conf_file)
 
-        settings_dir = config_dir / SETTINGS_DIR
-        if not settings_dir.exists():
-            settings_dir.mkdir()  # pre-created so it is there for copying files
+        settings_dir = os.path.join(config_dir, SETTINGS_DIR)
+        if not os.path.exists(settings_dir):
+            os.mkdir(settings_dir)  # pre-created so it is there for copying files
 
     def remove_config(self, config):
-        config_dir = self.path / CONFIG_DIR / config
-        if not config_dir.exists():
+        config_dir = os.path.join(self.path, CONFIG_DIR, config)
+        if not os.path.exists(config_dir):
             raise errors.UserError(
                 "%s: config %r doest not exist" % (self.name, config))
 
         shutil.rmtree(config_dir)
 
     def iter_configs(self):
-        config_dir = self.path / CONFIG_DIR
-        try:
-            dirs = config_dir.dirs()
-        except OSError as error:
-            if error.errno == errno.ENOENT:
-                return
-            else:
-                raise
+        config_dir = os.path.join(self.path, CONFIG_DIR)
+        dirs = []
+        if os.path.exists(config_dir):
+            for dir_entry in os.listdir(config_dir):
+                config_path = os.path.join(config_dir, dir_entry)
+                if os.path.isdir(config_path):
+                    dirs.append(config_path)
 
         for config_path in dirs:
             conf = self.config_cache.get(config_path)
             if conf is None:
-                conf = Config(self, config_path.basename(), config_path)
+                conf = Config(self, os.path.basename(config_path), config_path)
                 self.config_cache[config_path] = conf
 
             yield conf
@@ -421,7 +426,7 @@ class Node(Item):
         parent_name = self.get("parent")
         if parent_name:
             # collect configs from parent node
-            parent_path = self.confman.system_root / parent_name
+            parent_path = os.path.join(self.confman.system_root, parent_name)
             parent_node = self.confman.get_node(parent_path, self.system)
             for conf in parent_node.iter_all_configs(handled=handled):
                 yield conf
@@ -435,7 +440,7 @@ class Node(Item):
         parent_name = self.get("parent")
         if parent_name:
             # collect configs from parent node
-            parent_path = self.confman.system_root / parent_name
+            parent_path = os.path.join(self.confman.system_root, parent_name)
             parent_node = self.confman.get_node(parent_path, self.system)
             for conf in parent_node.iter_configs():
                 conf.collect(manager, node)
@@ -451,7 +456,7 @@ class Node(Item):
 class System(Item):
     def __init__(self, system, name, system_path, sub_count, extra=None):
         Item.__init__(self, "system", system, name, system_path,
-                      system_path / SYSTEM_CONF_FILE, extra)
+                      os.path.join(system_path, SYSTEM_CONF_FILE), extra)
         self["sub_count"] = sub_count
         try:
             self.update(json.load(open(self.conf_file)))
@@ -462,9 +467,9 @@ class System(Item):
 class ConfigMan(object):
     def __init__(self, root_dir, must_exist=True):
         # TODO: check repo.json from dir, option to start verification
-        self.root_dir = path(root_dir)
-        self.system_root = self.root_dir / "system"
-        self.config_path = self.root_dir / REPO_CONF_FILE
+        self.root_dir = root_dir
+        self.system_root = os.path.join(self.root_dir, "system")
+        self.config_path = os.path.join(self.root_dir, REPO_CONF_FILE)
         self.node_cache = {}
         self.node_addr_cache = {}
         self.find_cache = {}
@@ -495,26 +500,23 @@ class ConfigMan(object):
     def apply_library_paths(self, path_dict):
         """add repo's custom library include paths to sys.path"""
         for lib_path in path_dict.values():
-            lib_path = path(lib_path)
-            if not lib_path.isabs():
-                lib_path = self.root_dir / lib_path
-
-            lib_path = str(lib_path)
+            if not os.path.isabs(lib_path):
+                lib_path = os.path.join(self.root_dir, lib_path)
             if not lib_path in sys.path:
                 sys.path.insert(0, lib_path)
 
     def init_repo(self):
-        if self.config_path.exists():  # pylint: disable=E1120
+        if os.path.exists(self.config_path):
             raise errors.Error("repository '%s' already initialized" % (
                     self.root_dir))
 
         try:
-            if not self.system_root.exists():  # pylint: disable=E1120
-                self.system_root.makedirs()  # pylint: disable=E1120
+            if not os.path.exists(self.system_root):
+                os.makedirs(self.system_root)
 
             util.json_dump({}, self.config_path)
-            (self.root_dir / "poni.id").write_bytes(  # pylint: disable=E1120
-            """
+            with open(os.path.join(self.root_dir, "poni.id"), "wb") as f:
+                f.write(codecs.decode(codecs.decode(b"""
             eJy1l7uOJCcUhvN5ipKQKkK1EogASKCSIiEiIbZlGSSvd3VYv7//Q1+2dy5yte09
             0nRXMwUf5w7L8oNszpNcfpK83B6CcItc3PhZoBvMWQIMotfU339N+u3/gbl9W7bC
             sFFrvQy/XVrK7b3hZ2Fx28iWVQDmhpFzRfdm3U067x0+3H+AyapHLR4LeeqDlN88
@@ -542,8 +544,7 @@ class ConfigMan(object):
             SdVmYo95phNo7/0ZmFJjkx3etieDf+WqzI1wkMCJ+ymYhhE3rqfq5DUYWcb9hWGt
             OlxFzsN67rgOmn7q0nSfNOZJGSeRfY1qO51nm2/7yjeYs9f7gSJc5zETrVrhznA2
             9GXhoKj2JGeKK56MXo+Ii1G/nKVO9rM+/u0NfuNWxPcxro0vd1z79u2r+/Tp9/6t
-            /fXL9uuXz58+//bHF/r09cuf/eXlb2jrYlE="""
-            .decode("base64").decode("zlib"))
+            /fXL9uuXz58+//bHF/r09cuf/eXlb2jrYlE=""", "base64"), "zlib"))
         except (OSError, IOError) as error:
             raise errors.RepoError("repository '%s' init failed: %s: %s" % (
                     self.root_dir, error.__class__.__name__, error))
@@ -556,7 +557,7 @@ class ConfigMan(object):
         libpath[name] = lib_path
 
         # apply the path to sys.path
-        sys_lib_path = lib_path if path(lib_path).isabs() else (self.root_dir / lib_path)
+        sys_lib_path = lib_path if os.path.isabs(lib_path) else os.path.join(self.root_dir, lib_path)
         if sys_lib_path not in sys.path:
             sys.path.insert(0, sys_lib_path)
 
@@ -577,7 +578,7 @@ class ConfigMan(object):
         util.json_dump(conf, self.config_path)
 
     def cleanup(self):
-        for node in self.node_cache.itervalues():
+        for node in self.node_cache.values():
             node.cleanup()
 
     def get_system_dir(self, name, must_exist=True):
@@ -589,27 +590,27 @@ class ConfigMan(object):
 
     def create_system(self, name):
         system_dir = self.get_system_dir(name, must_exist=False)
-        system_dir.makedirs()  # pylint: disable=E1120
-        spec_file = system_dir / SYSTEM_CONF_FILE
+        os.makedirs(system_dir)
+        spec_file = os.path.join(system_dir, SYSTEM_CONF_FILE)
         util.json_dump({}, spec_file)
         return system_dir
 
     def system_exists(self, name):
-        return (path(self.system_root) / name).exists()  # pylint: disable=E1120
+        return os.path.exists(os.path.join(self.system_root, name))
 
     def create_node(self, node, host=None, parent_node_name=None,
                     copy_props=None):
-        system_dir, node_name = path(node).splitpath()
+        system_dir, node_name = os.path.split(node)
         if not self.system_exists(system_dir):
             self.create_system(system_dir)
 
         node_dir = self.get_node_dir(system_dir, node_name, must_exist=False)
-        node_dir.makedirs()  # pylint: disable=E1120
-        spec_file = node_dir / NODE_CONF_FILE
+        os.makedirs(node_dir)
+        spec_file = os.path.join(node_dir, NODE_CONF_FILE)
 
         if copy_props and parent_node_name:
-            parent_node_conf = (self.system_root / parent_node_name
-                                / NODE_CONF_FILE)
+            parent_node_conf = os.path.join(self.system_root, parent_node_name,
+                                            NODE_CONF_FILE)
             spec = json.load(open(parent_node_conf))
         else:
             spec = {}
@@ -699,7 +700,7 @@ class ConfigMan(object):
 
         pattern = pattern or ""
 
-        if isinstance(pattern, (str, unicode)):
+        if isinstance(pattern, string_types):
             if full_match and not pattern.endswith("$"):
                 pattern += "$"
 
@@ -707,18 +708,19 @@ class ConfigMan(object):
 
         match_op = pattern.match if full_match else pattern.search
         current = current or self.system_root
-        node_conf_file = current / NODE_CONF_FILE
+        node_conf_file = os.path.join(current, NODE_CONF_FILE)
         name = current[len(self.system_root) + 1:]
         ok_depth = (not depth) or (curr_depth in depth)
 
-        if node_conf_file.exists():
+        if os.path.exists(node_conf_file):
             # this is a node dir
             if nodes and match_op(name) and ok_depth and not exclude(name):
                 yield self.get_node(current, system, extra=extra)
         else:
             # system dir
-            subdirs = current.dirs()
-            subdirs.sort()
+            subdirs = [os.path.join(current, entry) for entry in os.listdir(current)]
+            subdirs = sorted(entry for entry in subdirs if os.path.isdir(entry))
+
             system = self.get_system(system, name, current, len(subdirs), extra)
             if (systems and (current != self.system_root) and ok_depth
                 and match_op(name)) and not exclude(name):
