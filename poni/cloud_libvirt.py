@@ -467,13 +467,13 @@ class LibvirtProvider(Provider):
                 for iface in addrs:
                     # the first interface is always the one used as the 'private.ip'
                     if not first_addr and iface["hardware-address"] == instance["macs"][0]:
-                        for addr in iface["ip-addresses"]:
+                        for addr in iface.get("ip-addresses", []):
                             if addr["ip-address-type"] == instance["ipproto"]:
                                 first_addr = addr["ip-address"]
                                 break
                     # find the address for the deployment interface
                     if iface["name"] == deploy_if:
-                        for addr in iface["ip-addresses"]:
+                        for addr in iface.get("ip-addresses", []):
                             if addr["ip-address-type"] == instance["ipproto"]:
                                 deploy_addr = addr["ip-address"]
                                 break
@@ -1010,7 +1010,7 @@ class PoniLVPool(object):
         try:
             vol = self.pool.createXML(volxml, 0)
         except libvirt.libvirtError as ex:
-            if not re.search("storage vol( '.*?')? already exists", str(ex)):
+            if ex.get_error_code() != libvirt.VIR_ERR_STORAGE_VOL_EXIST:
                 raise
             if not overwrite:
                 raise LVPError("{0!r} volume already exists".format(name))
