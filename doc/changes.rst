@@ -2,10 +2,34 @@
 Poni Changelog
 ==============
 
-Version 0.7.0
-=============
+Version 0.8
+===========
 :release date: TBD
 
+* Python 3 compatibility
+* ``docker``, ``eucalyptus`` and ``image`` cloud deployment targets
+* Major improvements in ``libvirt`` cloud deployments
+* Support for ``mako`` and basic ``name`` templates
+* Tests use ``py.test`` instead of ``nose``
+* Continuous integration on travis-ci.org
+* Cheetah is now an optional dependency
+* Removed ``path.py`` dependency
+* Various bug fixes and minor improvements
+
+Version 0.7
+===========
+:release date: 2013-01-08
+
+* support for ``libvirt`` cloud provider for deploying to a set of hosts
+  running libvirt
+
+Version 0.6
+===========
+:release date: 2012-12-05
+
+* changed license from MIT to Apache 2.0
+* support for ``vsphere`` cloud provider for deploying to vmware clusters
+* various performance improvements
 * added ``--exclude PATTERN`` support for many commands: allows skipping nodes
   that match a pattern when e.g. running a remote command over multiple nodes
 * optimization: internal cache for loaded plugin modules
