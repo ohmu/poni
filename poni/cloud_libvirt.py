@@ -1026,6 +1026,12 @@ class PoniLVPool(object):
         return vol
 
     def clone_volume(self, source, target, megabytes=None, overwrite=False, voltype=None):
+        if source.endswith("$LATEST"):
+            prefix = source[:-7]
+            candidates = [v for v in self.pool.listVolumes() if v.startswith(prefix)]
+            if not candidates:
+                raise LVPError("no source volume matching {0!r}".format(source))
+            source = sorted(candidates)[-1]
         return self._define_volume(target, megabytes, source, overwrite, voltype)
 
     def delete_volume(self, name):
