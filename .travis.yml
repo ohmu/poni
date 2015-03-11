@@ -11,7 +11,7 @@ install:
 
 script:
   - # Travis does a shallow clone and won't find tags with git describe
-  - echo "__version__ = '0.7-travis'" > poni/version.py
+  - echo "__version__ = '0.8-travis'" > poni/version.py
   - make all rst2html=rst2html.py
   - "(python -V 2>&1 | grep -qF 'Python 2.6') || make pylint"
   - make tests

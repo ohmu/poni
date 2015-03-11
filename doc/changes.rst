@@ -4,7 +4,7 @@ Poni Changelog
 
 Version 0.8
 ===========
-:release date: TBD
+:release date: 2015-03-11
 
 * Python 3 compatibility
 * ``docker``, ``eucalyptus`` and ``image`` cloud deployment targets
