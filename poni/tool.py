@@ -695,7 +695,7 @@ class Tool(object):
                             pp(source)))
 
             except OSError as err:
-                raise errors.UserError("invalid copy source {0}: {1.__class__.__name__}: {1}".format(
+                raise errors.UserError("invalid copy source {0}: {1.__class__.__name__}: {1}".format(  # pylint: disable=E1306
                         pp(source), err))
 
         def copy_file_or_dir(node, remote, source_path, dest_dir):
@@ -703,7 +703,7 @@ class Tool(object):
                 remote.stat(dest_dir)
             except errors.RemoteError as err:
                 if not "Errno 2" in str(err):
-                    raise errors.UserError("{0}: unexpected error checking target directory {1}: {2.__class__.__name__}: {2}".format(
+                    raise errors.UserError("{0}: unexpected error checking target directory {1}: {2.__class__.__name__}: {2}".format(  # pylint: disable=E1306
                             node.name, pp(dest_dir), err))
                 elif not arg.create_dest_dir:
                     raise errors.UserError("{0}: Remote directory {1} does not exist. (use -d to create it)".format(

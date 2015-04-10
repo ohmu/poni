@@ -190,10 +190,10 @@ class TaskPool(ThreadPool):
         try:
             return method(*method_args, **(method_kwargs or {}))
         except errors.Error as error:
-            self.log.fatal("task error: {0.__class__.__name__}: {0}".format(error))
+            self.log.fatal("task error: {0.__class__.__name__}: {0}".format(error))  # pylint: disable=W1202,E1306
             raise
         except Exception as error:
-            self.log.exception("task error: {0.__class__.__name__}: {0}".format(error))
+            self.log.exception("task error: {0.__class__.__name__}: {0}".format(error))  # pylint: disable=W1202,E1306
             raise
 
     def apply_async(self, method, args=(), kwds=None, callback=None):  # pylint: disable=W0221

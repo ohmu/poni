@@ -154,7 +154,7 @@ def convert_libvirt_errors(method):
                 err = "snapshot_exists"
                 msg = "snapshot {0!r} already exists for {1!r}".format(args[0], self.name)
             else:
-                raise LVPError("unexpected libvirt error: {0.__class__.__name__}: {0}".format(ex), code=code)
+                raise LVPError("unexpected libvirt error: {0.__class__.__name__}: {0}".format(ex), code=code)  # pylint: disable=E1306
 
             if err not in getattr(method, "ignore_libvirt_errors", []):
                 raise LVPError(msg, code=code)
@@ -890,7 +890,7 @@ class PoniLVConn(object):
             if name in self.dominfo.vms:
                 break
             time.sleep(2.0)
-            self.log.info("waiting for VM {0} to appear in libvirt hosts... retry #{1}".format(name, retry))
+            self.log.info("waiting for VM %s to appear in libvirt hosts... retry #%r", name, retry)
         else:
             raise LVPError("VM {0} did not appear in time on libvirt hosts".format(name))
 
