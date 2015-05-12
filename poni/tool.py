@@ -1067,7 +1067,7 @@ class Tool(object):
             changes = item.set_properties(props)
             old_value = None
             for key, old_value, new_value in changes:
-                changed = ((type(old_value) != type(new_value))
+                changed = ((type(old_value) != type(new_value))  # pylint: disable=W1504
                            or (old_value != new_value))
                 if changed:
                     note = "was %r" % old_value

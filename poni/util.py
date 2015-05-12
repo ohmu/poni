@@ -58,7 +58,7 @@ def set_dict_prop(item, address, value, verify=False, schema=None):
         if old is DEF_VALUE:
             raise errors.InvalidProperty(
                 "%r does not exist" % (".".join(address)))
-        elif type(value) != type(old):
+        elif type(value) != type(old):  # pylint: disable=W1504
             raise errors.InvalidProperty("%r type is %r, got %r: %r" % (
                     ".".join(address), type(old).__name__,
                     type(value).__name__, value))
